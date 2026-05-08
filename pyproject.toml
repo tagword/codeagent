@@ -6,7 +6,7 @@
 [tool.pytest.ini_options]
 minversion = "7.0"
 testpaths = ["tests"]
-pythonpath = ["src"]
+pythonpath = ["seed", "."]
 addopts = "-v --tb=short"
 filterwarnings = ["ignore::DeprecationWarning"]
 
@@ -40,4 +40,4 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["src"]
+known-first-party = ["seed", "codeagent"]
