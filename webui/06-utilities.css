@@ -1,0 +1,196 @@
+/* ================================================================
+ * 06-animations.css — Running states, animations, responsive
+ * ================================================================ */
+
+/* Session list running state */
+.sess-row.is-running { position: relative; }
+.sess-row.is-running::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  border-radius: 3px;
+  background: var(--accent, #4f46e5);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent, #4f46e5) 55%, transparent);
+  animation: oa-pulse-bar 1.4s ease-in-out infinite;
+  pointer-events: none;
+}
+.sess-row.is-running .sess-item__title::after {
+  content: '';
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-left: 6px;
+  border-radius: 50%;
+  background: var(--accent, #4f46e5);
+  vertical-align: middle;
+  animation: oa-pulse 1.15s ease-in-out infinite;
+}
+
+/* Global progress bar */
+.oa-global-progress {
+  position: absolute;
+  left: 0; right: 0;
+  top: 100%;
+  height: 2px;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  z-index: 5;
+}
+.oa-global-progress::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -40%;
+  width: 40%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, var(--accent, #4f46e5) 50%, transparent);
+  animation: oa-progress-slide 1.4s ease-in-out infinite;
+}
+body.chat-running .oa-global-progress { opacity: 1; }
+
+/* Keyframes */
+@keyframes oa-pulse {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent, #4f46e5) 55%, transparent); transform: scale(1); }
+  70%  { box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent, #4f46e5) 0%, transparent); transform: scale(1.05); }
+  100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent, #4f46e5) 0%, transparent); transform: scale(1); }
+}
+@keyframes oa-pulse-bar {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent, #4f46e5) 55%, transparent); }
+  70%  { box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent, #4f46e5) 0%, transparent); }
+  100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent, #4f46e5) 0%, transparent); }
+}
+@keyframes oa-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+@keyframes oa-progress-slide {
+  0%   { left: -40%; }
+  100% { left: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  details.oa-live-tool.is-running > summary,
+  details.oa-live-tool.is-running .oa-live-tool-spinner,
+  .sess-row.is-running::after,
+  .sess-row.is-running .sess-item__title::after,
+  .oa-global-progress::before { animation: none; }
+}
+
+/* ============ Todo Panel ============ */
+
+.todo-panel {
+  width: 280px;
+  flex-shrink: 0;
+  border-left: 1px solid var(--border);
+  background: var(--bg-panel);
+  display: none;
+  flex-direction: column;
+  min-height: 0;
+}
+.todo-panel__header {
+  padding: var(--sp-3) var(--sp-4);
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.todo-panel__list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--sp-1) var(--sp-2);
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+.todo-panel__list::-webkit-scrollbar { width: 6px; }
+.todo-panel__list::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
+.todo-panel__footer {
+  padding: var(--sp-2) var(--sp-3);
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+  display: flex;
+  justify-content: center;
+}
+.todo-empty {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 12px;
+  padding: var(--sp-8) var(--sp-4);
+  line-height: 1.6;
+}
+
+/* Todo item */
+.todo-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-1);
+  border-radius: var(--r-md);
+  font-size: 12.5px;
+  line-height: 1.4;
+  transition: background 0.12s ease;
+}
+.todo-item:hover { background: var(--bg-hover); }
+.todo-item__checkbox {
+  margin-top: 2px;
+  accent-color: var(--accent);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.todo-item__content { flex: 1; min-width: 0; word-break: break-word; }
+.todo-item__content--done { text-decoration: line-through; opacity: 0.6; }
+.todo-item__status {
+  font-size: 9.5px;
+  padding: 1px 6px;
+  border-radius: var(--r-full);
+  font-weight: 600;
+  flex-shrink: 0;
+  line-height: 1.5;
+}
+.todo-item__status--pending { background: var(--accent-soft); color: var(--accent); }
+.todo-item__status--in_progress { background: var(--todo-in-progress-bg); color: var(--todo-in-progress-text); }
+.todo-item__status--completed { background: var(--todo-completed-bg); color: var(--todo-completed-text); }
+.todo-item__status--cancelled { background: var(--danger-soft); color: var(--danger); }
+.todo-item__delete {
+  opacity: 0;
+  background: none; border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  padding: 2px;
+  font-size: 14px;
+  line-height: 1;
+  border-radius: var(--r-xs);
+  transition: opacity 0.12s ease, background 0.12s ease;
+}
+.todo-item:hover .todo-item__delete { opacity: 1; }
+.todo-item__delete:hover { background: var(--bg-hover); color: var(--danger); }
+
+/* ============ Responsive ============ */
+
+@media (max-width: 900px) {
+  :root { --sidebar-w: 100%; --topbar-h: 52px; }
+  .app {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+  }
+  .sidebar {
+    max-height: 46vh;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+  .nav-rail { padding: var(--sp-2) var(--sp-1) 0; }
+  .topbar { padding: 0 var(--sp-4); }
+  .chat-log, .compose { padding-left: var(--sp-4); padding-right: var(--sp-4); }
+  .page--scroll { padding: var(--sp-5) var(--sp-4) var(--sp-8); }
+  .topbar__title { max-width: 40vw; }
+  .session-id-chip { display: none; }
+  .todo-panel { width: 220px; }
+}

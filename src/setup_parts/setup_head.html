@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <link rel="icon" type="image/png" href="/icon.png"/>
+  <title>CodeAgent · 初始化</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --c-bg: #fff;
+      --c-text: #1a1a2e;
+      --c-border: #d0d5dd;
+      --c-muted: #667085;
+      --c-card-bg: #f9fafb;
+      --c-primary: #2563eb;
+      --c-primary-hover: #1d4ed8;
+      --c-err: #dc2626;
+      --c-ok: #16a34a;
+      --radius: 10px;
+      --sp: 1rem;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --c-bg: #0f172a;
+        --c-text: #e2e8f0;
+        --c-border: #334155;
+        --c-muted: #94a3b8;
+        --c-card-bg: #1e293b;
+        --c-primary: #3b82f6;
+        --c-primary-hover: #2563eb;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: var(--c-bg);
+      color: var(--c-text);
+      max-width: 720px;
+      margin: 2rem auto;
+      padding: 0 1rem 3rem;
+      line-height: 1.6;
+    }
+    h1 {
+      font-size: 1.35rem;
+      font-weight: 600;
+      margin: 0 0 0.2rem 0;
+    }
+    .subtitle {
+      color: var(--c-muted);
+      font-size: 0.92rem;
+      margin: 0 0 1.5rem 0;
+    }
+    .card { display: none; }
+    .card.active { display: block; }
+    .card-body {
+      border: 1px solid var(--c-border);
+      border-radius: var(--radius);
+      padding: 1.25rem;
+      background: var(--c-card-bg);
+      margin-top: 0.5rem;
+    }
+    .card-title {
+      font-size: 1.05rem;
+      font-weight: 600;
+      margin: 0 0 0.25rem 0;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .card-title .step-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: var(--c-primary);
+      color: #fff;
+      font-size: 0.8rem;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .card-desc {
+      color: var(--c-muted);
+      font-size: 0.88rem;
+      margin: 0 0 1rem 0;
+    }
+    .field-row {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      margin-bottom: 0.6rem;
+    }
+    .field-row > * { flex: 1; min-width: 200px; }
+    label {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 500;
+      margin-bottom: 0.25rem;

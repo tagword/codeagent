@@ -1,0 +1,110 @@
+          <div id="projectProgressDetail" style="font-size:11px;color:var(--text-muted);text-align:center;max-width:360px;line-height:1.5;"></div>
+          <div style="margin-top:16px;width:200px;height:4px;background:var(--border);border-radius:2px;overflow:hidden;">
+            <div id="projectProgressBar" style="width:0%;height:100%;background:var(--accent);border-radius:2px;transition:width 0.5s;"></div>
+          </div>
+        </div>
+        <div class="modal-dialog__header">
+          <span class="modal-dialog__title">🚀 新建项目</span>
+          <button class="modal-dialog__close" id="btnNewProjectDialogClose">&times;</button>
+        </div>
+        <div class="modal-dialog__body">
+          <!-- 项目名称 -->
+          <div class="modal-field">
+            <label class="modal-field__label" for="inpNewProjectName">项目名称 <span class="required">*</span></label>
+            <input type="text" id="inpNewProjectName" class="modal-field__input" placeholder="例如：my-awesome-project" autofocus />
+          </div>
+
+          <!-- 项目来源 -->
+          <div class="modal-field">
+            <label class="modal-field__label">项目来源</label>
+            <div style="display:flex;flex-direction:column;gap:4px;margin-top:4px;">
+              <label class="modal-radio-row" style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:6px 8px;border:1px solid var(--border);border-radius:6px;">
+                <input type="radio" name="projectSource" value="scratch" checked>
+                <span>📁 从零创建 <span style="font-size:11px;color:var(--text-muted);">— 本地空项目</span></span>
+              </label>
+              <label class="modal-radio-row" style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:6px 8px;border:1px solid var(--border);border-radius:6px;">
+                <input type="radio" name="projectSource" value="clone">
+                <span>📥 从远程仓库克隆</span>
+              </label>
+              <label class="modal-radio-row" style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:6px 8px;border:1px solid var(--border);border-radius:6px;">
+                <input type="radio" name="projectSource" value="template">
+                <span>🏗️ 从模板创建</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- 文件系统路径（所有来源共用） -->
+          <div class="modal-field" id="fieldProjectPath">
+            <label class="modal-field__label" for="inpNewProjectPath">文件系统路径 <span class="optional">(可选)</span></label>
+            <div class="modal-field__input-row">
+              <input type="text" id="inpNewProjectPath" class="modal-field__input" placeholder="留空则使用默认项目目录" />
+              <button type="button" id="btnBrowseDir" class="modal-btn modal-btn--browse" title="浏览选择目录">📁 浏览</button>
+            </div>
+          </div>
+
+          <!-- 克隆 URL（仅克隆模式） -->
+          <div class="modal-field" id="fieldCloneUrl" style="display:none;">
+            <label class="modal-field__label" for="inpCloneUrl">仓库 URL</label>
+            <input type="text" id="inpCloneUrl" class="modal-field__input" placeholder="https://github.com/user/repo.git 或 git@github.com:user/repo.git" />
+          </div>
+
+          <!-- 模板选择（仅模板模式） -->
+          <div class="modal-field" id="fieldTemplate" style="display:none;">
+            <label class="modal-field__label" for="selProjectTemplate">模板</label>
+            <select id="selProjectTemplate" class="modal-field__input">
+              <option value="fastapi">FastAPI</option>
+              <option value="flask">Flask</option>
+              <option value="cli">CLI 工具</option>
+              <option value="package">Python 包</option>
+            </select>
+          </div>
+
+          <!-- 关联远程仓库（从零创建和模板模式可用，克隆模式隐藏） -->
+          <div class="modal-field" id="fieldProjectRemote" style="display:none;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+              <span style="font-size:12px;font-weight:500;">🔗 关联远程仓库</span>
+              <label style="font-size:11px;color:var(--text-muted);display:flex;align-items:center;gap:4px;cursor:pointer;">
+                <input type="checkbox" id="chkProjectRemoteEnable"> 启用
+              </label>
+            </div>
+            <div id="projectRemoteForm" style="display:none;padding:8px;border:1px solid var(--border);border-radius:6px;">
+              <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;">
+                <select id="selProjectRemoteProvider" class="modal-field__input" style="flex:1;min-width:100px;">
+                  <option value="github">GitHub</option>
+                  <option value="gitlab">GitLab</option>
+                  <option value="gitee">Gitee</option>
+                  <option value="bitbucket">Bitbucket</option>
+                </select>
+                <input type="text" id="inpProjectRemoteOwner" class="modal-field__input" placeholder="所有者" style="flex:1;min-width:100px;">
+                <span style="line-height:32px;color:var(--text-muted);">/</span>
+                <input type="text" id="inpProjectRemoteRepo" class="modal-field__input" placeholder="仓库名" style="flex:1;min-width:100px;">
+              </div>
+              <div style="display:flex;gap:12px;align-items:center;">
+                <label style="font-size:11px;color:var(--text-muted);display:flex;align-items:center;gap:4px;cursor:pointer;">
+                  <input type="radio" name="projectRemoteProtocol" value="ssh" checked> SSH
+                </label>
+                <label style="font-size:11px;color:var(--text-muted);display:flex;align-items:center;gap:4px;cursor:pointer;">
+                  <input type="radio" name="projectRemoteProtocol" value="https"> HTTPS
+                </label>
+                <label style="font-size:11px;color:var(--text-muted);display:flex;align-items:center;gap:4px;cursor:pointer;margin-left:auto;">
+                  <input type="checkbox" id="chkProjectAutoPush"> 创建后自动推送
+                </label>
+              </div>
+              <div id="projectRemoteUrlPreview" style="font-size:10px;color:var(--text-muted);font-family:monospace;margin-top:4px;"></div>
+            </div>
+          </div>
+
+          <!-- 路径提示 -->
+          <div class="modal-field__hint" style="margin-top:4px;">关联源代码目录后，文件树和 Git 面板可直接操作项目文件</div>
+        </div>
+        <div class="modal-dialog__footer">
+          <button class="modal-btn modal-btn--cancel" id="btnNewProjectCancel">取消</button>
+          <button class="modal-btn modal-btn--confirm" id="btnNewProjectConfirm">🚀 创建项目</button>
+        </div>
+      </div>
+    </div>
+
+
+
+</main>
+</div>

@@ -1,0 +1,43 @@
+# ──────────────────────────────────────────────────────────────────
+#  Tool configuration: pytest, bandit, ruff
+#  Build system remains in setup.py (no conflict)
+# ──────────────────────────────────────────────────────────────────
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-v --tb=short"
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.bandit]
+exclude_dirs = [
+    "tests",
+    ".venv",
+    "venv",
+    "__pycache__",
+    "node_modules",
+    ".git",
+    "build",
+    "dist",
+    "*.egg-info",
+]
+skips = ["B101"]  # allow assert statements (used in tests)
+
+[tool.ruff]
+line-length = 120
+target-version = "py39"
+
+# ── Rules ────────────────────────────────────────────────────────
+# E, F, I, N, W = pycodestyle + pyflakes + isort + pep8-naming + pycodestyle warnings
+# UP = pyupgrade (auto modernize syntax)
+# SIM = flake8-simplify
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "SIM"]
+ignore = [
+    "E501",   # line too long → already handled by line-length
+    "N818",   # exception naming convention
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["src"]

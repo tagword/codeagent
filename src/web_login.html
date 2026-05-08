@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="color-scheme" content="light dark"/>
+  <link rel="icon" type="image/png" href="/icon.png"/>
+  <link rel="apple-touch-icon" href="/icon.png"/>
+  <title>CodeAgent · 登录</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --font-sans: "Inter", "Segoe UI Variable", system-ui, -apple-system, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+      --font-mono: ui-monospace, "SF Mono", Consolas, monospace;
+      --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 20px; --sp-6: 24px; --sp-8: 32px;
+      --r-md: 8px; --r-lg: 10px; --r-xl: 14px; --r-2xl: 18px;
+      --bg: #fbfbfc;
+      --bg-panel: #ffffff;
+      --bg-subtle: #f5f5f7;
+      --border: #e6e6ea;
+      --border-strong: #d4d4d8;
+      --text: #18181b;
+      --text-secondary: #3f3f46;
+      --text-muted: #71717a;
+      --text-subtle: #a1a1aa;
+      --accent: #4f46e5;
+      --accent-hover: #4338ca;
+      --accent-soft: rgba(79, 70, 229, 0.09);
+      --accent-ring: rgba(79, 70, 229, 0.22);
+      --danger: #dc2626;
+      --shadow-sm: 0 1px 3px rgba(16, 24, 40, 0.06), 0 1px 2px rgba(16, 24, 40, 0.04);
+      --shadow-lg: 0 18px 36px -10px rgba(16, 24, 40, 0.12), 0 4px 10px -4px rgba(16, 24, 40, 0.05);
+      --shadow-focus: 0 0 0 3px var(--accent-ring);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0a0a0b;
+        --bg-panel: #111113;
+        --bg-subtle: #161618;
+        --border: rgba(255,255,255,0.08);
+        --border-strong: rgba(255,255,255,0.14);
+        --text: #f4f4f5;
+        --text-secondary: #d4d4d8;
+        --text-muted: #a1a1aa;
+        --text-subtle: #71717a;
+        --accent: #a5b4fc;
+        --accent-hover: #c7d2fe;
+        --accent-soft: rgba(129, 140, 248, 0.16);
+        --accent-ring: rgba(129, 140, 248, 0.35);
+        --danger: #f87171;
+        --shadow-sm: 0 1px 3px rgba(0,0,0,0.4);
+        --shadow-lg: 0 24px 48px -14px rgba(0,0,0,0.6);
+      }
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: var(--font-sans);
+      font-size: 14px;
+      color: var(--text);
+      background: var(--bg);
+      background-image:
+        radial-gradient(ellipse 120% 80% at 50% -20%, var(--accent-soft), transparent 55%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: var(--sp-6) var(--sp-4);
+    }
+
+    .login-card {
+      width: 100%;
+      max-width: 400px;
+      padding: var(--sp-8) var(--sp-6);
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: var(--r-2xl);
+      box-shadow: var(--shadow-lg);
+    }
+
+    .login-brand {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-4);
+      margin-bottom: var(--sp-6);
+    }
+    .login-brand__logo {
+      width: 44px;
+      height: 44px;
+      border-radius: var(--r-lg);
+      object-fit: contain;
+      background: linear-gradient(160deg, #fff, var(--bg-subtle));
+      padding: 4px;
+      box-shadow:
+        var(--shadow-sm),
+        0 0 0 1px color-mix(in srgb, var(--accent) 14%, var(--border));
+      flex-shrink: 0;
+    }
+    .login-brand__name {
+      font-size: 18px;
+      font-weight: 650;
+      letter-spacing: -0.02em;
+      color: var(--text);
+      line-height: 1.2;
+    }
+    .login-brand__tag {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 4px;
+      font-weight: 450;
+    }
+
+    .login-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--accent);
+      background: var(--accent-soft);
+      margin-bottom: var(--sp-4);
+    }
+
+    .login-lead {
+      margin: 0 0 var(--sp-5);
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    .login-label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: var(--sp-2);
+    }
+
+    .login-input {
+      width: 100%;
+      padding: 11px 14px;
+      border-radius: var(--r-lg);
+      border: 1px solid var(--border);
+      background: var(--bg-subtle);
+      color: var(--text);
+      font-size: 14px;
+      font-family: var(--font-mono);
+      letter-spacing: 0.02em;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .login-input::placeholder { color: var(--text-subtle); }
+    .login-input:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: var(--shadow-focus);
+      background: var(--bg-panel);
+    }
+
+    .login-btn {
+      width: 100%;
+      margin-top: var(--sp-5);
+      padding: 11px var(--sp-4);
+      border: none;
+      border-radius: var(--r-lg);
+      font-size: 14px;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      color: #fff;
+      background: var(--accent);
+      box-shadow: 0 1px 2px rgba(79, 70, 229, 0.22);
+      transition: background 0.12s ease, transform 0.12s ease;
+    }
+    .login-btn:hover { background: var(--accent-hover); }
+    .login-btn:active { transform: translateY(1px); }
+
+    @media (prefers-color-scheme: dark) {
+      .login-btn {
+        background: linear-gradient(140deg, #6366f1 0%, #4f46e5 100%);
+        box-shadow: 0 1px 3px rgba(0,0,0,0.35);
+      }
+      .login-btn:hover {
+        filter: brightness(1.06);
+      }
+    }
+
+    .login-err {
+      margin-top: var(--sp-4);
+      min-height: 1.35em;
+      font-size: 13px;
+      color: var(--danger);
+    }
+
+    .login-foot {
+      margin-top: var(--sp-6);
+      padding-top: var(--sp-5);
+      border-top: 1px solid var(--border);
+      font-size: 11.5px;
+      color: var(--text-subtle);
+      line-height: 1.55;
+    }
+    .login-foot code {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      padding: 1px 6px;
+      border-radius: var(--r-md);
+      background: var(--bg-subtle);
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+  <main class="login-card" aria-labelledby="login-title">
+    <div class="login-brand">
+      <img class="login-brand__logo" src="/icon.png" alt="" width="44" height="44" decoding="async"/>
+      <div>
+        <div class="login-brand__name" id="login-title">CodeAgent</div>
+        <div class="login-brand__tag">本地 Agent 工作台 · Web UI</div>
+      </div>
+    </div>
+
+    <span class="login-badge" aria-hidden="true">令牌登录</span>
+    <p class="login-lead">此 Web UI 已开启访问保护，请输入令牌后即可进入。</p>
+
+    <label class="login-label" for="t">访问令牌</label>
+    <input id="t" class="login-input" type="password" autocomplete="current-password" placeholder="粘贴令牌" spellcheck="false"/>
+    <button type="button" class="login-btn" id="go">进入工作台</button>
+    <div id="err" class="login-err" role="alert"></div>
+
+    <p class="login-foot">
+      本地生成：<code>codeagent webui-token init</code>
+      · 亦可设置 <code>CODEAGENT_WEBUI_TOKEN</code>
+    </p>
+  </main>
+  <script>
+    document.getElementById('go').onclick = async () => {
+      const err = document.getElementById('err');
+      err.textContent = '';
+      const token = document.getElementById('t').value.trim();
+      if (!token) { err.textContent = '请输入令牌'; return; }
+      try {
+        const r = await fetch('/api/ui/auth', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ token })
+        });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) { err.textContent = j.detail || r.statusText; return; }
+        if (j.ws_query_token) {
+          try { sessionStorage.setItem('oa_webui_ws_token', j.ws_query_token); } catch (_) {}
+        } else {
+          try { sessionStorage.removeItem('oa_webui_ws_token'); } catch (_) {}
+        }
+        location.href = '/';
+      } catch (e) {
+        err.textContent = String(e);
+      }
+    };
+    document.getElementById('t').onkeydown = (e) => { if (e.key === 'Enter') document.getElementById('go').click(); };
+  </script>
+</body>
+</html>

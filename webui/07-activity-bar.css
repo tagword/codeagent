@@ -1,0 +1,49 @@
+.activity-bar {
+  width: var(--activity-bar-w, 48px);
+  min-width: var(--activity-bar-w, 48px);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-panel);
+  border-right: 1px solid var(--border);
+  flex-shrink: 0;
+  overflow: hidden;
+  z-index: 10;
+}
+.activity-bar__top {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: var(--sp-3) 0;
+}
+.activity-bar__bottom {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--sp-2) 0;
+  border-top: 1px solid var(--divider);
+}
+.activity-btn {
+  width: 36px; height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  position: relative;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.activity-btn svg { display: block; flex-shrink: 0; }
+.activity-btn:hover { background: var(--bg-hover); color: var(--text); }
+.activity-btn.active { color: var(--accent); background: var(--accent-soft); }
+.activity-btn.active::before {
+  content: ''; position: absolute; left: -6px; top: 50%; transform: translateY(-50%);
+  width: 3px; height: 20px; border-radius: 0 3px 3px 0; background: var(--accent);
+}
