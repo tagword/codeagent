@@ -5,7 +5,7 @@ import inspect
 import logging
 from typing import Any, Dict
 
-from src.models_pkg import Tool
+from src.models import Tool
 from src.tools.exceptions import ToolExecutionError
 from src.tools.registry import ToolRegistry
 
@@ -97,9 +97,10 @@ class ToolExecutor:
             )
         logger.info(f"Executing tool (async): {tool_name} with args: {kwargs}")
         try:
-            result = handler(**kwargs)
-            if inspect.isawaitable(result):
-                result = await result
+            if inspect.iscoroutinefunction(handler):
+                result = await handler(**kwargs)
+            else:
+                result = await asyncio.to_thread(handler, **kwargs)
             logger.info(f"Tool '{tool_name}' executed successfully")
             return result
         except Exception as e:
