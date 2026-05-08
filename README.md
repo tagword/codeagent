@@ -14,11 +14,7 @@
 
 ### 安装
 
-```bash
-pip install codeagent
-```
-
-或者从源码安装：
+从源码安装：
 
 ```bash
 git clone <your-repo-url>
@@ -34,11 +30,6 @@ codeagent serve
 
 然后浏览器打开 `http://localhost:8765` 即可使用。
 
-### 命令行使用
-
-```bash
-codeagent "你的任务描述"
-```
 
 ## 配置
 
