@@ -671,7 +671,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         row: Dict[str, Any] = {}
         try:
             from codeagent.core.paths import agent_projects_data_dir, ensure_agent_scaffold
-            from seed.tools import setup_builtin_tools
+            from seed_tools import setup_builtin_tools
 
             ensure_agent_scaffold(aid)
 

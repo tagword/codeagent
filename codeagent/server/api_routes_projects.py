@@ -80,7 +80,7 @@ async def api_ui_projects_create(request: Request) -> JSONResponse:
         if source == "template" and template:
             if project_dir and project_dir.is_dir():
                 try:
-                    from seed.tools import setup_builtin_tools
+                    from seed_tools import setup_builtin_tools
                     reg, _ = setup_builtin_tools()
                     scaffold_fn = reg.handlers.get("scaffold")
                     if scaffold_fn:

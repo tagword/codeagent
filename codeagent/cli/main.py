@@ -8,7 +8,7 @@ import time
 from datetime import datetime
 from typing import Set
 
-from seed.tools import ToolRegistry, setup_builtin_tools
+from seed_tools import ToolRegistry, setup_builtin_tools
 from seed.persistence import ensure_session_dir, list_sessions, save_session
 from seed.routing import find_commands, get_all_commands, get_command
 
@@ -424,7 +424,7 @@ def cmd_chat(args):
 
 def _cmd_chat_llm(args):
 
-    from seed.tools import setup_builtin_tools
+    from seed_tools import setup_builtin_tools
     from seed.llm_exec import LLMError
     from seed.llm_presets import llm_executor_from_resolved, resolve_preset
     from seed.agent_context import set_active_llm_session

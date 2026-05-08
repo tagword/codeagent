@@ -6,7 +6,7 @@ from datetime import datetime
 # Prefer `codeagent.py` / `python -m codeagent` — this module kept for compatibility.
 from .routing import get_all_commands, find_commands
 from .persistence import save_session, list_sessions, ensure_session_dir
-from seed.tools import ToolRegistry, setup_builtin_tools
+from seed_tools import ToolRegistry, setup_builtin_tools
 
 def main():
     parser = argparse.ArgumentParser(

@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from typing import Dict, Iterable, Set, Tuple
 
 from codeagent.core.paths import agent_home
-from seed.tools import ToolExecutor, ToolRegistry, setup_builtin_tools
+from seed_tools import ToolExecutor, ToolRegistry, setup_builtin_tools
 
 
 @dataclass

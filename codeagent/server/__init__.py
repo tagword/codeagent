@@ -8,7 +8,7 @@ def tools_for_agent(agent_id: str):
 
         return get_tools_for_agent(agent_id)
     except Exception:
-        from seed.tools import setup_builtin_tools
+        from seed_tools import setup_builtin_tools
 
         return setup_builtin_tools()
 
