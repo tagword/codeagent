@@ -19,7 +19,7 @@
 ```bash
 git clone <your-repo-url>
 cd codeagent
-pip install -e .
+pip install -e '.[server]'
 ```
 
 ### 启动 Web UI
