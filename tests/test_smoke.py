@@ -12,4 +12,4 @@ def test_import_key_modules():
     import seed.engine  # noqa: F401
     import seed.execution  # noqa: F401
     import seed.routing  # noqa: F401
-    import seed.safety  # noqa: F401
+    import seed_services.safety  # noqa: F401

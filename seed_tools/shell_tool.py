@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 def bash_tool_handler(command: str, timeout: int = 30, cwd: Optional[str] = None) -> str:
     """Execute a shell command with safety checks"""
-    from seed.safety import check_bash_command, enforce_bash_timeout
+    from seed_services.safety import check_bash_command, enforce_bash_timeout
 
     # Enhanced safety: regex-based pattern matching (before try to avoid var scope issues)
     err = check_bash_command(command, cwd=cwd)

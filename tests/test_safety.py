@@ -1,6 +1,6 @@
 """Tests for seed.safety — safety checks, secret redaction, prompt injection detection."""
 
-from seed.safety import (
+from seed_services.safety import (
     check_bash_command,
     enforce_bash_timeout,
     sanitize_assistant_output,

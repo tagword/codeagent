@@ -9,7 +9,7 @@ from seed_tools.models import Tool
 async def browser_status() -> str:
     """Return current browser debugger connection status."""
     try:
-        from seed.browser import BROWSER
+        from seed_services.browser import BROWSER
 
         return json.dumps(BROWSER.status(), ensure_ascii=False)
     except Exception as e:
@@ -25,7 +25,7 @@ browser_status_def = Tool(
 
 async def browser_connect(baseurl: str) -> str:
     """Connect to an existing Chromium remote-debugging endpoint (requires --remote-debugging-port)."""
-    from seed.browser import BROWSER
+    from seed_services.browser import BROWSER
 
     st = await BROWSER.connect(baseurl)
     return json.dumps(st, ensure_ascii=False)
@@ -59,7 +59,7 @@ async def browser_ensure_running(
     """
     Reuse an existing local debugging endpoint if present; otherwise launch a dedicated browser instance.
     """
-    from seed.browser import BROWSER, ensure_browser_running
+    from seed_services.browser import BROWSER, ensure_browser_running
 
     if not use_system_profile:
         use_system_profile = os.environ.get("CODEAGENT_BROWSER_USE_SYSTEM_PROFILE", "").strip().lower() in (
@@ -143,7 +143,7 @@ browser_ensure_running_def = Tool(
 
 async def browser_targets() -> str:
     """List debuggable targets."""
-    from seed.browser import BROWSER
+    from seed_services.browser import BROWSER
 
     rows = await BROWSER.list_targets()
     return json.dumps({"targets": rows}, ensure_ascii=False)
@@ -158,7 +158,7 @@ browser_targets_def = Tool(
 
 async def browser_new_page() -> str:
     """Create a new about:blank tab."""
-    from seed.browser import BROWSER
+    from seed_services.browser import BROWSER
 
     t = await BROWSER.new_page()
     return json.dumps(t, ensure_ascii=False)
@@ -173,7 +173,7 @@ browser_new_page_def = Tool(
 
 async def browser_navigate(target_ws_url: str, url: str) -> str:
     """Navigate a target page to URL (with SSRF guard by default)."""
-    from seed.browser import BROWSER
+    from seed_services.browser import BROWSER
 
     res = await BROWSER.navigate(target_ws_url=target_ws_url, url=url)
     return json.dumps(res, ensure_ascii=False)
@@ -198,7 +198,7 @@ browser_navigate_def = Tool(
 
 async def browser_screenshot(target_ws_url: str, full_page: bool = False) -> str:
     """Capture a screenshot as base64 PNG."""
-    from seed.browser import BROWSER
+    from seed_services.browser import BROWSER
 
     res = await BROWSER.screenshot(target_ws_url=target_ws_url, full_page=bool(full_page))
     # Do not return the full base64 to the model by default (it is huge).
