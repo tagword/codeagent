@@ -15,6 +15,10 @@
       .then(function(data) {
         children.innerHTML = '';
         var items = data.files || data.items || [];
+        if (data.detail && items.length === 0) {
+          children.innerHTML = '<div class="file-tree__loading" style="padding-left:20px;color:#e88;">' + data.detail + '</div>';
+          return;
+        }
         if (items.length === 0) {
           children.innerHTML = '<div class="file-tree__loading" style="padding-left:20px;">(空)</div>';
           return;
@@ -24,13 +28,14 @@
           subEl.className = 'file-tree__item' + (item.is_dir ? ' file-tree__item--dir' : ' file-tree__item--file');
           subEl.dataset.path = item.path;
           subEl.dataset.isDir = item.is_dir;
-          subEl.style.paddingLeft = (parseInt(el.style.paddingLeft) || 4) + 'px';
+          subEl.style.paddingLeft = ((parseInt(el.style.paddingLeft) || 4) + 16) + 'px';
 
           if (item.is_dir) {
             subEl.innerHTML = '<span class="file-tree__toggle" style="visibility:hidden;">▸</span>' +
               '<span class="file-tree__icon">📁</span>' +
               '<span class="file-tree__name">' + escapeHtml(item.name) + '</span>';
             subEl.onclick = function(e) {
+              e.stopPropagation();
               _toggleDir(item.path, subEl);
             };
             var subChildren = document.createElement('div');
@@ -41,7 +46,8 @@
             var icon = _getFileIcon(item.name);
             subEl.innerHTML = '<span class="file-tree__icon">' + icon + '</span>' +
               '<span class="file-tree__name">' + escapeHtml(item.name) + '</span>';
-            subEl.onclick = function() {
+            subEl.onclick = function(e) {
+              e.stopPropagation();
               _openFile(item.path, item.name);
               document.querySelectorAll('.file-tree__item.active').forEach(function(a) { a.classList.remove('active'); });
               subEl.classList.add('active');

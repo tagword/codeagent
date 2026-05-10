@@ -56,7 +56,7 @@
     _openTabs.forEach(function(tab, i) {
       var active = i === _activeTab ? ' active' : '';
       html += '<div class="file-editor__tab' + active + '" data-index="' + i + '">' +
-        '<span>' + escapeHtml(tab.name) + '</span>' +
+        '<span class="file-editor__tab-name">' + escapeHtml(tab.name) + '</span>' +
         '<span class="file-editor__tab-close" data-index="' + i + '">×</span></div>';
     });
     container.innerHTML = html;
