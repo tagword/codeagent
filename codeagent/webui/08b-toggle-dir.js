@@ -31,7 +31,7 @@
           subEl.style.paddingLeft = ((parseInt(el.style.paddingLeft) || 4) + 16) + 'px';
 
           if (item.is_dir) {
-            subEl.innerHTML = '<span class="file-tree__toggle" style="visibility:hidden;">▸</span>' +
+            subEl.innerHTML = '<span class="file-tree__toggle">▸</span>' +
               '<span class="file-tree__icon">📁</span>' +
               '<span class="file-tree__name">' + escapeHtml(item.name) + '</span>';
             subEl.onclick = function(e) {
