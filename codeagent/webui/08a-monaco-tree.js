@@ -60,7 +60,15 @@
           return;
         }
         container.innerHTML = '';
-        var items = data.items || [];
+        var items = data.files || data.items || [];
+        if (data.detail && items.length === 0) {
+          container.innerHTML = '<div class="file-tree__loading" style="color:#e88;">' + data.detail + '</div>';
+          return;
+        }
+        if (items.length === 0) {
+          container.innerHTML = '<div class="file-tree__loading">(空目录)</div>';
+          return;
+        }
         items.forEach(function(item) {
           var el = document.createElement('div');
           el.className = 'file-tree__item' + (item.is_dir ? ' file-tree__item--dir' : ' file-tree__item--file');

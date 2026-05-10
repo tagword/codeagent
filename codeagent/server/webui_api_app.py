@@ -368,7 +368,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
     )
     from seed.integrations.env_config import ENV_FILENAME
 
-    from . import SESSIONS, _memkey
+    from . import SESSIONS, _memkey, _running_sessions
 
     ensure_default_config_files(project_root_fn())
 
@@ -1009,6 +1009,20 @@ def build_webui_api_app(project_root: Path) -> Starlette:
             rows = list_stored_llm_sessions_meta(limit=lim, agent_id=aid, filter_by_project=False)
         return JSONResponse({"sessions": rows})
 
+    async def api_sessions_running(request: Request) -> JSONResponse:
+        """返回当前正在执行中的会话 ID 列表（用于页面刷新后恢复心跳指示）。"""
+        aid = (request.query_params.get("agent_id") or "").strip() or os.environ.get(
+            "CODEAGENT_AGENT_ID", "default"
+        ).strip() or "default"
+        # _running_sessions 中存的是 mkey（agent_id::session_id）, 按 agent_id 过滤
+        prefix = f"{aid}::"
+        running = [
+            mkey.removeprefix(prefix)
+            for mkey in _running_sessions
+            if mkey.startswith(prefix)
+        ]
+        return JSONResponse({"running": running})
+
     async def api_session_transcript(request: Request) -> JSONResponse:
         try:
             sid = (request.query_params.get("session_id") or "").strip()
@@ -1516,7 +1530,19 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         base = _project_fs_dir(aid, pid) if pid else None
         if base is None:
             return JSONResponse({"files": [], "detail": "no project path"})
-        target = base if not dir_q else _safe_under(base, dir_q)
+        base = base.resolve()
+        # dir_q 可能是绝对路径或相对路径，统一处理
+        target = base
+        if dir_q:
+            p = Path(dir_q)
+            if p.is_absolute():
+                # 绝对路径：确保在 base 下
+                p = p.resolve()
+                if p == base or base in p.parents:
+                    target = p
+            else:
+                # 相对路径：join 到 base
+                target = _safe_under(base, dir_q)
         if target is None or not target.is_dir():
             return JSONResponse({"files": []})
         items = []
@@ -1545,14 +1571,41 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         base = _project_fs_dir(aid, pid) if pid else None
         if base is None:
             return JSONResponse({"detail": "no project path"}, status_code=400)
-        fp = _safe_under(base, rel.lstrip("/"))
+        base = base.resolve()
+        # 支持绝对路径或相对路径
+        p = Path(rel)
+        if p.is_absolute():
+            p = p.resolve()
+            if p == base or base in p.parents:
+                fp = p
+            else:
+                return JSONResponse({"detail": "path not under project"}, status_code=400)
+        else:
+            fp = _safe_under(base, rel.lstrip("/"))
         if fp is None or not fp.is_file():
             return JSONResponse({"detail": "not found"}, status_code=404)
         try:
             text = fp.read_text(encoding="utf-8", errors="replace")
         except OSError as e:
             return JSONResponse({"detail": str(e)}, status_code=500)
-        return JSONResponse({"path": str(fp), "content": text})
+        # 简单推断语言类型
+        ext = fp.suffix.lower()
+        lang_map = {
+            ".py": "python", ".js": "javascript", ".jsx": "javascript", ".ts": "typescript",
+            ".tsx": "typescript", ".html": "html", ".css": "css", ".json": "json",
+            ".md": "markdown", ".yaml": "yaml", ".yml": "yaml", ".toml": "toml",
+            ".sql": "sql", ".sh": "shell", ".bash": "shell", ".xml": "xml",
+            ".svg": "xml", ".ini": "ini", ".cfg": "ini", ".conf": "ini",
+            ".txt": "plaintext", ".rst": "rst",
+        }
+        language = lang_map.get(ext, "plaintext")
+        try:
+            st = fp.stat()
+            size = st.st_size
+        except OSError:
+            size = len(text.encode("utf-8"))
+        lines = text.count("\n") + (1 if text and not text.endswith("\n") else 0)
+        return JSONResponse({"path": str(fp), "content": text, "language": language, "size": size, "lines": lines})
 
     async def api_setup_finish(_: Request) -> JSONResponse:
         tok = secrets.token_urlsafe(32)
@@ -1600,6 +1653,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         Route("/projects/todos/{todo_id}", api_projects_todos_delete, methods=["DELETE"]),
         Route("/projects/todos", api_projects_todos_list, methods=["GET"]),
         Route("/sessions", api_sessions, methods=["GET"]),
+        Route("/sessions/running", api_sessions_running, methods=["GET"]),
         Route("/session/transcript", api_session_transcript, methods=["GET"]),
         Route("/session/archive", api_session_archive, methods=["POST"]),
         Route("/session/delete", api_session_delete, methods=["POST"]),
