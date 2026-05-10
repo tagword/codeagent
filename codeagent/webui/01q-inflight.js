@@ -32,6 +32,27 @@ function resetAgentReplyDedupe() {
   if (typeof _streamConsumedLen !== 'undefined') _streamConsumedLen = 0;
 }
 
+/**
+ * 页面刷新后从后端恢复正在运行中的会话状态（心跳指示）。
+ * 由 initWebUiSessions 在最开始时调用。
+ */
+async function restoreRunningSessions() {
+  try {
+    const aid = (typeof agentId !== 'undefined') ? agentId : 'default';
+    const r = await fetch('/api/ui/sessions/running?agent_id=' + encodeURIComponent(aid));
+    if (!r.ok) return;
+    const j = await r.json();
+    if (j && Array.isArray(j.running)) {
+      j.running.forEach(function(sid) {
+        if (sid) {
+          const k = String(sid);
+          if (!chatInflightBySid[k]) chatInflightBySid[k] = 1;
+        }
+      });
+    }
+  } catch (_) {}
+}
+
 // ---- 项目路径显示：切换项目时更新 topbar ---- //
 document.addEventListener('project-changed', function(e) {
   var pathEl = document.getElementById('currentProjectPath');

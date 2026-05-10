@@ -51,22 +51,21 @@
     level = level || 0;
     container = container || document.getElementById('fileTreeContainer');
     container.innerHTML = '<div class="file-tree__loading">加载中...</div>';
+    _fileTreeLoaded = false;
 
     fetch('/api/ui/files/list?dir=' + encodeURIComponent(dir || '') + '&project_id=' + encodeURIComponent(_fileTreeProjectId))
       .then(function(r) { return r.json(); })
       .then(function(data) {
-        if (data.error) {
-          container.innerHTML = '<div class="file-tree__loading" style="color:#e33;">' + data.error + '</div>';
-          return;
-        }
         container.innerHTML = '';
         var items = data.files || data.items || [];
         if (data.detail && items.length === 0) {
           container.innerHTML = '<div class="file-tree__loading" style="color:#e88;">' + data.detail + '</div>';
+          _fileTreeLoaded = true;
           return;
         }
         if (items.length === 0) {
           container.innerHTML = '<div class="file-tree__loading">(空目录)</div>';
+          _fileTreeLoaded = true;
           return;
         }
         items.forEach(function(item) {

@@ -97,7 +97,7 @@ def create_app():
         from seed.core.mem_bridge import apply_episodic_to_messages
         from seed.integrations.session_title import maybe_llm_refresh_session_title
 
-        from . import SESSIONS, tools_for_agent
+        from . import SESSIONS, _DEFAULT_AUTO_CONTINUE_NUDGE, _running_sessions, tools_for_agent
 
         try:
             body = await request.json()
@@ -106,175 +106,216 @@ def create_app():
 
         session_id = str(body.get("session_id") or "web-chat").strip() or "web-chat"
         agent_id = str(body.get("agent_id") or os.environ.get("CODEAGENT_AGENT_ID", "default")).strip() or "default"
-        project_id = str(body.get("project_id") or "").strip()
-        if project_id == "__unassigned__":
-            project_id = ""
-        message = str(body.get("message") or "").strip()
-        if not message:
-            return JSONResponse({"detail": "message required"}, status_code=400)
-
-        mkey = _memkey(agent_id, session_id)
+        _run_mkey = _memkey(agent_id, session_id)
+        _running_sessions.add(_run_mkey)
         try:
-            from codeagent.core.paths import ensure_agent_scaffold
+            project_id = str(body.get("project_id") or "").strip()
+            if project_id == "__unassigned__":
+                project_id = ""
+            message = str(body.get("message") or "").strip()
+            if not message:
+                return JSONResponse({"detail": "message required"}, status_code=400)
 
-            ensure_agent_scaffold(agent_id)
-        except Exception:
-            pass
-
-        if mkey in SESSIONS:
-            chat_sess = SESSIONS[mkey]
-        else:
-            chat_sess = load_or_create_chat_session(session_id, agent_id, project_id or None)
-            SESSIONS[mkey] = chat_sess
-
-        fresh_sys = default_system_prompt()
-        if not chat_sess.messages:
-            chat_sess.messages = [{"role": "system", "content": fresh_sys}]
-        else:
-            chat_sess.messages[:] = merge_fresh_system(chat_sess.messages, fresh_sys)
-
-        chat_sess.messages.append({"role": "user", "content": message})
-        try:
-            from seed.integrations.transcript_store import append_transcript_entries
-
-            append_transcript_entries(session_id, [chat_sess.messages[-1]], agent_id=agent_id)
-        except Exception:
-            pass
-
-        max_hist = int(os.environ.get("CODEAGENT_CHAT_USER_ROUNDS", "12"))
-        max_rounds = int(os.environ.get("CODEAGENT_MAX_TOOL_ROUNDS", "24"))
-
-        llm = llm_executor_from_resolved(resolve_preset(None))
-        reg, exe = tools_for_agent(agent_id)
-        set_active_llm_session(session_id)
-        from seed.core.agent_context import set_active_project_episodic
-        if project_id:
-            set_active_project_episodic(True, project_id)
-        else:
-            set_active_project_episodic(False)
-
-        api_msgs = build_api_projection_messages(
-            chat_sess.messages,
-            max_user_rounds=max_hist,
-            skills_suffix=None,
-        )
-        maybe_compact_context_messages(api_msgs, llm)
-        apply_episodic_to_messages(
-            api_msgs,
-            project_root,
-            session_id,
-            project_id=project_id or None,
-            project_scope=False,
-        )
-
-        # ── WS 广播回调 ──
-        from seed.core.chat_events import reset_chat_event_emitter, set_chat_event_emitter
-
-        main_loop = asyncio.get_event_loop()
-        emitter_token = None
-
-        def _emit_progress_from_worker(evt: dict) -> None:
-            with contextlib.suppress(Exception):
-                asyncio.run_coroutine_threadsafe(
-                    _broadcast_session_event(agent_id, session_id, evt), main_loop
-                )
-
-        emitter_token = set_chat_event_emitter(_emit_progress_from_worker)
-
-        n_before = len(api_msgs)
-        n_before_ref = [n_before]
-        _last_trace_len = [0]
-        _stream_placeholder_created = [False]
-
-        def _on_tool_round_persist(tt: list, tu: list) -> None:
+            mkey = _memkey(agent_id, session_id)
             try:
-                new_tail = api_msgs[n_before_ref[0]:]
-                if new_tail:
-                    if (_stream_placeholder_created[0]
-                            and chat_sess.messages
-                            and chat_sess.messages[-1].get("_streaming")
-                            and new_tail[0].get("role") == "assistant"):
-                        real_msg = dict(new_tail[0])
-                        real_msg.pop("_streaming", None)
-                        chat_sess.messages[-1] = real_msg
-                        rest = new_tail[1:]
-                    else:
-                        rest = new_tail
-                    if rest:
-                        chat_sess.messages.extend(rest)
-                    n_before_ref[0] = len(api_msgs)
-                _stream_placeholder_created[0] = False
-                if tt:
-                    new_trace = tt[_last_trace_len[0]:]
-                    if new_trace:
-                        for _i in range(len(chat_sess.messages) - 1, -1, -1):
-                            mm = chat_sess.messages[_i]
-                            if isinstance(mm, dict) and mm.get("role") == "assistant":
-                                existing = mm.get("tool_trace")
-                                if not isinstance(existing, list):
-                                    existing = []
-                                chat_sess.messages[_i] = {
-                                    **mm,
-                                    "tool_trace": existing + new_trace,
-                                    "tools_used": list(tu) if tu else mm.get("tools_used", []),
-                                }
-                                break
-                    _last_trace_len[0] = len(tt)
-                persist_chat_session(chat_sess, agent_id)
+                from codeagent.core.paths import ensure_agent_scaffold
+
+                ensure_agent_scaffold(agent_id)
             except Exception:
                 pass
 
-        def _on_text_delta(full_text: str) -> None:
+            if mkey in SESSIONS:
+                chat_sess = SESSIONS[mkey]
+            else:
+                chat_sess = load_or_create_chat_session(session_id, agent_id, project_id or None)
+                SESSIONS[mkey] = chat_sess
+
+            fresh_sys = default_system_prompt()
+            if not chat_sess.messages:
+                chat_sess.messages = [{"role": "system", "content": fresh_sys}]
+            else:
+                chat_sess.messages[:] = merge_fresh_system(chat_sess.messages, fresh_sys)
+
+            chat_sess.messages.append({"role": "user", "content": message})
             try:
-                if not _stream_placeholder_created[0]:
-                    chat_sess.messages.append({
-                        "role": "assistant",
-                        "content": "",
-                        "_streaming": True,
-                    })
-                    _stream_placeholder_created[0] = True
-                if chat_sess.messages and chat_sess.messages[-1].get("_streaming"):
-                    chat_sess.messages[-1]["content"] = full_text
+                from seed.integrations.transcript_store import append_transcript_entries
+
+                append_transcript_entries(session_id, [chat_sess.messages[-1]], agent_id=agent_id)
+            except Exception:
+                pass
+
+            max_hist = int(os.environ.get("CODEAGENT_CHAT_USER_ROUNDS", "12"))
+            max_rounds = int(os.environ.get("CODEAGENT_MAX_TOOL_ROUNDS", "24"))
+
+            llm = llm_executor_from_resolved(resolve_preset(None))
+            reg, exe = tools_for_agent(agent_id)
+            set_active_llm_session(session_id)
+            from seed.core.agent_context import set_active_project_episodic
+            if project_id:
+                set_active_project_episodic(True, project_id)
+            else:
+                set_active_project_episodic(False)
+
+            api_msgs = build_api_projection_messages(
+                chat_sess.messages,
+                max_user_rounds=max_hist,
+                skills_suffix=None,
+            )
+            await asyncio.to_thread(maybe_compact_context_messages, api_msgs, llm)
+            apply_episodic_to_messages(
+                api_msgs,
+                project_root,
+                session_id,
+                project_id=project_id or None,
+                project_scope=False,
+            )
+
+            # ── WS 广播回调 ──
+            from seed.core.chat_events import reset_chat_event_emitter, set_chat_event_emitter
+
+            main_loop = asyncio.get_event_loop()
+            emitter_token = None
+
+            def _emit_progress_from_worker(evt: dict) -> None:
                 with contextlib.suppress(Exception):
                     asyncio.run_coroutine_threadsafe(
-                        _broadcast_session_event(agent_id, session_id, {
-                            "type": "text_delta",
-                            "session_id": session_id,
-                            "agent_id": agent_id,
-                            "text": full_text,
-                        }), main_loop
+                        _broadcast_session_event(agent_id, session_id, evt), main_loop
                     )
-            except Exception:
-                pass
 
-        def _on_reasoning_delta(full_reasoning: str) -> None:
+            emitter_token = set_chat_event_emitter(_emit_progress_from_worker)
+
+            n_before = len(api_msgs)
+            n_before_ref = [n_before]
+            _last_trace_len = [0]
+            _stream_placeholder_created = [False]
+
+            def _on_tool_round_persist(tt: list, tu: list) -> None:
+                try:
+                    new_tail = api_msgs[n_before_ref[0]:]
+                    if new_tail:
+                        if (_stream_placeholder_created[0]
+                                and chat_sess.messages
+                                and chat_sess.messages[-1].get("_streaming")
+                                and new_tail[0].get("role") == "assistant"):
+                            real_msg = dict(new_tail[0])
+                            real_msg.pop("_streaming", None)
+                            chat_sess.messages[-1] = real_msg
+                            rest = new_tail[1:]
+                        else:
+                            rest = new_tail
+                        if rest:
+                            chat_sess.messages.extend(rest)
+                        n_before_ref[0] = len(api_msgs)
+                    _stream_placeholder_created[0] = False
+                    if tt:
+                        new_trace = tt[_last_trace_len[0]:]
+                        if new_trace:
+                            for _i in range(len(chat_sess.messages) - 1, -1, -1):
+                                mm = chat_sess.messages[_i]
+                                if isinstance(mm, dict) and mm.get("role") == "assistant":
+                                    existing = mm.get("tool_trace")
+                                    if not isinstance(existing, list):
+                                        existing = []
+                                    chat_sess.messages[_i] = {
+                                        **mm,
+                                        "tool_trace": existing + new_trace,
+                                        "tools_used": list(tu) if tu else mm.get("tools_used", []),
+                                    }
+                                    break
+                        _last_trace_len[0] = len(tt)
+                    loop = asyncio.get_running_loop()
+                    loop.run_in_executor(None, persist_chat_session, chat_sess, agent_id)
+                except Exception:
+                    pass
+
+            def _on_text_delta(full_text: str) -> None:
+                try:
+                    if not _stream_placeholder_created[0]:
+                        chat_sess.messages.append({
+                            "role": "assistant",
+                            "content": "",
+                            "_streaming": True,
+                        })
+                        _stream_placeholder_created[0] = True
+                    if chat_sess.messages and chat_sess.messages[-1].get("_streaming"):
+                        chat_sess.messages[-1]["content"] = full_text
+                    with contextlib.suppress(Exception):
+                        asyncio.run_coroutine_threadsafe(
+                            _broadcast_session_event(agent_id, session_id, {
+                                "type": "text_delta",
+                                "session_id": session_id,
+                                "agent_id": agent_id,
+                                "text": full_text,
+                            }), main_loop
+                        )
+                except Exception:
+                    pass
+
+            def _on_reasoning_delta(full_reasoning: str) -> None:
+                try:
+                    if (_stream_placeholder_created[0]
+                            and chat_sess.messages
+                            and chat_sess.messages[-1].get("_streaming")):
+                        chat_sess.messages[-1]["reasoning_content"] = full_reasoning
+                except Exception:
+                    pass
+
             try:
-                if (_stream_placeholder_created[0]
-                        and chat_sess.messages
-                        and chat_sess.messages[-1].get("_streaming")):
-                    chat_sess.messages[-1]["reasoning_content"] = full_reasoning
-            except Exception:
-                pass
+                # ── auto_continue 配置 ──
+                _ac_on = os.environ.get("CODEAGENT_CHAT_AUTO_CONTINUE_ON_LIMIT", "0").strip() in (
+                    "1", "true", "yes",
+                )
+                _max_seg = int(os.environ.get("CODEAGENT_CHAT_AUTO_CONTINUE_MAX_SEGMENTS", "4"))
+                _max_seg = max(1, min(_max_seg, 50))
 
-        try:
-            # ── auto_continue 配置 ──
-            _ac_on = os.environ.get("CODEAGENT_CHAT_AUTO_CONTINUE_ON_LIMIT", "0").strip() in (
-                "1", "true", "yes",
-            )
-            _max_seg = int(os.environ.get("CODEAGENT_CHAT_AUTO_CONTINUE_MAX_SEGMENTS", "4"))
-            _max_seg = max(1, min(_max_seg, 50))
+                if _ac_on:
+                    from . import _auto_continue_nudge
 
-            if _ac_on:
-                from . import _auto_continue_nudge
+                    _segment = 0
+                    _all_trace: list[dict] = []
+                    _all_used: list[str] = []
+                    _final_reply = ""
+                    _final_meta: dict = {}
 
-                _segment = 0
-                _all_trace: list[dict] = []
-                _all_used: list[str] = []
-                _final_reply = ""
-                _final_meta: dict = {}
+                    while _segment < _max_seg:
+                        _seg_reply, __, _seg_used, _seg_trace, _seg_meta = await run_llm_tool_loop(
+                            llm, exe,
+                            messages=api_msgs,
+                            registry=reg,
+                            max_tool_rounds=max_rounds,
+                            on_round_persist=_on_tool_round_persist,
+                            on_text_delta=_on_text_delta,
+                            on_reasoning_delta=_on_reasoning_delta,
+                        )
+                        _all_trace.extend(_seg_trace or [])
+                        for _t in (_seg_used or []):
+                            if _t not in _all_used:
+                                _all_used.append(_t)
+                        if _seg_reply:
+                            _final_reply = _seg_reply
+                        _final_meta = _seg_meta or {}
 
-                while _segment < _max_seg:
-                    _seg_reply, __, _seg_used, _seg_trace, _seg_meta = await run_llm_tool_loop(
+                        if _seg_meta.get("stopped_reason") != "max_tool_rounds":
+                            break
+
+                        _segment += 1
+                        if _segment >= _max_seg:
+                            break
+
+                        # Reset per-segment markers for next loop
+                        _last_trace_len[0] = 0
+                        # Inject nudge as user message to continue
+                        # n_before_ref deliberately NOT reset — nudge must be
+                        # picked up by _on_tool_round_persist in the next segment
+                        _nudge = _auto_continue_nudge(_seg_meta)
+                        api_msgs.append({"role": "user", "content": _nudge})
+
+                    reply = _final_reply
+                    tools_used = _all_used
+                    tool_trace = _all_trace
+                    _loop_meta = _final_meta
+                else:
+                    reply, _meta, tools_used, tool_trace, _loop_meta = await run_llm_tool_loop(
                         llm, exe,
                         messages=api_msgs,
                         registry=reg,
@@ -283,116 +324,101 @@ def create_app():
                         on_text_delta=_on_text_delta,
                         on_reasoning_delta=_on_reasoning_delta,
                     )
-                    _all_trace.extend(_seg_trace or [])
-                    for _t in (_seg_used or []):
-                        if _t not in _all_used:
-                            _all_used.append(_t)
-                    if _seg_reply:
-                        _final_reply = _seg_reply
-                    _final_meta = _seg_meta or {}
 
-                    if _seg_meta.get("stopped_reason") != "max_tool_rounds":
-                        break
-
-                    _segment += 1
-                    if _segment >= _max_seg:
-                        break
-
-                    # Reset per-segment markers for next loop
-                    _last_trace_len[0] = 0
-                    # Inject nudge as user message to continue
-                    # n_before_ref deliberately NOT reset — nudge must be
-                    # picked up by _on_tool_round_persist in the next segment
-                    _nudge = _auto_continue_nudge(_seg_meta)
-                    api_msgs.append({"role": "user", "content": _nudge})
-
-                reply = _final_reply
-                tools_used = _all_used
-                tool_trace = _all_trace
-                _loop_meta = _final_meta
-            else:
-                reply, _meta, tools_used, tool_trace, _loop_meta = await run_llm_tool_loop(
-                    llm, exe,
-                    messages=api_msgs,
-                    registry=reg,
-                    max_tool_rounds=max_rounds,
-                    on_round_persist=_on_tool_round_persist,
-                    on_text_delta=_on_text_delta,
-                    on_reasoning_delta=_on_reasoning_delta,
-                )
-
-            # ── WS: 广播 text_done + reply（两分支共享） ──
-            trace_out_ws = [
-                {"tool": t.get("name", ""), "arguments": t.get("arguments", ""), "result": t.get("result", "")}
-                for t in (tool_trace or [])
-            ]
-            with contextlib.suppress(Exception):
-                asyncio.run_coroutine_threadsafe(
-                    _broadcast_session_event(agent_id, session_id, {
-                        "type": "text_done",
-                        "session_id": session_id,
-                        "agent_id": agent_id,
-                        "text": reply or "",
-                        "tool_trace": trace_out_ws,
-                        "tools_used": tools_used or [],
-                    }), main_loop
-                )
-            with contextlib.suppress(Exception):
-                asyncio.run_coroutine_threadsafe(
-                    _broadcast_session_event(agent_id, session_id, {
-                        "type": "reply",
-                        "session_id": session_id,
-                        "agent_id": agent_id,
-                        "text": reply or "",
-                        "tool_trace": trace_out_ws,
-                        "tools_used": tools_used or [],
-                    }), main_loop
-                )
-
-            tail = merge_llm_tail_into_full(chat_sess.messages, api_msgs, n_before_ref[0])
-            try:
-                from seed.integrations.transcript_store import append_transcript_entries
-
-                if tail:
-                    append_transcript_entries(session_id, tail, agent_id=agent_id)
-            except Exception:
-                pass
-            try:
-                persist_chat_session(chat_sess, agent_id)
-            except Exception:
-                logger.exception("persist_chat_session failed")
-            try:
-                maybe_llm_refresh_session_title(llm, chat_sess)
-            except Exception:
-                logger.exception("session title refresh failed")
-            trace_out = [
-                {
-                    # WebUI 读 row.tool；run_llm_tool_loop 写 row.name — 两边对齐
-                    "tool": t.get("name", ""),
-                    "name": t.get("name", ""),
-                    "arguments": t.get("arguments", ""),
-                    "result": t.get("result", ""),
-                }
-                for t in tool_trace
-            ]
-            return JSONResponse(
-                {
-                    "reply": reply,
-                    "session_id": session_id,
-                    "tools_used": tools_used,
-                    "tool_trace": trace_out,
-                }
-            )
-        except LLMError as e:
-            with contextlib.suppress(Exception):
-                chat_sess.messages.pop()
-            return JSONResponse({"detail": str(e)}, status_code=502)
-        finally:
-            set_active_llm_session(None)
-            set_active_project_episodic(False)
-            if emitter_token:
+                # ── WS: 广播 text_done + reply（两分支共享） ──
+                trace_out_ws = [
+                    {"tool": t.get("name", ""), "arguments": t.get("arguments", ""), "result": t.get("result", "")}
+                    for t in (tool_trace or [])
+                ]
                 with contextlib.suppress(Exception):
-                    reset_chat_event_emitter(emitter_token)
+                    asyncio.run_coroutine_threadsafe(
+                        _broadcast_session_event(agent_id, session_id, {
+                            "type": "text_done",
+                            "session_id": session_id,
+                            "agent_id": agent_id,
+                            "text": reply or "",
+                            "tool_trace": trace_out_ws,
+                            "tools_used": tools_used or [],
+                        }), main_loop
+                    )
+                with contextlib.suppress(Exception):
+                    asyncio.run_coroutine_threadsafe(
+                        _broadcast_session_event(agent_id, session_id, {
+                            "type": "reply",
+                            "session_id": session_id,
+                            "agent_id": agent_id,
+                            "text": reply or "",
+                            "tool_trace": trace_out_ws,
+                            "tools_used": tools_used or [],
+                        }), main_loop
+                    )
+
+                tail = merge_llm_tail_into_full(chat_sess.messages, api_msgs, n_before_ref[0])
+                try:
+                    from seed.integrations.transcript_store import append_transcript_entries
+
+                    if tail:
+                        append_transcript_entries(session_id, tail, agent_id=agent_id)
+                except Exception:
+                    pass
+                try:
+                    loop = asyncio.get_running_loop()
+                    loop.run_in_executor(None, persist_chat_session, chat_sess, agent_id)
+                except Exception:
+                    logger.exception("persist_chat_session failed")
+                try:
+                    # auto-continue 注入的 nudge 消息不应参与标题生成
+                    # （否则标题会变成"继续完成未完成事项"而非用户原始意图）
+                    # 默认 nudge 以 "请继续完成未完成事项" 开头，
+                    # domain playbook 以 "上一段连续在" 开头
+                    _nudge_filtered: list[int] = []
+                    for _i, _m in enumerate(chat_sess.messages):
+                        if (
+                            isinstance(_m, dict)
+                            and _m.get("role") == "user"
+                            and isinstance(_m.get("content"), str)
+                            and (
+                                _m["content"].startswith(_DEFAULT_AUTO_CONTINUE_NUDGE[:20])
+                                or _m["content"].startswith("上一段连续在")
+                            )
+                        ):
+                            _nudge_filtered.append(_i)
+                    for _i in reversed(_nudge_filtered):
+                        chat_sess.messages.pop(_i)
+                    maybe_llm_refresh_session_title(llm, chat_sess)
+                except Exception:
+                    logger.exception("session title refresh failed")
+                trace_out = [
+                    {
+                        # WebUI 读 row.tool；run_llm_tool_loop 写 row.name — 两边对齐
+                        "tool": t.get("name", ""),
+                        "name": t.get("name", ""),
+                        "arguments": t.get("arguments", ""),
+                        "result": t.get("result", ""),
+                    }
+                    for t in tool_trace
+                ]
+                return JSONResponse(
+                    {
+                        "reply": reply,
+                        "session_id": session_id,
+                        "tools_used": tools_used,
+                        "tool_trace": trace_out,
+                    }
+                )
+            except LLMError as e:
+                with contextlib.suppress(Exception):
+                    chat_sess.messages.pop()
+                return JSONResponse({"detail": str(e)}, status_code=502)
+            finally:
+                set_active_llm_session(None)
+                set_active_project_episodic(False)
+                if emitter_token:
+                    with contextlib.suppress(Exception):
+                        reset_chat_event_emitter(emitter_token)
+
+        finally:
+            _running_sessions.discard(_run_mkey)
 
     async def api_chat_stop(_: Request) -> JSONResponse:
         return JSONResponse({"active": False})
