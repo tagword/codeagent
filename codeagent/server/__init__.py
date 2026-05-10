@@ -40,6 +40,7 @@ logger = logging.getLogger(__name__)
 # Shared with ``seed`` cron / runtime — re-export for ``app_factory`` / ``webui_api_app`` ``from . import``.
 from seed.core._session_cache import (  # noqa: E402
     ACTIVE_CHAT_CANCELS,
+    PENDING_INJECTIONS,
     SESSIONS,
     WS_BY_SESSION,
     _memkey,
