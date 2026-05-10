@@ -377,6 +377,22 @@ function createProjectNode(pr) {
   name.textContent = displayName;
   row.appendChild(name);
 
+  var addBtn = document.createElement('button');
+  addBtn.type = 'button'; addBtn.className = 'tree-project__add-session';
+  addBtn.textContent = '+';
+  addBtn.setAttribute('aria-label', '新建会话');
+  addBtn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    // 切换到该项目，然后创建新会话
+    if (pid !== treePid(projectId)) {
+      projectId = pid; treeProjectActiveId = pid;
+      window.dispatchEvent(new CustomEvent('project-changed', {detail: {projectId: pid}}));
+      saveProjectIdForAgent(agentId, projectId);
+    }
+    document.getElementById('btnNewSession').click();
+  });
+  row.appendChild(addBtn);
+
   var menu = document.createElement('button');
   menu.type = 'button'; menu.className = 'tree-project__menu';
   menu.textContent = '⋮';
