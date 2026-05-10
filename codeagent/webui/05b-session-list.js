@@ -96,5 +96,7 @@ function bindSessListOnce() {
 // ---------------- Web UI sessions initialization ----------------
 
 async function initWebUiSessions() {
+  // 页面刷新后先恢复正在运行中的会话状态（心跳指示）
+  await restoreRunningSessions();
   const sidebar = document.getElementById('chatSidebar');
   const fs = document.getElementById('fieldsetChatSessions');

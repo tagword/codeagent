@@ -45,6 +45,10 @@ from seed.core._session_cache import (  # noqa: E402
     _memkey,
 )
 
+# 当前正在执行中的会话集合（mkey 格式：agent_id::session_id）
+# 用于页面刷新后前端恢复运行状态指示
+_running_sessions: set[str] = set()
+
 def _env_truthy(name: str, default: str = "0") -> bool:
     return os.environ.get(name, default).strip().lower() in ("1", "true", "yes", "on")
 

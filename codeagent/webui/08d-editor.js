@@ -46,9 +46,8 @@
     var filesSection = document.getElementById('sidebarFiles');
     var container = document.getElementById('fileTreeContainer');
     if (!filesSection || !container || filesSection.style.display === 'none') return;
-    if (!_fileTreeLoaded) {
-      _renderFileTree('', container);
-    }
+    // 每次切到文件模式都重新加载，确保切换项目后能刷新（不依赖 _fileTreeLoaded 缓存）
+    _renderFileTree('', container);
     _loadMonaco();
   }
   window.webuiRefreshFileTreeIfVisible = refreshFileTreeIfVisible;
