@@ -25,6 +25,9 @@ team-knowledge-base/
 # Root-level icon is redundant (server/icon.png is the canonical one)
 /icon.png
 
+# Internal dev scripts
+/refresh_title.py
+
 # Internal development plans — keep locally; not published with the OSS repo
 *-plan.md
 plans/
