@@ -1,0 +1,654 @@
+<div class="app">
+  <nav class="activity-bar" id="activityBar" aria-label="活动栏">
+    <div class="activity-bar__top">
+      <button type="button" class="activity-btn active" data-mode="chat" title="聊天">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 018.5-8.5 8.38 8.38 0 013.8.9z" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <button type="button" class="activity-btn" data-mode="tasks" title="计划">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.75"/><path d="M12 7v6l4 2" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/></svg>
+      </button>
+      <button type="button" class="activity-btn" data-mode="agent" title="Agent">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 5v2M10 3h4" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/><rect x="6" y="8" width="12" height="12" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.75"/><circle cx="9.5" cy="13.5" r="1.2" fill="currentColor"/><circle cx="14.5" cy="13.5" r="1.2" fill="currentColor"/><path d="M9 18h6" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/><path d="M10 20v2h4v-2" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/></svg>
+      </button>
+      <button type="button" class="activity-btn" data-mode="config" title="配置">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.75"/><path d="M12 2v2m0 18v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m18 0h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/></svg>
+      </button>
+      <button type="button" class="activity-btn" data-mode="stats" title="统计">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 20V11M10 20V4M16 20v-7M22 20V9" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/></svg>
+      </button>
+      <button type="button" class="activity-btn" data-mode="files" title="文件">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M14 3v4a1 1 0 001 1h4" fill="none" stroke="currentColor" stroke-width="1.75"/><path d="M17 21H7a2 2 0 01-2-2V5a2 2 0 012-2h7l5 5v11a2 2 0 01-2 2z" fill="none" stroke="currentColor" stroke-width="1.75"/></svg>
+      </button>
+    </div>
+    <div class="activity-bar__bottom">
+      <button type="button" class="activity-btn" id="btnLogout" title="退出登录">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+  </nav>
+  <aside class="sidebar" aria-label="主导航">
+    <div class="sidebar__head">
+      <div class="brand">
+        <img class="brand__logo" src="/icon.png" alt="" width="34" height="34" decoding="async"/>
+        <div class="brand__text">
+          <div class="brand__name">CodeAgent</div>
+          <div class="brand__slogan">对话 · 工作台</div>
+        </div>
+      </div>
+    </div>
+
+    <aside id="chatSidebar" class="sess-panel" style="display:none;" aria-label="会话列表">
+      <!-- 搜索栏 -->
+      <div class="search-bar">
+        <input type="text" id="treeSearchInput" class="search-bar__input" placeholder="搜索项目或会话... Ctrl+K">
+      </div>
+      <!-- 项目树 -->
+      <div id="projectTree" class="project-tree" role="tree">
+        <div class="project-tree__empty">加载中...</div>
+      </div>
+      <div class="project-tree__footer">
+        <button class="tree-footer-btn" id="btnNewProject">+ 新建项目</button>
+        <button class="tree-footer-btn" id="btnNewSession">+ 新建会话</button>
+      </div>
+
+
+    </aside>
+
+    <section id="sidebarStats" class="sidebar-mode" style="display:none;">
+      <div class="sidebar-mode__scroll">
+        <div class="sidebar__head" style="padding-bottom:0;">
+          <div class="brand brand--stats">
+            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 20V11M10 20V4M16 20v-7M22 20V9" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/></svg>
+            <div class="brand__text">
+              <div class="brand__name" style="font-size:13px;">统计数据</div>
+              <div class="brand__slogan" style="font-size:10.5px;" id="statsLastUpdated">加载中…</div>
+            </div>
+          </div>
+        </div>
+        <div class="stats-grid" id="statsGrid">
+          <div class="stats-card"><div class="stats-card__value" id="statProjects">-</div><div class="stats-card__label">项目数</div></div>
+          <div class="stats-card"><div class="stats-card__value" id="statSessions">-</div><div class="stats-card__label">会话数</div></div>
+          <div class="stats-card"><div class="stats-card__value" id="statMessages">-</div><div class="stats-card__label">消息数</div></div>
+          <div class="stats-card"><div class="stats-card__value" id="statTodos">-</div><div class="stats-card__label">待办项</div></div>
+        </div>
+        <div class="stats-section">
+          <div class="sidebar__section-label" style="margin-top:0;">最近项目</div>
+          <div id="statsRecentProjects" class="stats-recent"><div class="config-tool-list__empty">加载中…</div></div>
+        </div>
+        <div class="stats-section">
+          <div class="sidebar__section-label" style="margin-top:0;">最近会话</div>
+          <div id="statsRecentSessions" class="stats-recent"><div class="config-tool-list__empty">加载中…</div></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="sidebarFiles" class="sidebar-mode" style="display:none;">
+      <div class="sidebar-mode__scroll">
+        <div class="sidebar__head" style="padding-bottom:0;">
+          <div class="sidebar__section-label">文件浏览器</div>
+        </div>
+        <div id="fileTreeContainer" class="file-tree">
+          <div class="file-tree__loading">加载中...</div>
+        </div>
+      </div>
+    </section>
+    <section id="sidebarGit" class="sidebar-mode" style="display:none;">
+      <div class="sidebar-mode__scroll">
+        <div class="sidebar__head" style="padding-bottom:0;">
+          <div class="sidebar__section-label">源代码管理</div>
+        </div>
+        <div class="git-panel">
+          <div class="git-panel__branch" id="gitBranch">🌿 main</div>
+          <div class="git-panel__actions">
+            <button class="btn btn--sm btn--subtle" id="gitBtnRefresh" title="刷新">🔄</button>
+            <button class="btn btn--sm btn--subtle" id="gitBtnPull" title="拉取">⬇</button>
+            <button class="btn btn--sm btn--subtle" id="gitBtnPush" title="推送">⬆</button>
+          </div>
+          <div class="git-panel__status" id="gitStatus">
+            <div class="git-panel__loading">加载中...</div>
+          </div>
+          <div class="git-panel__commit">
+            <textarea id="gitCommitMsg" class="git-panel__commit-input" rows="3" placeholder="提交信息..."></textarea>
+            <button class="btn btn--primary btn--sm" id="gitBtnCommit" style="width:100%;">提交</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </aside>
+
+  <main class="workspace">
+    <header class="topbar">
+      <div class="topbar__title-group">
+        <h2 class="topbar__title" id="currentConvTitle">新对话</h2>
+        <span class="channel-pill" id="currentConvChannel">Web 聊天</span>
+        <span class="topbar__project-path" id="currentProjectPath" style="display:none"></span>
+      </div>
+      <div class="topbar__meta">
+        <button type="button" class="topbar__todo-btn" id="btnTogglePlans" title="项目规划面板">
+          <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 2.5h10v11H3z"/>
+            <path d="M6 5.5h4M6 8h4M6 10.5h2"/>
+          </svg>
+        </button>
+        <button type="button" class="topbar__todo-btn" id="btnToggleTodos" title="待办事项面板">
+          <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 4.5h10M3 8h10M3 11.5h10"/>
+            <circle cx="5.5" cy="4.5" r="1.2"/>
+            <circle cx="5.5" cy="8" r="1.2"/>
+            <circle cx="5.5" cy="11.5" r="1.2"/>
+          </svg>
+        </button>
+        <button type="button" class="topbar__todo-btn" id="btnToggleGit" title="Git 版本控制">
+          <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M15 8l-6.5 6.5a1.5 1.5 0 0 1-2 0L2 9.5a1.5 1.5 0 0 1 0-2L8.5 1"/>
+            <circle cx="8" cy="8" r="1.5"/>
+          </svg>
+        </button>
+      </div>
+      <div class="oa-global-progress" id="chatGlobalProgress" aria-hidden="true"></div>
+    </header>
+
+    <section id="page-chat" class="page active">
+      <div class="chat-workspace">
+        <div id="log" class="chat-log" role="log" aria-live="polite"></div>
+        <button id="btnNewMessages" class="new-msg-btn" style="display:none" title="有新消息，点击回到最新">
+          <span class="new-msg-btn__dot"></span>
+          <span class="new-msg-btn__text">新消息 ↓</span>
+        </button>
+        <div class="compose">
+          <div class="compose__box">
+            <textarea id="msg" rows="1" placeholder="请输入消息…  Enter 发送，Shift+Enter 换行" autocomplete="off" spellcheck="true"></textarea>
+            <div class="compose__actions">
+              <span class="compose__hint"><select id="modelSelect" class="compose__model-select" title="选择 LLM 模型预设"><option value="__default__">默认模型</option></select></span>
+              <button type="button" class="btn btn--subtle btn--sm think-toggle" id="thinkToggle" aria-pressed="true" title="思考开关：开启时模型会先思考再回答（慢但更准）；关闭后直接回答（快）">
+                <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 1.8a4.5 4.5 0 0 0-3 7.9V11h6V9.7a4.5 4.5 0 0 0-3-7.9z"/><path d="M6.5 13.5h3M7 15h2"/></svg>
+                <span class="think-toggle__label">思考</span>
+              </button>
+              <button type="button" class="btn btn--subtle btn--sm" id="stop" disabled>停止</button>
+              <button type="button" class="btn btn--primary btn--sm" id="send">
+                <span>发送</span>
+                <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <aside id="todoPanel" class="todo-panel" style="display:none;" aria-label="待办事项">
+        <div class="todo-panel__header">
+          <span>待办事项</span>
+          <div class="todo-scope-toggle" id="todoScopeToggle">
+            <button type="button" class="todo-scope-btn is-active" data-scope="session">当前会话</button>
+            <button type="button" class="todo-scope-btn" data-scope="project">全部</button>
+          </div>
+        </div>
+        <div class="todo-panel__list" id="todoList"></div>
+        <div class="todo-panel__footer">
+          <button type="button" class="btn btn--ghost btn--sm" id="btnTodoRefresh">刷新</button>
+        </div>
+      </aside>
+      <aside id="planPanel" class="plan-panel" style="display:none;" aria-label="项目规划">
+        <div class="plan-panel__header">
+          <span>📋 项目规划</span>
+          <span id="planStatus" style="font-weight:400;font-size:12px;color:var(--text-muted);"></span>
+        </div>
+        <div class="plan-panel__list" id="planList"></div>
+        <div class="plan-panel__footer">
+          <button type="button" class="btn btn--ghost btn--sm" id="btnPlanRefresh">刷新</button>
+        </div>
+      </aside>
+      <aside id="gitPanel" class="git-slide-panel" style="display:none;" aria-label="Git 版本控制">
+        <div class="git-slide-panel__header">
+          <span>⎇ Git 版本控制</span>
+          <div style="display:flex;gap:4px;align-items:center;">
+            <span id="gitPanelBranch" style="font-size:11px;color:var(--text-muted);font-weight:400;"></span>
+            <button type="button" class="btn btn--ghost btn--sm" id="gitPanelRefresh" title="刷新">⟳</button>
+          </div>
+        </div>
+        <div class="git-slide-panel__remote" id="gitPanelRemote">
+          <!-- 远程信息展示（只读，编辑请到配置页） -->
+          <div class="git-slide-panel__remote-info" id="gitRemoteInfoBar" style="display:none;">
+            <span id="gitRemoteDisplay" style="font-size:11px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;"></span>
+            <button type="button" class="btn btn--ghost btn--xs" id="gitRemoteTestBtn" title="测试连接">🔌</button>
+            <a href="#" id="gitRemoteConfigLink" style="font-size:10px;color:var(--accent);text-decoration:none;white-space:nowrap;" title="到配置页管理远程仓库">配置 ›</a>
+          </div>
+          <!-- 未配置时的提示栏 -->
+          <div class="git-slide-panel__remote-info" id="gitRemoteEmptyBar">
+            <span style="font-size:11px;color:var(--text-muted);">🔗 未配置远程仓库</span>
+            <a href="#" id="gitRemoteConfigLinkEmpty" style="font-size:10px;color:var(--accent);text-decoration:none;margin-left:auto;">到配置页设置 ›</a>
+          </div>
+        </div>
+        <div class="git-slide-panel__commit">
+          <textarea id="gitPanelCommitMsg" class="git-panel__commit-input" rows="2" placeholder="提交信息... (Ctrl+Enter)" spellcheck="false"></textarea>
+          <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;">
+            <button type="button" class="btn btn--primary btn--sm" id="gitPanelCommit">提交</button>
+            <button type="button" class="btn btn--ghost btn--sm" id="gitPanelPush">↑ 推送</button>
+            <button type="button" class="btn btn--ghost btn--sm" id="gitPanelPull">↓ 拉取</button>
+            <span id="gitPanelHint" style="font-size:11px;color:var(--text-muted,#888);margin-left:auto;"></span>
+          </div>
+        </div>
+        <div class="git-slide-panel__tabs">
+          <button type="button" class="git-slide-panel__tab is-active" data-view="status">状态</button>
+          <button type="button" class="git-slide-panel__tab" data-view="log">历史</button>
+          <button type="button" class="git-slide-panel__tab" data-view="diff">差异</button>
+        </div>
+        <div class="git-slide-panel__content" id="gitPanelContent">
+          <div class="git-panel__loading">加载状态中...</div>
+        </div>
+      </aside>
+    </section>
+
+    <section id="page-config" class="page page--scroll">
+      <div class="content-max">
+        <fieldset class="section" id="fieldsetChatSessions">
+          <div class="section__header">
+            <h3 class="section__title">聊天与会话</h3>
+          </div>
+          <p class="section__desc" style="margin-bottom:var(--sp-4);">
+            在这里调整聊天的行为，比如对话太长时自动总结、工具调用超出上限后自动继续等。改完点"保存"就能生效。
+          </p>
+          <div class="chat-env-form" id="chatEnvForm">
+            <!-- 工具轮次 -->
+            <label class="checkbox-row">
+              <input type="checkbox" id="chkAutoContinue"/>
+              <span>工具轮次上限时自动续接</span>
+            </label>
+            <div class="sub-rows" id="rowToolRounds" style="display:none;">
+              <div class="form-row sub-row">
+                <label class="form-label" for="inpAutoContinueMax">最大续接段数</label>
+                <input type="number" id="inpAutoContinueMax" class="form-input-sm" min="0" max="200" value="4"/>
+                <span class="form-hint">0 表示不限，直到任务完成或被手动停止</span>
+              </div>
+              <div class="form-row sub-row">
+                <label class="form-label" for="inpMaxToolRounds">每轮最大工具调用次数</label>
+                <input type="number" id="inpMaxToolRounds" class="form-input-sm" min="1" max="400" value="16"/>
+                <span class="form-hint">1-400 次</span>
+              </div>
+            </div>
+
+            <!-- 上下文压缩 -->
+            <label class="checkbox-row">
+              <input type="checkbox" id="chkContextCompact"/>
+              <span>启用智能上下文压缩</span>
+            </label>
+            <div class="sub-rows" id="compactSubRows" style="display:none;">
+              <p style="font-size:12px;color:var(--text-muted);margin:var(--sp-2) 0;">
+                启用后，当满足任一触发条件时，用 LLM 对早期对话进行摘要压缩，释放上下文空间。
+              </p>
+              <div class="form-row sub-row">
+                <label class="form-label" for="inpCompactMinBytes">上下文字节触发阈值</label>
+                <input type="number" id="inpCompactMinBytes" class="form-input-sm" min="0" max="500000" value="90000"/>
+                <span class="form-hint">消息长度超过此字节数时触发（0=禁用）</span>
+              </div>
+              <div class="form-row sub-row">
+                <label class="form-label" for="inpCompactMinRounds">用户对话轮数触发阈值</label>
+                <input type="number" id="inpCompactMinRounds" class="form-input-sm" min="0" max="500" value="0"/>
+                <span class="form-hint">用户轮数超过此值时触发压缩（0=禁用）</span>
+              </div>
+              <div class="form-row sub-row">
+                <label class="form-label" for="selCompactSummarizer">摘要模型</label>
+                <select id="selCompactSummarizer" class="md-select" style="max-width:180px;">
+                </select>
+              </div>
+            </div>
+          </div>
+          <div class="row-actions" style="margin-top:var(--sp-4);">
+            <button type="button" class="btn btn--primary btn--sm" id="btnChatEnvSave">保存</button>
+          </div>
+          <div id="chatEnvStatus" class="status-line"></div>
+        </fieldset>
+
+        <fieldset class="section" id="fieldsetLlmPresets">
+          <div class="section__header">
+            <h3 class="section__title">多模型预设</h3>
+            <div class="row-actions" style="display:flex;gap:var(--sp-2);margin:0;">
+              <button type="button" class="btn btn--primary btn--sm" id="btnLlmPresetAdd">+ 新增</button>
+              <button type="button" class="btn btn--ghost btn--sm" id="btnLlmPresetRefresh">刷新</button>
+            </div>
+          </div>
+          <p class="section__desc">
+            设置不同的 AI 模型，聊天时可以在输入框上方快速切换。每个预设可以配置接口地址、模型名和密钥。点击卡片即可展开编辑。
+          </p>
+          <div id="llmPresetList" class="preset-list" style="margin-bottom: var(--sp-4);"></div>
+          <div id="llmPresetStatus" class="status-line"></div>
+        </fieldset>
+
+        <fieldset class="section" id="fieldsetPaths">
+          <div class="section__header">
+            <h3 class="section__title">目录与权限</h3>
+          </div>
+          <div id="configPathsDisplay" style="margin-bottom:var(--sp-3);"></div>
+          <div id="allowlistConfig"></div>
+        </fieldset>
+
+        <fieldset class="section" id="fieldsetGitRemote">
+          <div class="section__header">
+            <h3 class="section__title">🔗 Git 远程仓库</h3>
+          </div>
+          <p class="section__desc">
+            管理 SSH 密钥、HTTPS 凭据和 Git 代理。设置默认值后，新建项目时会自动预填。
+          </p>
+
+          <!-- 默认远程配置 -->
+          <div id="gitDefaultsSection" style="margin-bottom:var(--sp-3);padding:var(--sp-3);border:1px solid var(--border);border-radius:6px;">
+            <div style="font-weight:500;font-size:12px;margin-bottom:var(--sp-2);">📋 默认远程配置</div>
+            <label class="checkbox-row" style="margin-bottom:var(--sp-2);">
+              <input type="checkbox" id="chkGitDefaultEnabled"/>
+              <span>新建项目时默认启用远程仓库</span>
+            </label>
+            <div id="gitDefaultsForm" style="display:none;">
+              <div class="form-row">
+                <label class="form-label" for="selGitDefaultProvider">平台</label>
+                <select id="selGitDefaultProvider" class="md-select" style="max-width:160px;">
+                  <option value="github">GitHub</option>
+                  <option value="gitlab">GitLab</option>
+                  <option value="gitee">Gitee</option>
+                  <option value="bitbucket">Bitbucket</option>
+                </select>
+              </div>
+              <div class="form-row">
+                <label class="form-label" for="inpGitDefaultOwner">所有者</label>
+                <input type="text" id="inpGitDefaultOwner" class="form-input-sm" placeholder="用户名或组织名" style="max-width:200px;">
+              </div>
+              <div class="form-row">
+                <label class="form-label">协议</label>
+                <div style="display:flex;gap:12px;align-items:center;">
+                  <label style="font-size:12px;display:flex;align-items:center;gap:4px;cursor:pointer;">
+                    <input type="radio" name="gitDefaultProtocol" value="ssh" checked> SSH
+                  </label>
+                  <label style="font-size:12px;display:flex;align-items:center;gap:4px;cursor:pointer;">
+                    <input type="radio" name="gitDefaultProtocol" value="https"> HTTPS
+                  </label>
+                </div>
+              </div>
+              <label class="checkbox-row">
+                <input type="checkbox" id="chkGitDefaultAutoPush"/>
+                <span>创建后自动推送初始提交</span>
+              </label>
+              <div class="row-actions" style="margin-top:var(--sp-2);">
+                <button type="button" class="btn btn--primary btn--sm" id="btnGitDefaultsSave">保存默认值</button>
+                <span id="gitDefaultsStatus" class="status-line" style="display:inline;margin-left:8px;"></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- SSH 密钥管理（可折叠） -->
+          <div style="margin-top:var(--sp-2);border:1px solid var(--border);border-radius:6px;overflow:hidden;">
+            <div id="gitConfigSshHeader" style="display:flex;align-items:center;justify-content:space-between;padding:var(--sp-2) var(--sp-3);cursor:pointer;user-select:none;font-size:12px;">
+              <span>🔑 SSH 密钥</span>
+              <span id="gitConfigSshIcon" style="font-size:10px;color:var(--text-muted);">▶</span>
+            </div>
+            <div id="gitConfigSshBody" style="display:none;padding:0 var(--sp-3) var(--sp-3);">
+              <div id="gitConfigSshStatus" style="font-size:11px;color:var(--text-muted);padding:4px 0;">检查中...</div>
+              <div style="display:flex;gap:4px;flex-wrap:wrap;">
+                <button type="button" class="btn btn--ghost btn--xs" id="btnConfigSshGen">生成密钥</button>
+                <button type="button" class="btn btn--ghost btn--xs" id="btnConfigSshCat">查看公钥</button>
+                <button type="button" class="btn btn--ghost btn--xs" id="btnConfigSshTest">测试连接</button>
+              </div>
+              <pre id="gitConfigSshOutput" style="font-size:11px;color:var(--text);padding:6px 0;max-height:120px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;margin:0;"></pre>
+            </div>
+          </div>
+
+          <!-- HTTPS 凭据（可折叠） -->
+          <div style="margin-top:var(--sp-2);border:1px solid var(--border);border-radius:6px;overflow:hidden;">
+            <div id="gitConfigCredHeader" style="display:flex;align-items:center;justify-content:space-between;padding:var(--sp-2) var(--sp-3);cursor:pointer;user-select:none;font-size:12px;">
+              <span>🔐 HTTPS 凭据</span>
+              <span id="gitConfigCredIcon" style="font-size:10px;color:var(--text-muted);">▶</span>
+            </div>
+            <div id="gitConfigCredBody" style="display:none;padding:0 var(--sp-3) var(--sp-3);">
+              <div id="gitConfigCredStatus" style="font-size:11px;color:var(--text-muted);padding:4px 0;">检查中...</div>
+              <div id="gitConfigCredForm" style="display:none;margin-bottom:var(--sp-2);">
+                <div class="form-row">
+                  <label class="form-label" for="inpConfigCredUrl">URL</label>
+                  <input type="text" id="inpConfigCredUrl" class="form-input-sm" placeholder="https://github.com" style="max-width:250px;">
+                </div>
+                <div class="form-row">
+                  <label class="form-label" for="inpConfigCredUser">用户名</label>
+                  <input type="text" id="inpConfigCredUser" class="form-input-sm" placeholder="用户名或邮箱" style="max-width:200px;">
+                </div>
+                <div class="form-row">
+                  <label class="form-label" for="inpConfigCredToken">Token / 密码</label>
+                  <input type="password" id="inpConfigCredToken" class="form-input-sm" placeholder="Personal Access Token" style="max-width:250px;">
+                </div>
+                <div class="row-actions">
+                  <button type="button" class="btn btn--primary btn--sm" id="btnConfigCredSave">保存凭据</button>
+                  <button type="button" class="btn btn--ghost btn--sm" id="btnConfigCredCancel">取消</button>
+                </div>
+              </div>
+              <div style="display:flex;gap:4px;flex-wrap:wrap;">
+                <button type="button" class="btn btn--ghost btn--xs" id="btnConfigCredAdd">+ 添加凭据</button>
+                <button type="button" class="btn btn--ghost btn--xs" id="btnConfigCredShow">查看已存储</button>
+                <button type="button" class="btn btn--ghost btn--xs" id="btnConfigCredClear">清除所有</button>
+              </div>
+            </div>
+
+          <!-- Git 代理设置 -->
+          <div style="margin-bottom:var(--sp-3);padding:var(--sp-3);border:1px solid var(--border);border-radius:6px;">
+            <div style="font-weight:500;font-size:12px;margin-bottom:var(--sp-2);">🌐 Git 代理</div>
+            <p style="font-size:11px;color:var(--text-muted);margin-bottom:var(--sp-2);">
+              如果你的网络需要代理才能访问 GitHub/GitLab 等，在这里设置。例如 <code>http://127.0.0.1:1087</code>
+            </p>
+            <label class="checkbox-row" style="margin-bottom:var(--sp-2);">
+              <input type="checkbox" id="chkGitProxyEnabled"/>
+              <span>启用代理</span>
+            </label>
+            <div id="gitProxyForm" style=""> <!-- toggled by JS -->
+            <div class="form-row">
+              <label class="form-label" for="inpGitHttpProxy">HTTP 代理</label>
+              <input type="text" id="inpGitHttpProxy" class="form-input-sm" placeholder="http://127.0.0.1:1087" style="max-width:280px;font-family:monospace;font-size:11px;">
+              <button type="button" class="btn btn--ghost btn--xs" id="btnGitHttpProxyClear" title="清除">✕</button>
+            </div>
+            <div class="form-row">
+              <label class="form-label" for="inpGitHttpsProxy">HTTPS 代理</label>
+              <input type="text" id="inpGitHttpsProxy" class="form-input-sm" placeholder="http://127.0.0.1:1087" style="max-width:280px;font-family:monospace;font-size:11px;">
+              <button type="button" class="btn btn--ghost btn--xs" id="btnGitHttpsProxyClear" title="清除">✕</button>
+            </div>
+            <div class="row-actions" style="margin-top:var(--sp-2);">
+              <button type="button" class="btn btn--primary btn--sm" id="btnGitProxySave">保存代理设置</button>
+              <span id="gitProxyStatus" class="status-line" style="display:inline;margin-left:8px;"></span>
+            </div>
+            </div><!-- /gitProxyForm -->
+          </div>
+        </fieldset>
+      </div>
+    </section>
+
+    <section id="page-tasks" class="page page--scroll">
+      <div class="content-max">
+        <fieldset class="section" id="fieldsetCron">
+          <div class="section__header">
+            <h3 class="section__title">定时任务</h3>
+            <div class="row-actions" style="display:flex;gap:var(--sp-2);margin:0;align-items:center;">
+              <span id="cronGlobalToggle" class="toggle-switch off" title="点击切换总开关"></span>
+              <button type="button" class="btn btn--primary btn--sm" id="btnCronJobAdd">+ 新增</button>
+              <button type="button" class="btn btn--ghost btn--sm" id="btnCronRefresh">刷新</button>
+            </div>
+          </div>
+          <p class="section__desc">
+            设置 Agent 在指定的时间自动干活，比如每天早晨发报告、定期检查消息。每个任务可以单独开关，也可以随时修改。
+          </p>
+          <div id="cronJobList" class="cron-list" style="margin-bottom: var(--sp-4);"></div>
+          <div id="cronUiStatus" class="status-line"></div>
+        </fieldset>
+      </div>
+    </section>
+
+    <section id="page-agent" class="page page--scroll">
+      <div class="content-max">
+        <!-- Skills management -->
+        <fieldset class="section" id="fieldsetAgentSkills">
+          <div class="section__header">
+            <h3 class="section__title">技能（Skills）</h3>
+            <div class="row-actions" style="display:flex;gap:var(--sp-2);margin:0;">
+              <button type="button" class="btn btn--primary btn--sm" id="btnSkillAdd">+ 新增</button>
+              <button type="button" class="btn btn--ghost btn--sm" id="btnSkillRefresh">刷新</button>
+            </div>
+          </div>
+          <p class="section__desc">
+            在这里管理 Agent 能使用的技能文件。技能是 Markdown 文档，描述了 Agent 可以做什么、怎么做。勾选即可启用/停用，修改后保存，下次新会话生效。
+          </p>
+          <div id="skillList" class="skill-list" style="margin-bottom:var(--sp-3);"></div>
+          <div id="skillStatus" class="status-line"></div>
+        </fieldset>
+
+        <!-- Tools (renamed from 集成插件) -->
+        <fieldset class="section" id="fieldsetAgentTools">
+          <div class="section__header">
+            <h3 class="section__title">工具</h3>
+            <div class="row-actions" style="display:flex;gap:var(--sp-2);margin:0;">
+              <button type="button" class="btn btn--ghost btn--sm" id="btnToolRefresh">刷新</button>
+            </div>
+          </div>
+          <p class="section__desc">集成外部工具，开启后 Agent 可以使用对应能力。每个工具可以独立开关，也可以编辑配置。</p>
+          <div id="toolList" class="tool-list" style="margin-bottom:var(--sp-3);"></div>
+          <div id="toolStatus" class="status-line"></div>
+        </fieldset>
+
+        <!-- System prompt MD files: click to edit (all enabled by default) -->
+        <fieldset class="section" id="fieldsetSysPromptMd">
+          <div class="section__header">
+            <h3 class="section__title">系统提示（Agent 配置文档）</h3>
+          </div>
+          <p class="section__desc">
+            点击文件名即可编辑对应文档的内容。所有文档默认参与<strong>系统提示</strong>，无需额外勾选。保存后<strong>下一轮对话</strong>生效。
+          </p>
+          <div id="mdFileList"></div>
+          <div id="mdFileStatus" class="status-line"></div>
+        </fieldset>
+      </div>
+    </section>
+
+    <section id="page-files" class="page">
+      <div class="file-editor-layout">
+        <div class="file-editor">
+          <div class="file-editor__tabs" id="editorTabs">
+            <div class="file-editor__tabs-empty">选择一个文件查看</div>
+          </div>
+          <div id="editorContainer" class="file-editor__container">
+            <div class="file-editor__welcome">
+              <h3>文件浏览器</h3>
+              <p>左侧边栏选择文件进行编辑</p>
+            </div>
+          </div>
+          <div class="file-editor__status" id="editorStatus"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 新建项目对话框 ===== -->
+    <div id="newProjectDialog" class="modal-overlay" style="display:none">
+      <div class="modal-dialog" style="max-width:520px;position:relative;">
+        <!-- 进度提示覆盖层 -->
+        <div id="projectProgressOverlay" style="display:none;position:absolute;inset:0;background:var(--bg);border-radius:8px;z-index:10;flex-direction:column;align-items:center;justify-content:center;padding:32px;">
+          <div style="font-size:28px;margin-bottom:12px;">⏳</div>
+          <div id="projectProgressText" style="font-size:14px;font-weight:500;text-align:center;margin-bottom:8px;">正在准备...</div>
+          <div id="projectProgressDetail" style="font-size:11px;color:var(--text-muted);text-align:center;max-width:360px;line-height:1.5;"></div>
+          <div style="margin-top:16px;width:200px;height:4px;background:var(--border);border-radius:2px;overflow:hidden;">
+            <div id="projectProgressBar" style="width:0%;height:100%;background:var(--accent);border-radius:2px;transition:width 0.5s;"></div>
+          </div>
+        </div>
+        <div class="modal-dialog__header">
+          <span class="modal-dialog__title">🚀 新建项目</span>
+          <button class="modal-dialog__close" id="btnNewProjectDialogClose">&times;</button>
+        </div>
+        <div class="modal-dialog__body">
+          <!-- 项目名称 -->
+          <div class="modal-field">
+            <label class="modal-field__label" for="inpNewProjectName">项目名称 <span class="required">*</span></label>
+            <input type="text" id="inpNewProjectName" class="modal-field__input" placeholder="例如：my-awesome-project" autofocus />
+          </div>
+
+          <!-- 项目来源 -->
+          <div class="modal-field">
+            <label class="modal-field__label">项目来源</label>
+            <div style="display:flex;flex-direction:column;gap:4px;margin-top:4px;">
+              <label class="modal-radio-row" style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:6px 8px;border:1px solid var(--border);border-radius:6px;">
+                <input type="radio" name="projectSource" value="scratch" checked>
+                <span>📁 从零创建 <span style="font-size:11px;color:var(--text-muted);">— 本地空项目</span></span>
+              </label>
+              <label class="modal-radio-row" style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:6px 8px;border:1px solid var(--border);border-radius:6px;">
+                <input type="radio" name="projectSource" value="clone">
+                <span>📥 从远程仓库克隆</span>
+              </label>
+              <label class="modal-radio-row" style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:6px 8px;border:1px solid var(--border);border-radius:6px;">
+                <input type="radio" name="projectSource" value="template">
+                <span>🏗️ 从模板创建</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- 文件系统路径（所有来源共用） -->
+          <div class="modal-field" id="fieldProjectPath">
+            <label class="modal-field__label" for="inpNewProjectPath">文件系统路径 <span class="optional">(可选)</span></label>
+            <div class="modal-field__input-row">
+              <input type="text" id="inpNewProjectPath" class="modal-field__input" placeholder="留空则使用默认项目目录" />
+              <button type="button" id="btnBrowseDir" class="modal-btn modal-btn--browse" title="浏览选择目录">📁 浏览</button>
+            </div>
+          </div>
+
+          <!-- 克隆 URL（仅克隆模式） -->
+          <div class="modal-field" id="fieldCloneUrl" style="display:none;">
+            <label class="modal-field__label" for="inpCloneUrl">仓库 URL</label>
+            <input type="text" id="inpCloneUrl" class="modal-field__input" placeholder="https://github.com/user/repo.git 或 git@github.com:user/repo.git" />
+          </div>
+
+          <!-- 模板选择（仅模板模式） -->
+          <div class="modal-field" id="fieldTemplate" style="display:none;">
+            <label class="modal-field__label" for="selProjectTemplate">模板</label>
+            <select id="selProjectTemplate" class="modal-field__input">
+              <option value="fastapi">FastAPI</option>
+              <option value="flask">Flask</option>
+              <option value="cli">CLI 工具</option>
+              <option value="package">Python 包</option>
+            </select>
+          </div>
+
+          <!-- 关联远程仓库（从零创建和模板模式可用，克隆模式隐藏） -->
+          <div class="modal-field" id="fieldProjectRemote" style="display:none;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+              <span style="font-size:12px;font-weight:500;">🔗 关联远程仓库</span>
+              <label style="font-size:11px;color:var(--text-muted);display:flex;align-items:center;gap:4px;cursor:pointer;">
+                <input type="checkbox" id="chkProjectRemoteEnable"> 启用
+              </label>
+            </div>
+            <div id="projectRemoteForm" style="display:none;padding:8px;border:1px solid var(--border);border-radius:6px;">
+              <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;">
+                <select id="selProjectRemoteProvider" class="modal-field__input" style="flex:1;min-width:100px;">
+                  <option value="github">GitHub</option>
+                  <option value="gitlab">GitLab</option>
+                  <option value="gitee">Gitee</option>
+                  <option value="bitbucket">Bitbucket</option>
+                </select>
+                <input type="text" id="inpProjectRemoteOwner" class="modal-field__input" placeholder="所有者" style="flex:1;min-width:100px;">
+                <span style="line-height:32px;color:var(--text-muted);">/</span>
+                <input type="text" id="inpProjectRemoteRepo" class="modal-field__input" placeholder="仓库名" style="flex:1;min-width:100px;">
+              </div>
+              <div style="display:flex;gap:12px;align-items:center;">
+                <label style="font-size:11px;color:var(--text-muted);display:flex;align-items:center;gap:4px;cursor:pointer;">
+                  <input type="radio" name="projectRemoteProtocol" value="ssh" checked> SSH
+                </label>
+                <label style="font-size:11px;color:var(--text-muted);display:flex;align-items:center;gap:4px;cursor:pointer;">
+                  <input type="radio" name="projectRemoteProtocol" value="https"> HTTPS
+                </label>
+                <label style="font-size:11px;color:var(--text-muted);display:flex;align-items:center;gap:4px;cursor:pointer;margin-left:auto;">
+                  <input type="checkbox" id="chkProjectAutoPush"> 创建后自动推送
+                </label>
+              </div>
+              <div id="projectRemoteUrlPreview" style="font-size:10px;color:var(--text-muted);font-family:monospace;margin-top:4px;"></div>
+            </div>
+          </div>
+
+          <!-- 路径提示 -->
+          <div class="modal-field__hint" style="margin-top:4px;">关联源代码目录后，文件树和 Git 面板可直接操作项目文件</div>
+        </div>
+        <div class="modal-dialog__footer">
+          <button class="modal-btn modal-btn--cancel" id="btnNewProjectCancel">取消</button>
+          <button class="modal-btn modal-btn--confirm" id="btnNewProjectConfirm">🚀 创建项目</button>
+        </div>
+      </div>
+    </div>
+
+
+
+</main>
+</div>

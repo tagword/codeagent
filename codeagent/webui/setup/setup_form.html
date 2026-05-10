@@ -1,0 +1,140 @@
+      color: var(--c-text);
+    }
+    input, select {
+      width: 100%;
+      padding: 0.5rem 0.65rem;
+      border-radius: 7px;
+      border: 1px solid var(--c-border);
+      background: var(--c-bg);
+      color: var(--c-text);
+      font-size: 0.92rem;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    input:focus, select:focus {
+      border-color: var(--c-primary);
+      box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+    }
+    .actions {
+      display: flex;
+      gap: 0.6rem;
+      flex-wrap: wrap;
+      margin-top: 1rem;
+    }
+    button {
+      padding: 0.5rem 1.1rem;
+      border-radius: 8px;
+      border: 1px solid var(--c-border);
+      background: var(--c-bg);
+      color: var(--c-text);
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: all 0.12s;
+      font-weight: 500;
+    }
+    button:hover { opacity: 0.85; }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-primary {
+      background: var(--c-primary);
+      color: #fff;
+      border-color: var(--c-primary);
+    }
+    .btn-primary:hover { background: var(--c-primary-hover); }
+    .btn-primary:disabled { background: var(--c-muted); border-color: var(--c-muted); }
+    .msg { font-size: 0.88rem; min-height: 1.3rem; margin-top: 0.5rem; }
+    .msg.err { color: var(--c-err); }
+    .msg.ok { color: var(--c-ok); }
+    .token-display {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      margin-top: 0.5rem;
+    }
+    .token-display input { flex: 1; font-family: monospace; }
+    .hint {
+      font-size: 0.85rem;
+      color: var(--c-muted);
+      margin: 0.5rem 0;
+    }
+    code {
+      font-size: 0.9em;
+      padding: 0.1em 0.3em;
+      background: var(--c-border);
+      border-radius: 4px;
+    }
+    .divider {
+      border: none;
+      border-top: 1px solid var(--c-border);
+      margin: 1.25rem 0;
+    }
+    .setup-hero {
+      display: flex;
+      align-items: flex-start;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+      padding: 1.1rem 1.2rem;
+      border-radius: 14px;
+      background: linear-gradient(135deg, rgba(37, 99, 235, 0.09) 0%, rgba(99, 102, 241, 0.06) 100%);
+      border: 1px solid rgba(37, 99, 235, 0.2);
+    }
+    @media (prefers-color-scheme: dark) {
+      .setup-hero {
+        background: linear-gradient(135deg, rgba(59, 130, 246, 0.14) 0%, rgba(79, 70, 229, 0.09) 100%);
+        border-color: rgba(96, 165, 250, 0.25);
+      }
+    }
+    .setup-hero__icon {
+      width: 52px;
+      height: 52px;
+      border-radius: 14px;
+      object-fit: contain;
+      flex-shrink: 0;
+      box-shadow: 0 2px 14px rgba(37, 99, 235, 0.22), 0 0 0 1px rgba(255,255,255,0.06);
+      background: #fff;
+      padding: 4px;
+    }
+    .setup-hero__text h1 {
+      margin: 0 0 0.35rem 0;
+      font-size: 1.35rem;
+      font-weight: 650;
+      letter-spacing: -0.02em;
+    }
+    .setup-hero .subtitle {
+      margin: 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="setup-hero">
+    <img class="setup-hero__icon" src="/icon.png" alt="" width="52" height="52" decoding="async"/>
+    <div class="setup-hero__text">
+      <h1>CodeAgent 初始化向导</h1>
+      <p class="subtitle">
+        首次使用需要配置一个 LLM 模型预设。所有数据保存在本地，不会上传到第三方。
+      </p>
+    </div>
+  </div>
+
+  <!-- Step 1: LLM Preset -->
+  <div class="card active" id="step1">
+    <div class="card-body">
+      <div class="card-title">
+        <span class="step-badge">1</span>
+        配置 LLM 预设
+      </div>
+      <p class="card-desc">
+        添加一个 LLM 模型预设（支持任何 <strong>OpenAI 兼容协议</strong> 的 API）。配置后将设为默认模型，后续也可在 WebUI 中随时增删改。
+      </p>
+      <div class="field-row">
+        <div>
+          <label>预设名称</label>
+          <input id="fName" placeholder="如：我的 DeepSeek" value="默认预设"/>
+        </div>
+        <div>
+          <label>Base URL</label>
+          <input id="fBase" placeholder="https://api.deepseek.com/v1" value=""/>
+        </div>
+      </div>
+      <div class="field-row">
+        <div>
+          <label>模型名称</label>

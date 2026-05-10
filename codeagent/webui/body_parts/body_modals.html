@@ -1,0 +1,100 @@
+            </div>
+            <div class="row-actions" style="margin-top:var(--sp-2);">
+              <button type="button" class="btn btn--primary btn--sm" id="btnGitProxySave">保存代理设置</button>
+              <span id="gitProxyStatus" class="status-line" style="display:inline;margin-left:8px;"></span>
+            </div>
+            </div><!-- /gitProxyForm -->
+          </div>
+        </fieldset>
+      </div>
+    </section>
+
+    <section id="page-tasks" class="page page--scroll">
+      <div class="content-max">
+        <fieldset class="section" id="fieldsetCron">
+          <div class="section__header">
+            <h3 class="section__title">定时任务</h3>
+            <div class="row-actions" style="display:flex;gap:var(--sp-2);margin:0;align-items:center;">
+              <span id="cronGlobalToggle" class="toggle-switch off" title="点击切换总开关"></span>
+              <button type="button" class="btn btn--primary btn--sm" id="btnCronJobAdd">+ 新增</button>
+              <button type="button" class="btn btn--ghost btn--sm" id="btnCronRefresh">刷新</button>
+            </div>
+          </div>
+          <p class="section__desc">
+            设置 Agent 在指定的时间自动干活，比如每天早晨发报告、定期检查消息。每个任务可以单独开关，也可以随时修改。
+          </p>
+          <div id="cronJobList" class="cron-list" style="margin-bottom: var(--sp-4);"></div>
+          <div id="cronUiStatus" class="status-line"></div>
+        </fieldset>
+      </div>
+    </section>
+
+    <section id="page-agent" class="page page--scroll">
+      <div class="content-max">
+        <!-- Skills management -->
+        <fieldset class="section" id="fieldsetAgentSkills">
+          <div class="section__header">
+            <h3 class="section__title">技能（Skills）</h3>
+            <div class="row-actions" style="display:flex;gap:var(--sp-2);margin:0;">
+              <button type="button" class="btn btn--primary btn--sm" id="btnSkillAdd">+ 新增</button>
+              <button type="button" class="btn btn--ghost btn--sm" id="btnSkillRefresh">刷新</button>
+            </div>
+          </div>
+          <p class="section__desc">
+            在这里管理 Agent 能使用的技能文件。技能是 Markdown 文档，描述了 Agent 可以做什么、怎么做。勾选即可启用/停用，修改后保存，下次新会话生效。
+          </p>
+          <div id="skillList" class="skill-list" style="margin-bottom:var(--sp-3);"></div>
+          <div id="skillStatus" class="status-line"></div>
+        </fieldset>
+
+        <!-- Tools (renamed from 集成插件) -->
+        <fieldset class="section" id="fieldsetAgentTools">
+          <div class="section__header">
+            <h3 class="section__title">工具</h3>
+            <div class="row-actions" style="display:flex;gap:var(--sp-2);margin:0;">
+              <button type="button" class="btn btn--ghost btn--sm" id="btnToolRefresh">刷新</button>
+            </div>
+          </div>
+          <p class="section__desc">集成外部工具，开启后 Agent 可以使用对应能力。每个工具可以独立开关，也可以编辑配置。</p>
+          <div id="toolList" class="tool-list" style="margin-bottom:var(--sp-3);"></div>
+          <div id="toolStatus" class="status-line"></div>
+        </fieldset>
+
+        <!-- System prompt MD files: click to edit (all enabled by default) -->
+        <fieldset class="section" id="fieldsetSysPromptMd">
+          <div class="section__header">
+            <h3 class="section__title">系统提示（Agent 配置文档）</h3>
+          </div>
+          <p class="section__desc">
+            点击文件名即可编辑对应文档的内容。所有文档默认参与<strong>系统提示</strong>，无需额外勾选。保存后<strong>下一轮对话</strong>生效。
+          </p>
+          <div id="mdFileList"></div>
+          <div id="mdFileStatus" class="status-line"></div>
+        </fieldset>
+      </div>
+    </section>
+
+    <section id="page-files" class="page">
+      <div class="file-editor-layout">
+        <div class="file-editor">
+          <div class="file-editor__tabs" id="editorTabs">
+            <div class="file-editor__tabs-empty">选择一个文件查看</div>
+          </div>
+          <div id="editorContainer" class="file-editor__container">
+            <div class="file-editor__welcome">
+              <h3>文件浏览器</h3>
+              <p>左侧边栏选择文件进行编辑</p>
+            </div>
+          </div>
+          <div class="file-editor__status" id="editorStatus"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 新建项目对话框 ===== -->
+    <div id="newProjectDialog" class="modal-overlay" style="display:none">
+      <div class="modal-dialog" style="max-width:520px;position:relative;">
+        <!-- 进度提示覆盖层 -->
+        <div id="projectProgressOverlay" style="display:none;position:absolute;inset:0;background:var(--bg);border-radius:8px;z-index:10;flex-direction:column;align-items:center;justify-content:center;padding:32px;">
+          <div style="font-size:28px;margin-bottom:12px;">⏳</div>
+          <div id="projectProgressText" style="font-size:14px;font-weight:500;text-align:center;margin-bottom:8px;">正在准备...</div>

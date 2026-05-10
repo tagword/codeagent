@@ -1,0 +1,96 @@
+/* ================================================================
+ * 01-theme.css — CSS custom properties, light/dark theme, resets
+ * ================================================================ */
+
+:root {
+  color-scheme: light dark;
+
+  /* Spacing scale (4px base) */
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 20px; --sp-6: 24px; --sp-8: 32px; --sp-10: 40px; --sp-12: 48px;
+
+  /* Radii */
+  --r-xs: 4px; --r-sm: 6px; --r-md: 8px; --r-lg: 10px;
+  --r-xl: 14px; --r-2xl: 18px; --r-full: 9999px;
+
+  /* Typography */
+  --font-sans: "Inter", "Segoe UI Variable", system-ui, -apple-system, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", "Helvetica Neue", sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", ui-monospace, "Cascadia Code", Consolas, monospace;
+
+  /* Layout */
+  --activity-bar-w: 48px;
+  --sidebar-w: 272px;
+  --topbar-h: 56px;
+
+  /* Light theme */
+  --bg: #fbfbfc;
+  --bg-panel: #ffffff;
+  --bg-subtle: #f5f5f7;
+  --bg-hover: #eeeef1;
+  --bg-chat: #fafafb;
+  --border: #e6e6ea;
+  --border-strong: #d4d4d8;
+  --divider: #eeeef1;
+  --text: #18181b;
+  --text-secondary: #3f3f46;
+  --text-muted: #71717a;
+  --text-subtle: #a1a1aa;
+  --accent: #4f46e5;
+  --accent-hover: #4338ca;
+  --accent-soft: rgba(79, 70, 229, 0.09);
+  --accent-softer: rgba(79, 70, 229, 0.04);
+  --accent-ring: rgba(79, 70, 229, 0.22);
+  --danger: #dc2626;
+  --danger-soft: rgba(220, 38, 38, 0.10);
+  --success: #16a34a;
+  --shadow-xs: 0 1px 2px rgba(16, 24, 40, 0.04);
+  --shadow-sm: 0 1px 3px rgba(16, 24, 40, 0.06), 0 1px 2px rgba(16, 24, 40, 0.04);
+  --shadow-md: 0 6px 16px -4px rgba(16, 24, 40, 0.08), 0 2px 4px -2px rgba(16, 24, 40, 0.04);
+  --shadow-lg: 0 18px 36px -10px rgba(16, 24, 40, 0.12), 0 4px 10px -4px rgba(16, 24, 40, 0.05);
+  --shadow-focus: 0 0 0 3px var(--accent-ring);
+
+  --bubble-user-bg: linear-gradient(140deg, #4f46e5 0%, #4338ca 100%);
+  --bubble-user-text: #ffffff;
+  --bubble-agent-bg: #ffffff;
+  --bubble-agent-border: #e8e8ec;
+  --todo-in-progress-bg: #fef3c7;
+  --todo-in-progress-text: #d97706;
+  --todo-completed-bg: #d1fae5;
+  --todo-completed-text: #059669;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0a0a0b;
+    --bg-panel: #111113;
+    --bg-subtle: #161618;
+    --bg-hover: rgba(255,255,255,0.05);
+    --bg-chat: #0c0c0e;
+    --border: rgba(255,255,255,0.08);
+    --border-strong: rgba(255,255,255,0.14);
+    --divider: rgba(255,255,255,0.06);
+    --text: #f4f4f5;
+    --text-secondary: #d4d4d8;
+    --text-muted: #a1a1aa;
+    --text-subtle: #71717a;
+    --accent: #a5b4fc;
+    --accent-hover: #c7d2fe;
+    --accent-soft: rgba(129, 140, 248, 0.16);
+    --accent-softer: rgba(129, 140, 248, 0.06);
+    --accent-ring: rgba(129, 140, 248, 0.35);
+    --danger: #f87171;
+    --danger-soft: rgba(248, 113, 113, 0.14);
+    --shadow-xs: 0 1px 2px rgba(0,0,0,0.35);
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.4);
+    --shadow-md: 0 8px 20px -6px rgba(0,0,0,0.5);
+    --shadow-lg: 0 24px 48px -14px rgba(0,0,0,0.6);
+    --bubble-user-bg: linear-gradient(140deg, #6366f1 0%, #4f46e5 100%);
+    --bubble-user-text: #ffffff;
+    --bubble-agent-bg: #17171a;
+    --bubble-agent-border: rgba(255,255,255,0.08);
+    --todo-in-progress-bg: rgba(217, 119, 6, 0.2);
+    --todo-in-progress-text: #fbbf24;
+    --todo-completed-bg: rgba(5, 150, 105, 0.2);
+    --todo-completed-text: #34d399;
+  }
+}

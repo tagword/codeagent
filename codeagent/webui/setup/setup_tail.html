@@ -1,0 +1,84 @@
+          llm_model: model,
+          llm_api_key: key,
+          llm_auth_scheme: scheme || 'Bearer'
+        });
+        setMsg('msg1', '连接成功：' + (j.model_hint || 'OK'));
+      } catch (e) {
+        setMsg('msg1', String(e), true);
+      }
+    };
+
+    $('btnSave').onclick = async () => {
+      const name = $('fName').value.trim();
+      const base = $('fBase').value.trim();
+      const model = $('fModel').value.trim();
+      const key = $('fKey').value.trim();
+      const scheme = $('fScheme').value;
+      if (!name) { setMsg('msg1', '预设名称不能为空', true); return; }
+      if (!base) { setMsg('msg1', 'Base URL 不能为空', true); return; }
+      if (!model) { setMsg('msg1', '模型名称不能为空', true); return; }
+      setMsg('msg1', '保存中…');
+      try {
+        // Auto-generate a stable ID from name
+        const id = name.replace(/[^a-zA-Z0-9\u4e00-\u9fff_-]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '').toLowerCase() || 'default';
+        await postJson('/api/ui/llm/presets', {
+          id: id,
+          name: name,
+          base_url: base,
+          model: model,
+          api_key: key,
+          auth_scheme: scheme === 'Bearer' ? 'Bearer' : ''
+        });
+        // Set as default
+        await postJson('/api/ui/llm/presets/default', { preset_id: id });
+        setMsg('msg1', '预设已保存并设为默认。');
+        // Move to step 2
+        document.querySelector('.card.active').classList.remove('active');
+        $('step2').classList.add('active');
+        setMsg('msg2', '');
+      } catch (e) {
+        setMsg('msg1', String(e), true);
+      }
+    };
+
+    // --- Step 2: Security ---
+
+    let lastToken = '';
+
+    $('btnFinish').onclick = async () => {
+      setMsg('msg2', '生成中…');
+      try {
+        const j = await postJson('/api/ui/setup/finish', {});
+        lastToken = String(j.webui_token || '').trim();
+        $('tokenVal').value = lastToken;
+        $('btnCopyToken').disabled = !lastToken;
+        $('tokenHint').style.display = lastToken ? 'block' : 'none';
+        setMsg('msg2', 'Token 已生成。请先复制保存，再进入第 3 步。');
+        $('btnStart').disabled = false;
+        // Enable step 3 link
+        document.querySelector('.card.active').classList.remove('active');
+        $('step3').classList.add('active');
+      } catch (e) {
+        setMsg('msg2', String(e), true);
+      }
+    };
+
+    $('btnCopyToken').onclick = async () => {
+      const t = String($('tokenVal').value || '').trim();
+      if (!t) return;
+      try {
+        await navigator.clipboard.writeText(t);
+        setMsg('msg2', '已复制 Token。请妥善保存！');
+      } catch (e) {
+        setMsg('msg2', '复制失败，请手动选中复制。', true);
+      }
+    };
+
+    // --- Step 3: Start ---
+
+    $('btnStart').onclick = () => {
+      location.href = '/?setup_done=1';
+    };
+  </script>
+</body>
+</html>

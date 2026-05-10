@@ -1,0 +1,55 @@
+/* ============ Compose ============ */.compose {  flex-shrink: 0;  padding: var(--sp-3) var(--sp-8) var(--sp-5);  background: linear-gradient(to top, var(--bg) 72%, transparent);}.compose__box {  max-width: 820px;  margin: 0 auto;  background: var(--bg-panel);  border: 1px solid var(--border);  border-radius: var(--r-xl);  box-shadow: var(--shadow-sm);  transition: border-color 0.15s ease, box-shadow 0.15s ease;  display: flex;  flex-direction: column;}.compose__box:focus-within { border-color: var(--accent); box-shadow: var(--shadow-focus); }#msg {  width: 100%;  min-height: 44px;  max-height: 220px;  padding: 11px 14px 2px;  border: none;  background: transparent;  color: var(--text);  font-size: 13.5px;  font-family: inherit;  line-height: 1.55;  resize: none;  outline: none;}#msg::placeholder { color: var(--text-subtle); }.compose__actions {  display: flex;  align-items: center;  justify-content: flex-end;  gap: var(--sp-2);  padding: 6px 10px 8px;}.compose__hint {  margin-right: auto;  font-size: 11px;  color: var(--text-subtle);  font-family: var(--font-mono);  padding-left: 6px;  letter-spacing: 0.02em;  white-space: nowrap;  overflow: hidden;  text-overflow: ellipsis;}.compose__hint kbd {  display: inline-block;  padding: 1px 5px;  border-radius: var(--r-xs);  border: 1px solid var(--border);  background: var(--bg-subtle);  font-size: 10px;  font-family: inherit;  color: var(--text-muted);  line-height: 1.4;}.compose__model-select {  font-size: inherit;  font-family: inherit;  background: transparent;  color: var(--text-secondary);  border: none;  cursor: pointer;  max-width: 120px;  vertical-align: baseline;  padding: 0; margin: 0;  appearance: auto;  -webkit-appearance: auto;}.compose__model-select:hover { color: var(--text); }.compose__model-select option { background: var(--bg-panel); color: var(--text); }/* ============ Session running state indicator ============ */
+
+/* 通道指示点 — 基础样式 */
+.sess-item__channel-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--border-strong);
+  flex-shrink: 0;
+  transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* 会话列表行 — 运行中状态 */
+.sess-row.is-running {
+  position: relative;
+}
+.sess-row.is-running .sess-item-main {
+  background: var(--accent-softer);
+}
+.sess-row.is-running .sess-item__channel-dot {
+  background: var(--success);
+  box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.5);
+  animation: sess-running-pulse 1.4s ease-in-out infinite;
+}
+.sess-row.is-running .sess-item__title {
+  color: var(--accent);
+  font-weight: 600;
+}
+/* 树状视图 — 运行中状态 */
+.tree-session.is-running .tree-session__row {
+  background: var(--accent-softer);
+}
+.tree-session.is-running .tree-session__indicator {
+  background: var(--success);
+  box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.5);
+  animation: sess-running-pulse 1.4s ease-in-out infinite;
+}
+.tree-session.is-running .tree-session__title {
+  color: var(--accent);
+  font-weight: 600;
+}
+@keyframes sess-running-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.45); }
+  50% { box-shadow: 0 0 0 6px rgba(22, 163, 74, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0); }
+}
+
+/* topbar session-id-chip 运行态 */
+.chat-running .session-id-chip::before {
+  background: var(--success);
+  animation: sess-running-pulse 1.4s ease-in-out infinite;
+}
+
+/* ============ New message floating button ============ */.new-msg-btn {  position: sticky;  bottom: 0;  align-self: center;  z-index: 20;  display: inline-flex;  align-items: center;  gap: 6px;  padding: 7px 16px;  margin: -38px 0 4px;  border: 1px solid var(--border-strong);  border-radius: 20px;  background: var(--bg-panel);  color: var(--accent);  font-size: 12.5px;  font-weight: 500;  cursor: pointer;  box-shadow: 0 2px 10px rgba(0,0,0,0.12);  transition: opacity 0.2s ease, transform 0.2s ease;  user-select: none;  -webkit-user-select: none;}.new-msg-btn:hover {  background: var(--bg-hover);  box-shadow: 0 3px 14px rgba(0,0,0,0.18);  transform: translateY(-1px);}.new-msg-btn:active {  transform: translateY(0);}.new-msg-btn__dot {  width: 8px;  height: 8px;  border-radius: 50%;  background: var(--accent);  flex-shrink: 0;}

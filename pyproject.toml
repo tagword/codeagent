@@ -1,0 +1,75 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "codeagent"
+version = "1.0.0"
+description = "LLM agent with Markdown config, tool loop, Web UI, sessions, memory, and webhooks"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.9"
+dependencies = [
+    "seed>=1.0.0",
+    "seed-tools>=1.0.0",
+]
+
+[project.optional-dependencies]
+server = [
+    "uvicorn[standard]>=0.30.0",
+    "starlette>=0.37.0",
+    "apscheduler>=3.10.0",
+]
+dev = ["pytest>=7.0", "ruff>=0.4.0", "bandit>=1.7.0"]
+yaml = ["pyyaml>=6.0"]
+
+[project.scripts]
+codeagent = "codeagent.cli.main:main"
+codeagent-core = "codeagent.cli.main:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["codeagent*"]
+
+# ──────────────────────────────────────────────────────────────────
+#  Tool configuration: pytest, bandit, ruff
+# ──────────────────────────────────────────────────────────────────
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-v --tb=short"
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.bandit]
+exclude_dirs = [
+    "tests",
+    ".venv",
+    "venv",
+    "__pycache__",
+    "node_modules",
+    ".git",
+    "build",
+    "dist",
+    "*.egg-info",
+]
+skips = ["B101"]  # allow assert statements (used in tests)
+
+[tool.ruff]
+line-length = 120
+target-version = "py39"
+
+# ── Rules ────────────────────────────────────────────────────────
+# E, F, I, N, W = pycodestyle + pyflakes + isort + pep8-naming + pycodestyle warnings
+# UP = pyupgrade (auto modernize syntax)
+# SIM = flake8-simplify
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "SIM"]
+ignore = [
+    "E501",   # line too long → already handled by line-length
+    "N818",   # exception naming convention
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["seed", "codeagent"]

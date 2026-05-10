@@ -1,0 +1,100 @@
+          <input id="fModel" placeholder="如：deepseek-chat / gpt-4.1-mini"/>
+        </div>
+        <div>
+          <label>API Key（可选）</label>
+          <input id="fKey" type="password" placeholder="sk-... 留空则不传 Key"/>
+        </div>
+      </div>
+      <div class="field-row">
+        <div>
+          <label>认证方案</label>
+          <select id="fScheme">
+            <option value="Bearer" selected>Bearer</option>
+            <option value="">None（无认证）</option>
+          </select>
+        </div>
+      </div>
+      <div class="actions">
+        <button id="btnTest" type="button">测试连接</button>
+        <button id="btnSave" type="button" class="btn-primary">保存并继续 →</button>
+      </div>
+      <div id="msg1" class="msg"></div>
+    </div>
+  </div>
+
+  <!-- Step 2: Security Token -->
+  <div class="card" id="step2">
+    <div class="card-body">
+      <div class="card-title">
+        <span class="step-badge">2</span>
+        安全设置
+      </div>
+      <p class="card-desc">
+        启用 WebUI 鉴权并生成访问 Token。请务必保存好此 Token——刷新或重启后需用它登录。
+      </p>
+      <div class="actions">
+        <button id="btnFinish" type="button" class="btn-primary">生成 Token</button>
+      </div>
+      <div class="token-display">
+        <input id="tokenVal" readonly placeholder="点击「生成 Token」后显示"/>
+        <button id="btnCopyToken" type="button" disabled>复制</button>
+      </div>
+      <div id="msg2" class="msg"></div>
+      <p class="hint" id="tokenHint" style="display:none;">
+        Token 已生成。请先点击「复制」保存到安全位置，然后进入第 3 步。
+      </p>
+    </div>
+  </div>
+
+  <!-- Step 3: Done + Start -->
+  <div class="card" id="step3">
+    <div class="card-body">
+      <div class="card-title">
+        <span class="step-badge">3</span>
+        开始使用
+      </div>
+      <p class="card-desc">
+        初始化完成！确认已保存 Token 后，点击下方按钮进入主界面。
+      </p>
+      <div class="actions">
+        <button id="btnStart" type="button" class="btn-primary" disabled>开始对话 →</button>
+      </div>
+      <div id="msg3" class="msg"></div>
+    </div>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    function setMsg(id, text, isErr) {
+      const el = $(id);
+      if (!el) return;
+      el.textContent = text || '';
+      el.className = 'msg' + (isErr ? ' err' : text && !isErr ? ' ok' : '');
+    }
+
+    async function postJson(url, body) {
+      const r = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify(body || {})
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.detail || r.statusText);
+      return j;
+    }
+
+    // --- Step 1: LLM Preset ---
+
+    $('btnTest').onclick = async () => {
+      const base = $('fBase').value.trim();
+      const model = $('fModel').value.trim();
+      const key = $('fKey').value.trim();
+      const scheme = $('fScheme').value;
+      if (!base) { setMsg('msg1', 'Base URL 不能为空', true); return; }
+      if (!model) { setMsg('msg1', '模型名称不能为空', true); return; }
+      setMsg('msg1', '测试连接中…');
+      try {
+        const j = await postJson('/api/ui/setup/test-llm', {
+          llm_baseurl: base,

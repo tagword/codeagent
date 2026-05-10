@@ -1,0 +1,100 @@
+                <input type="text" id="inpConfigRemoteOwner" class="form-input-sm" placeholder="用户名" style="max-width:200px;">
+              </div>
+              <div class="form-row">
+                <label class="form-label" for="inpConfigRemoteRepo">仓库名</label>
+                <input type="text" id="inpConfigRemoteRepo" class="form-input-sm" placeholder="repo-name" style="max-width:200px;">
+              </div>
+              <div class="form-row">
+                <label class="form-label" for="inpConfigRemoteUrl">完整 URL</label>
+                <input type="text" id="inpConfigRemoteUrl" class="form-input-sm" placeholder="自动生成或手动输入" style="flex:1;">
+                <span id="configUrlPreview" style="font-size:10px;color:var(--text-muted);font-family:monospace;margin-left:4px;"></span>
+              </div>
+              <div class="form-row">
+                <label class="form-label">协议</label>
+                <div style="display:flex;gap:12px;align-items:center;">
+                  <label style="font-size:12px;display:flex;align-items:center;gap:4px;cursor:pointer;">
+                    <input type="radio" name="configRemoteProtocol" value="ssh" checked> SSH
+                  </label>
+                  <label style="font-size:12px;display:flex;align-items:center;gap:4px;cursor:pointer;">
+                    <input type="radio" name="configRemoteProtocol" value="https"> HTTPS
+                  </label>
+                </div>
+              </div>
+              <div class="row-actions">
+                <button type="button" class="btn btn--primary btn--sm" id="btnConfigRemoteSave">保存</button>
+                <button type="button" class="btn btn--ghost btn--sm" id="btnConfigRemoteCancel">取消</button>
+                <span id="configRemoteStatus" class="status-line" style="display:inline;margin-left:8px;"></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- SSH 密钥管理（可折叠） -->
+          <div style="margin-top:var(--sp-2);border:1px solid var(--border);border-radius:6px;overflow:hidden;">
+            <div id="gitConfigSshHeader" style="display:flex;align-items:center;justify-content:space-between;padding:var(--sp-2) var(--sp-3);cursor:pointer;user-select:none;font-size:12px;">
+              <span>🔑 SSH 密钥</span>
+              <span id="gitConfigSshIcon" style="font-size:10px;color:var(--text-muted);">▶</span>
+            </div>
+            <div id="gitConfigSshBody" style="display:none;padding:0 var(--sp-3) var(--sp-3);">
+              <div id="gitConfigSshStatus" style="font-size:11px;color:var(--text-muted);padding:4px 0;">检查中...</div>
+              <div style="display:flex;gap:4px;flex-wrap:wrap;">
+                <button type="button" class="btn btn--ghost btn--xs" id="btnConfigSshGen">生成密钥</button>
+                <button type="button" class="btn btn--ghost btn--xs" id="btnConfigSshCat">查看公钥</button>
+                <button type="button" class="btn btn--ghost btn--xs" id="btnConfigSshTest">测试连接</button>
+              </div>
+              <pre id="gitConfigSshOutput" style="font-size:11px;color:var(--text);padding:6px 0;max-height:120px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;margin:0;"></pre>
+            </div>
+          </div>
+
+          <!-- HTTPS 凭据（可折叠） -->
+          <div style="margin-top:var(--sp-2);border:1px solid var(--border);border-radius:6px;overflow:hidden;">
+            <div id="gitConfigCredHeader" style="display:flex;align-items:center;justify-content:space-between;padding:var(--sp-2) var(--sp-3);cursor:pointer;user-select:none;font-size:12px;">
+              <span>🔐 HTTPS 凭据</span>
+              <span id="gitConfigCredIcon" style="font-size:10px;color:var(--text-muted);">▶</span>
+            </div>
+            <div id="gitConfigCredBody" style="display:none;padding:0 var(--sp-3) var(--sp-3);">
+              <div id="gitConfigCredStatus" style="font-size:11px;color:var(--text-muted);padding:4px 0;">检查中...</div>
+              <div id="gitConfigCredForm" style="display:none;margin-bottom:var(--sp-2);">
+                <div class="form-row">
+                  <label class="form-label" for="inpConfigCredUrl">URL</label>
+                  <input type="text" id="inpConfigCredUrl" class="form-input-sm" placeholder="https://github.com" style="max-width:250px;">
+                </div>
+                <div class="form-row">
+                  <label class="form-label" for="inpConfigCredUser">用户名</label>
+                  <input type="text" id="inpConfigCredUser" class="form-input-sm" placeholder="用户名或邮箱" style="max-width:200px;">
+                </div>
+                <div class="form-row">
+                  <label class="form-label" for="inpConfigCredToken">Token / 密码</label>
+                  <input type="password" id="inpConfigCredToken" class="form-input-sm" placeholder="Personal Access Token" style="max-width:250px;">
+                </div>
+                <div class="row-actions">
+                  <button type="button" class="btn btn--primary btn--sm" id="btnConfigCredSave">保存凭据</button>
+                  <button type="button" class="btn btn--ghost btn--sm" id="btnConfigCredCancel">取消</button>
+                </div>
+              </div>
+              <div style="display:flex;gap:4px;flex-wrap:wrap;">
+                <button type="button" class="btn btn--ghost btn--xs" id="btnConfigCredAdd">+ 添加凭据</button>
+                <button type="button" class="btn btn--ghost btn--xs" id="btnConfigCredShow">查看已存储</button>
+                <button type="button" class="btn btn--ghost btn--xs" id="btnConfigCredClear">清除所有</button>
+              </div>
+            </div>
+
+          <!-- Git 代理设置 -->
+          <div style="margin-bottom:var(--sp-3);padding:var(--sp-3);border:1px solid var(--border);border-radius:6px;">
+            <div style="font-weight:500;font-size:12px;margin-bottom:var(--sp-2);">🌐 Git 代理</div>
+            <p style="font-size:11px;color:var(--text-muted);margin-bottom:var(--sp-2);">
+              如果你的网络需要代理才能访问 GitHub/GitLab 等，在这里设置。例如 <code>http://127.0.0.1:1087</code>
+            </p>
+            <label class="checkbox-row" style="margin-bottom:var(--sp-2);">
+              <input type="checkbox" id="chkGitProxyEnabled"/>
+              <span>启用代理</span>
+            </label>
+            <div id="gitProxyForm" style=""> <!-- toggled by JS -->
+            <div class="form-row">
+              <label class="form-label" for="inpGitHttpProxy">HTTP 代理</label>
+              <input type="text" id="inpGitHttpProxy" class="form-input-sm" placeholder="http://127.0.0.1:1087" style="max-width:280px;font-family:monospace;font-size:11px;">
+              <button type="button" class="btn btn--ghost btn--xs" id="btnGitHttpProxyClear" title="清除">✕</button>
+            </div>
+            <div class="form-row">
+              <label class="form-label" for="inpGitHttpsProxy">HTTPS 代理</label>
+              <input type="text" id="inpGitHttpsProxy" class="form-input-sm" placeholder="http://127.0.0.1:1087" style="max-width:280px;font-family:monospace;font-size:11px;">
+              <button type="button" class="btn btn--ghost btn--xs" id="btnGitHttpsProxyClear" title="清除">✕</button>

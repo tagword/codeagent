@@ -1,0 +1,21 @@
+{
+  "name": "codeagent-webui",
+  "version": "1.0.0",
+  "private": true,
+  "description": "CodeAgent Web UI frontend (JS bundled at runtime)",
+  "scripts": {
+    "check": "npx @biomejs/biome check *.js --max-diagnostics=50",
+    "lint": "npx @biomejs/biome lint *.js --max-diagnostics=50",
+    "format": "npx @biomejs/biome format --write *.js",
+    "verify:js": "npx @biomejs/biome ci *.js",
+    "verify:syntax": "node scripts/verify-combined.mjs",
+    "verify": "npm run verify:js && npm run verify:syntax",
+    "verify:combined": "node scripts/verify-combined.mjs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.14"
+  }
+}

@@ -1,0 +1,2 @@
+"""Integrations namespace (future-proof)."""
+

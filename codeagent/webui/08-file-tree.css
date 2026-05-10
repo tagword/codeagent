@@ -1,0 +1,176 @@
+/* === 文件树 === */
+.file-tree {
+  padding: 4px 0;
+  font-size: 13px;
+  user-select: none;
+}
+
+.file-tree__loading {
+  padding: 12px 16px;
+  color: var(--text-muted, #888);
+  font-style: italic;
+}
+
+.file-tree__item {
+  display: flex;
+  align-items: center;
+  padding: 3px 8px 3px 4px;
+  cursor: pointer;
+  border-radius: 3px;
+  margin: 1px 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-tree__item:hover {
+  background: var(--bg-hover, rgba(128,128,128,0.1));
+}
+
+.file-tree__item.active {
+  background: var(--bg-active, rgba(128,128,128,0.2));
+}
+
+.file-tree__item--dir {
+  font-weight: 500;
+}
+
+.file-tree__item--file {
+  padding-left: 22px;
+}
+
+.file-tree__icon {
+  margin-right: 4px;
+  flex-shrink: 0;
+  font-size: 14px;
+  width: 18px;
+  text-align: center;
+}
+
+.file-tree__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-tree__children {
+  display: none;
+}
+
+.file-tree__children.open {
+  display: block;
+}
+
+.file-tree__toggle {
+  width: 16px;
+  flex-shrink: 0;
+  text-align: center;
+  font-size: 10px;
+  color: var(--text-muted, #888);
+  transition: transform 0.15s;
+}
+
+.file-tree__toggle.expanded {
+  transform: rotate(90deg);
+}
+
+/* === 编辑器布局 === */
+.file-editor-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.file-editor {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--bg-editor, #1e1e1e);
+}
+
+.file-editor__tabs {
+  display: flex;
+  align-items: center;
+  min-height: 35px;
+  background: var(--bg-tabs, #252526);
+  border-bottom: 1px solid var(--border-tabs, #3c3c3c);
+  overflow-x: auto;
+  padding: 0 4px;
+}
+
+.file-editor__tabs-empty {
+  color: var(--text-muted, #888);
+  padding: 0 12px;
+  font-size: 12px;
+}
+
+.file-editor__tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  border-right: 1px solid var(--border-tabs, #3c3c3c);
+  white-space: nowrap;
+  color: var(--text-muted, #aaa);
+  background: var(--bg-tab-inactive, #2d2d2d);
+}
+
+.file-editor__tab.active {
+  color: var(--text, #ddd);
+  background: var(--bg-tab-active, #1e1e1e);
+  border-bottom: 2px solid var(--accent, #0078d4);
+}
+
+.file-editor__tab-close {
+  font-size: 14px;
+  line-height: 1;
+  opacity: 0.5;
+  padding: 0 2px;
+}
+
+.file-editor__tab-close:hover {
+  opacity: 1;
+}
+
+.file-editor__container {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.file-editor__welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-muted, #888);
+}
+
+.file-editor__welcome h3 {
+  margin: 0 0 8px;
+  font-size: 18px;
+  font-weight: 400;
+}
+
+.file-editor__welcome p {
+  margin: 0;
+  font-size: 13px;
+}
+
+.file-editor__status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 3px 12px;
+  font-size: 12px;
+  color: var(--text-muted, #888);
+  background: var(--bg-status, #007acc);
+  color: #fff;
+  min-height: 22px;
+}
+
+#editorContainer .monaco-editor {
+  padding-top: 0;
+}

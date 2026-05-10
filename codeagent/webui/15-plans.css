@@ -1,0 +1,183 @@
+/* ================================================================
+ * 15-plans.css — Plan 面板样式
+ *   与 todo-panel 视觉一致，保持统一
+ * ================================================================ */
+
+/* ---- Plan panel (right sidebar, like todo panel) ---- */
+
+.plan-panel {
+  position: absolute;
+  top: var(--topbar-h, 44px);
+  right: 0;
+  bottom: 0;
+  width: 400px;
+  max-width: 92vw;
+  background: var(--bg-panel);
+  border-left: 1px solid var(--border);
+  display: none;
+  flex-direction: column;
+  z-index: 50;
+  box-shadow: -4px 0 16px rgba(0,0,0,0.06);
+  overflow: hidden;
+}
+
+.plan-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--sp-3) var(--sp-4);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.plan-panel__list {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--sp-2) 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+.plan-panel__list::-webkit-scrollbar { width: 8px; }
+.plan-panel__list::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
+
+.plan-panel__footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-2) var(--sp-4);
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+/* ---- Plan card ---- */
+
+.plan-card {
+  margin: 0 var(--sp-2) var(--sp-1);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm, 6px);
+  background: var(--bg);
+  overflow: hidden;
+  transition: border-color 0.15s;
+}
+.plan-card:hover {
+  border-color: var(--border-strong);
+}
+
+.plan-card__header {
+  display: flex;
+  align-items: center;
+  padding: var(--sp-2) var(--sp-3);
+  cursor: pointer;
+  user-select: none;
+  gap: var(--sp-2);
+}
+
+.plan-card__icon {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
+.plan-card__info {
+  flex: 1;
+  min-width: 0;
+}
+
+.plan-card__name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* icon 由 JS 中的 .plan-card__icon 提供 */
+
+.plan-card__meta {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 1px;
+}
+
+.plan-card__arrow {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  color: var(--text-muted);
+  transition: transform 0.2s;
+}
+.plan-card__arrow.is-open {
+  transform: rotate(90deg);
+}
+
+/* ---- Plan card expanded body ---- */
+
+.plan-card__body-wrap {
+  display: none;
+  border-top: 1px solid var(--border);
+  background: var(--bg-subtle, #fafafa);
+}
+.plan-card__body-wrap.is-open {
+  display: block;
+}
+
+.plan-card__body {
+  padding: var(--sp-3);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text);
+  max-height: 60vh;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--font-mono, monospace);
+}
+
+.plan-card__body h1,
+.plan-card__body h2,
+.plan-card__body h3 {
+  font-family: var(--font-sans, system-ui, sans-serif);
+  margin: 0.5em 0 0.25em;
+  font-weight: 600;
+}
+.plan-card__body h1 { font-size: 15px; }
+.plan-card__body h2 { font-size: 14px; }
+.plan-card__body h3 { font-size: 13px; }
+
+.plan-card__body ul,
+.plan-card__body ol {
+  padding-left: 1.5em;
+  margin: 0.3em 0;
+}
+
+.plan-card__body code {
+  background: var(--bg-hover);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 0.92em;
+}
+
+.plan-card__body pre {
+  background: var(--bg-hover);
+  padding: var(--sp-2);
+  border-radius: var(--r-sm, 4px);
+  overflow-x: auto;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* ---- Empty state ---- */
+
+.plan-empty {
+  text-align: center;
+  padding: var(--sp-6) var(--sp-4);
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.8;
+}

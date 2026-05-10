@@ -1,0 +1,100 @@
+          <div class="git-panel__branch" id="gitBranch">🌿 main</div>
+          <div class="git-panel__actions">
+            <button class="btn btn--sm btn--subtle" id="gitBtnRefresh" title="刷新">🔄</button>
+            <button class="btn btn--sm btn--subtle" id="gitBtnPull" title="拉取">⬇</button>
+            <button class="btn btn--sm btn--subtle" id="gitBtnPush" title="推送">⬆</button>
+          </div>
+          <div class="git-panel__status" id="gitStatus">
+            <div class="git-panel__loading">加载中...</div>
+          </div>
+          <div class="git-panel__commit">
+            <textarea id="gitCommitMsg" class="git-panel__commit-input" rows="3" placeholder="提交信息..."></textarea>
+            <button class="btn btn--primary btn--sm" id="gitBtnCommit" style="width:100%;">提交</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </aside>
+
+  <main class="workspace">
+    <header class="topbar">
+      <div class="topbar__title-group">
+        <h2 class="topbar__title" id="currentConvTitle">新对话</h2>
+        <span class="channel-pill" id="currentConvChannel">Web 聊天</span>
+        <span class="topbar__project-path" id="currentProjectPath" style="display:none"></span>
+      </div>
+      <div class="topbar__meta">
+        <button type="button" class="topbar__todo-btn" id="btnTogglePlans" title="项目规划面板">
+          <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 2.5h10v11H3z"/>
+            <path d="M6 5.5h4M6 8h4M6 10.5h2"/>
+          </svg>
+        </button>
+        <button type="button" class="topbar__todo-btn" id="btnToggleTodos" title="待办事项面板">
+          <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 4.5h10M3 8h10M3 11.5h10"/>
+            <circle cx="5.5" cy="4.5" r="1.2"/>
+            <circle cx="5.5" cy="8" r="1.2"/>
+            <circle cx="5.5" cy="11.5" r="1.2"/>
+          </svg>
+        </button>
+        <button type="button" class="topbar__todo-btn" id="btnToggleGit" title="Git 版本控制">
+          <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M15 8l-6.5 6.5a1.5 1.5 0 0 1-2 0L2 9.5a1.5 1.5 0 0 1 0-2L8.5 1"/>
+            <circle cx="8" cy="8" r="1.5"/>
+          </svg>
+        </button>
+      </div>
+      <div class="oa-global-progress" id="chatGlobalProgress" aria-hidden="true"></div>
+    </header>
+
+    <section id="page-chat" class="page active">
+      <div class="chat-workspace">
+        <div id="log" class="chat-log" role="log" aria-live="polite"></div>
+        <button id="btnNewMessages" class="new-msg-btn" style="display:none" title="有新消息，点击回到最新">
+          <span class="new-msg-btn__dot"></span>
+          <span class="new-msg-btn__text">新消息 ↓</span>
+        </button>
+        <div class="compose">
+          <div class="compose__box">
+            <textarea id="msg" rows="1" placeholder="请输入消息…  Enter 发送，Shift+Enter 换行" autocomplete="off" spellcheck="true"></textarea>
+            <div class="compose__actions">
+              <span class="compose__hint"><select id="modelSelect" class="compose__model-select" title="选择 LLM 模型预设"><option value="__default__">默认模型</option></select></span>
+              <button type="button" class="btn btn--subtle btn--sm think-toggle" id="thinkToggle" aria-pressed="true" title="思考开关：开启时模型会先思考再回答（慢但更准）；关闭后直接回答（快）">
+                <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 1.8a4.5 4.5 0 0 0-3 7.9V11h6V9.7a4.5 4.5 0 0 0-3-7.9z"/><path d="M6.5 13.5h3M7 15h2"/></svg>
+                <span class="think-toggle__label">思考</span>
+              </button>
+              <button type="button" class="btn btn--subtle btn--sm" id="stop" disabled>停止</button>
+              <button type="button" class="btn btn--primary btn--sm" id="send">
+                <span>发送</span>
+                <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <aside id="todoPanel" class="todo-panel" style="display:none;" aria-label="待办事项">
+        <div class="todo-panel__header">
+          <span>待办事项</span>
+          <div class="todo-scope-toggle" id="todoScopeToggle">
+            <button type="button" class="todo-scope-btn is-active" data-scope="session">当前会话</button>
+            <button type="button" class="todo-scope-btn" data-scope="project">全部</button>
+          </div>
+        </div>
+        <div class="todo-panel__list" id="todoList"></div>
+        <div class="todo-panel__footer">
+          <button type="button" class="btn btn--ghost btn--sm" id="btnTodoRefresh">刷新</button>
+        </div>
+      </aside>
+      <aside id="planPanel" class="plan-panel" style="display:none;" aria-label="项目规划">
+        <div class="plan-panel__header">
+          <span>📋 项目规划</span>
+          <span id="planStatus" style="font-weight:400;font-size:12px;color:var(--text-muted);"></span>
+        </div>
+        <div class="plan-panel__list" id="planList"></div>
+        <div class="plan-panel__footer">
+          <button type="button" class="btn btn--ghost btn--sm" id="btnPlanRefresh">刷新</button>
+        </div>
+      </aside>
+      <aside id="gitPanel" class="git-slide-panel" style="display:none;" aria-label="Git 版本控制">

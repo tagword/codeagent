@@ -1,0 +1,100 @@
+        <div class="git-slide-panel__header">
+          <span>⎇ Git 版本控制</span>
+          <div style="display:flex;gap:4px;align-items:center;">
+            <span id="gitPanelBranch" style="font-size:11px;color:var(--text-muted);font-weight:400;"></span>
+            <button type="button" class="btn btn--ghost btn--sm" id="gitPanelRefresh" title="刷新">⟳</button>
+          </div>
+        </div>
+        <div class="git-slide-panel__remote" id="gitPanelRemote">
+          <!-- 远程信息展示（只读，编辑请到配置页） -->
+          <div class="git-slide-panel__remote-info" id="gitRemoteInfoBar" style="display:none;">
+            <span id="gitRemoteDisplay" style="font-size:11px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;"></span>
+            <button type="button" class="btn btn--ghost btn--xs" id="gitRemoteTestBtn" title="测试连接">🔌</button>
+            <a href="#" id="gitRemoteConfigLink" style="font-size:10px;color:var(--accent);text-decoration:none;white-space:nowrap;" title="到配置页管理远程仓库">配置 ›</a>
+          </div>
+          <!-- 未配置时的提示栏 -->
+          <div class="git-slide-panel__remote-info" id="gitRemoteEmptyBar">
+            <span style="font-size:11px;color:var(--text-muted);">🔗 未配置远程仓库</span>
+            <a href="#" id="gitRemoteConfigLinkEmpty" style="font-size:10px;color:var(--accent);text-decoration:none;margin-left:auto;">到配置页设置 ›</a>
+          </div>
+        </div>
+        <div class="git-slide-panel__commit">
+          <textarea id="gitPanelCommitMsg" class="git-panel__commit-input" rows="2" placeholder="提交信息... (Ctrl+Enter)" spellcheck="false"></textarea>
+          <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;">
+            <button type="button" class="btn btn--primary btn--sm" id="gitPanelCommit">提交</button>
+            <button type="button" class="btn btn--ghost btn--sm" id="gitPanelPush">↑ 推送</button>
+            <button type="button" class="btn btn--ghost btn--sm" id="gitPanelPull">↓ 拉取</button>
+            <span id="gitPanelHint" style="font-size:11px;color:var(--text-muted,#888);margin-left:auto;"></span>
+          </div>
+        </div>
+        <div class="git-slide-panel__tabs">
+          <button type="button" class="git-slide-panel__tab is-active" data-view="status">状态</button>
+          <button type="button" class="git-slide-panel__tab" data-view="log">历史</button>
+          <button type="button" class="git-slide-panel__tab" data-view="diff">差异</button>
+        </div>
+        <div class="git-slide-panel__content" id="gitPanelContent">
+          <div class="git-panel__loading">加载状态中...</div>
+        </div>
+      </aside>
+    </section>
+
+    <section id="page-config" class="page page--scroll">
+      <div class="content-max">
+        <fieldset class="section" id="fieldsetChatSessions">
+          <div class="section__header">
+            <h3 class="section__title">聊天与会话</h3>
+          </div>
+          <p class="section__desc" style="margin-bottom:var(--sp-4);">
+            在这里调整聊天的行为，比如对话太长时自动总结、工具调用超出上限后自动继续等。改完点"保存"就能生效。
+          </p>
+          <div class="chat-env-form" id="chatEnvForm">
+            <!-- 工具轮次 -->
+            <label class="checkbox-row">
+              <input type="checkbox" id="chkAutoContinue"/>
+              <span>工具轮次上限时自动续接</span>
+            </label>
+            <div class="sub-rows" id="rowToolRounds" style="display:none;">
+              <div class="form-row sub-row">
+                <label class="form-label" for="inpAutoContinueMax">最大续接段数</label>
+                <input type="number" id="inpAutoContinueMax" class="form-input-sm" min="0" max="200" value="4"/>
+                <span class="form-hint">0 表示不限，直到任务完成或被手动停止</span>
+              </div>
+              <div class="form-row sub-row">
+                <label class="form-label" for="inpMaxToolRounds">每轮最大工具调用次数</label>
+                <input type="number" id="inpMaxToolRounds" class="form-input-sm" min="1" max="400" value="16"/>
+                <span class="form-hint">1-400 次</span>
+              </div>
+            </div>
+
+            <!-- 上下文压缩 -->
+            <label class="checkbox-row">
+              <input type="checkbox" id="chkContextCompact"/>
+              <span>启用智能上下文压缩</span>
+            </label>
+            <div class="sub-rows" id="compactSubRows" style="display:none;">
+              <p style="font-size:12px;color:var(--text-muted);margin:var(--sp-2) 0;">
+                启用后，当满足任一触发条件时，用 LLM 对早期对话进行摘要压缩，释放上下文空间。
+              </p>
+              <div class="form-row sub-row">
+                <label class="form-label" for="inpCompactMinBytes">上下文字节触发阈值</label>
+                <input type="number" id="inpCompactMinBytes" class="form-input-sm" min="0" max="500000" value="90000"/>
+                <span class="form-hint">消息长度超过此字节数时触发（0=禁用）</span>
+              </div>
+              <div class="form-row sub-row">
+                <label class="form-label" for="inpCompactMinRounds">用户对话轮数触发阈值</label>
+                <input type="number" id="inpCompactMinRounds" class="form-input-sm" min="0" max="500" value="0"/>
+                <span class="form-hint">用户轮数超过此值时触发压缩（0=禁用）</span>
+              </div>
+              <div class="form-row sub-row">
+                <label class="form-label" for="selCompactSummarizer">摘要模型</label>
+                <select id="selCompactSummarizer" class="md-select" style="max-width:180px;">
+                </select>
+              </div>
+            </div>
+          </div>
+          <div class="row-actions" style="margin-top:var(--sp-4);">
+            <button type="button" class="btn btn--primary btn--sm" id="btnChatEnvSave">保存</button>
+          </div>
+          <div id="chatEnvStatus" class="status-line"></div>
+        </fieldset>
+
