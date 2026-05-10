@@ -145,6 +145,11 @@ def create_app():
         llm = llm_executor_from_resolved(resolve_preset(None))
         reg, exe = tools_for_agent(agent_id)
         set_active_llm_session(session_id)
+        from seed.core.agent_context import set_active_project_episodic
+        if project_id:
+            set_active_project_episodic(True, project_id)
+        else:
+            set_active_project_episodic(False)
 
         api_msgs = build_api_projection_messages(
             chat_sess.messages,
@@ -329,6 +334,7 @@ def create_app():
             return JSONResponse({"detail": str(e)}, status_code=502)
         finally:
             set_active_llm_session(None)
+            set_active_project_episodic(False)
             if emitter_token:
                 with contextlib.suppress(Exception):
                     reset_chat_event_emitter(emitter_token)

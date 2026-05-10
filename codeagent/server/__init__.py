@@ -37,6 +37,14 @@ HTTP + WebSocket + webhook (Starlette). Install: pip install 'codeagent[server]'
 
 logger = logging.getLogger(__name__)
 
+# Shared with ``seed`` cron / runtime — re-export for ``app_factory`` / ``webui_api_app`` ``from . import``.
+from seed.core._session_cache import (  # noqa: E402
+    ACTIVE_CHAT_CANCELS,
+    SESSIONS,
+    WS_BY_SESSION,
+    _memkey,
+)
+
 def _env_truthy(name: str, default: str = "0") -> bool:
     return os.environ.get(name, default).strip().lower() in ("1", "true", "yes", "on")
 
