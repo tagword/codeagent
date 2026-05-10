@@ -2,5 +2,5 @@
 
 from __future__ import annotations
 
-from codeagent.web.auth_impl import *  # noqa: F401,F403
+from codeagent.web.auth_impl import *  # noqa: F403
 

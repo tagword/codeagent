@@ -2,5 +2,5 @@
 
 from __future__ import annotations
 
-from seed.models import *  # noqa: F401,F403
+from seed.models import *  # noqa: F403
 

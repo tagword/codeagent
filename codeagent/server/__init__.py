@@ -458,4 +458,4 @@ def get_setup_html() -> str:
 
 # --- Re-exports ---
 
-from codeagent.server.app_factory import create_app  # noqa: F401, E402
+from codeagent.server.app_factory import create_app  # noqa: E402
