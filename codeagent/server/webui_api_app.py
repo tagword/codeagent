@@ -1384,6 +1384,51 @@ def build_webui_api_app(project_root: Path) -> Starlette:
                 text = (out_b or b"").decode() + (err_b or b"").decode()
                 return JSONResponse({"result": text.strip() or "完成"})
 
+        # ---- 核心 git 命令：log / diff / status / commit / branch / push / pull ----
+        if cmd == "log":
+            extra = _split_git_args(args)
+            rc, out, err = await _run_git(cwd, ["log", *extra])
+            if rc != 0:
+                return JSONResponse({"result": out, "error": err.strip() or "git log 失败"})
+            return JSONResponse({"result": out})
+
+        if cmd == "diff":
+            extra = _split_git_args(args)
+            rc, out, err = await _run_git(cwd, ["diff", *extra])
+            return JSONResponse({"result": out or err, "error": err if rc != 0 else ""})
+
+        if cmd == "status":
+            rc, out, err = await _run_git(cwd, ["status"])
+            return JSONResponse({"result": out or err, "error": err if rc != 0 else ""})
+
+        if cmd == "commit":
+            msg = str(body.get("message") or "").strip()
+            if not msg:
+                return JSONResponse({"error": "提交信息不能为空"}, status_code=400)
+            # 先 add -A，再 commit
+            rc1, out1, err1 = await _run_git(cwd, ["add", "-A"])
+            if rc1 != 0:
+                return JSONResponse({"result": out1, "error": err1.strip() or "git add 失败"})
+            rc2, out2, err2 = await _run_git(cwd, ["commit", "-m", msg])
+            if rc2 != 0:
+                return JSONResponse({"result": out2, "error": err2.strip() or "git commit 失败"})
+            return JSONResponse({"result": (out2 or err2).strip() or "提交成功"})
+
+        if cmd == "branch":
+            extra = _split_git_args(args)
+            rc, out, err = await _run_git(cwd, ["branch", *extra])
+            return JSONResponse({"result": out or err, "error": err if rc != 0 else ""})
+
+        if cmd == "push":
+            extra = _split_git_args(args)
+            rc, out, err = await _run_git(cwd, ["push", *extra])
+            return JSONResponse({"result": (out or err).strip(), "error": err if rc != 0 else ""})
+
+        if cmd == "pull":
+            extra = _split_git_args(args)
+            rc, out, err = await _run_git(cwd, ["pull", *extra])
+            return JSONResponse({"result": (out or err).strip(), "error": err if rc != 0 else ""})
+
         return JSONResponse({"detail": "unsupported git command"}, status_code=400)
 
     async def api_pick_directory(_: Request) -> JSONResponse:
