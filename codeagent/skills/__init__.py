@@ -1,2 +1,2 @@
-from .select import select_skills
+from .select import select_skills  # noqa: F401
 

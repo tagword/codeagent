@@ -53,14 +53,14 @@ def create_app():
     project_root = project_root_fn()
 
     # ── WebSocket 广播基础设施 ──
-    WS_BY_SESSION: dict[str, set] = defaultdict(set)
+    ws_by_session: dict[str, set] = defaultdict(set)
 
     async def _broadcast_session_event(aid: str, sid: str, payload: dict) -> None:
         mkey = _memkey(aid, sid)
         msg = dict(payload)
         msg.setdefault("session_id", sid)
         msg.setdefault("agent_id", aid)
-        for ws in list(WS_BY_SESSION.get(mkey, ())):
+        for ws in list(ws_by_session.get(mkey, ())):
             with contextlib.suppress(Exception):
                 await ws.send_json(msg)
 
@@ -266,7 +266,6 @@ def create_app():
                 {"tool": t.get("name", ""), "arguments": t.get("arguments", ""), "result": t.get("result", "")}
                 for t in (tool_trace or [])
             ]
-            import logging as _lg; _lg.getLogger("ws_debug").info("DEBUG: text_done tool_trace=%d entries, reply=%r", len(trace_out_ws), (reply or '')[:60])
             with contextlib.suppress(Exception):
                 asyncio.run_coroutine_threadsafe(
                     _broadcast_session_event(agent_id, session_id, {
@@ -371,7 +370,7 @@ def create_app():
         aid = (websocket.query_params.get("agent_id") or "").strip() or "default"
         if sid:
             mkey = _memkey(aid, sid)
-            WS_BY_SESSION[mkey].add(websocket)
+            ws_by_session[mkey].add(websocket)
         try:
             while True:
                 await websocket.receive_text()
@@ -379,7 +378,7 @@ def create_app():
             pass
         finally:
             if sid:
-                WS_BY_SESSION[mkey].discard(websocket)
+                ws_by_session[mkey].discard(websocket)
 
     middleware: list[Any] = []
     tok = get_webui_token(project_root)
