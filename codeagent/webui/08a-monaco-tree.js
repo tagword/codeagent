@@ -79,6 +79,7 @@
               '<span class="file-tree__icon">📁</span>' +
               '<span class="file-tree__name">' + escapeHtml(item.name) + '</span>';
             el.onclick = function(e) {
+              e.stopPropagation();
               if (e.target.className === 'file-tree__toggle') return;
               _toggleDir(item.path, el);
             };
@@ -99,7 +100,8 @@
             var icon = _getFileIcon(item.name);
             el.innerHTML = '<span class="file-tree__icon">' + icon + '</span>' +
               '<span class="file-tree__name">' + escapeHtml(item.name) + '</span>';
-            el.onclick = function() {
+            el.onclick = function(e) {
+              e.stopPropagation();
               _openFile(item.path, item.name);
               // 高亮
               container.querySelectorAll('.file-tree__item.active').forEach(function(a) { a.classList.remove('active'); });

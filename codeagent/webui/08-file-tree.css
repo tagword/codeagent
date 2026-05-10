@@ -112,14 +112,21 @@
   cursor: pointer;
   border-right: 1px solid var(--border-tabs, #3c3c3c);
   white-space: nowrap;
-  color: var(--text-muted, #aaa);
+  color: #cccccc;
   background: var(--bg-tab-inactive, #2d2d2d);
 }
 
 .file-editor__tab.active {
-  color: var(--text, #ddd);
+  color: #ffffff;
   background: var(--bg-tab-active, #1e1e1e);
   border-bottom: 2px solid var(--accent, #0078d4);
+}
+
+.file-editor__tab-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 160px;
 }
 
 .file-editor__tab-close {
