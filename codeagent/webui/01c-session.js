@@ -146,37 +146,13 @@ function syncTreeSessionActiveHighlight() {
   });
 }
 
-function attachCollapsedNewButton(projDiv, pid) {
-  var k = treePid(pid);
-  var newInline = document.createElement('div');
-  newInline.className = 'tree-session__new';
-  newInline.style.display = 'none';
-  newInline.textContent = '+';
-  newInline.addEventListener('click', function(e) {
-    e.stopPropagation();
-    if (k !== treePid(projectId)) {
-      projectId = k; treeProjectActiveId = k; window.dispatchEvent(new CustomEvent('project-changed', {detail: {projectId: k}}));
-      saveProjectIdForAgent(agentId, projectId);
-    }
-    document.getElementById('btnNewSession').click();
-  });
-  projDiv.appendChild(newInline);
-}
-
 function fillSessionsList(childrenEl, pid, sessions) {
   var k = treePid(pid);
   childrenEl.innerHTML = '';
   if (!sessions || sessions.length === 0) {
     var empty = document.createElement('div');
-    empty.className = 'tree-session__new';
-    empty.textContent = '+ 新建会话';
-    empty.addEventListener('click', function() {
-      if (k !== treePid(projectId)) {
-        projectId = k; treeProjectActiveId = k; window.dispatchEvent(new CustomEvent('project-changed', {detail: {projectId: k}}));
-        saveProjectIdForAgent(agentId, projectId);
-      }
-      document.getElementById('btnNewSession').click();
-    });
+    empty.className = 'tree-session__empty';
+    empty.textContent = '暂无会话';
     childrenEl.appendChild(empty);
     return;
   }
@@ -231,17 +207,6 @@ function fillSessionsList(childrenEl, pid, sessions) {
     childrenEl.appendChild(sDiv);
   });
 
-  var newBtn = document.createElement('div');
-  newBtn.className = 'tree-session__new';
-  newBtn.textContent = '+ 新建会话';
-  newBtn.addEventListener('click', function() {
-    if (k !== treePid(projectId)) {
-      projectId = k; treeProjectActiveId = k; window.dispatchEvent(new CustomEvent('project-changed', {detail: {projectId: k}}));
-      saveProjectIdForAgent(agentId, projectId);
-    }
-    document.getElementById('btnNewSession').click();
-  });
-  childrenEl.appendChild(newBtn);
 }
 
 function loadSessionsIntoContainer(childrenEl, pid) {
@@ -285,9 +250,7 @@ function applyProjectExpandStateToDom(pid) {
     }
   } else {
     if (existing) existing.remove();
-    if (!projDiv.querySelector(':scope > .tree-session__new')) {
-      attachCollapsedNewButton(projDiv, k);
-    }
+
   }
 }
 
@@ -419,8 +382,6 @@ function createProjectNode(pr) {
     children.dataset.projectId = pid;
     projDiv.appendChild(children);
     loadSessionsIntoContainer(children, pid);
-  } else {
-    attachCollapsedNewButton(projDiv, pid);
   }
 
   return projDiv;
