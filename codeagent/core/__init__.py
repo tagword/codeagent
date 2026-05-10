@@ -1,2 +1,2 @@
-from .models import Session
+from .models import Session  # noqa: F401
 

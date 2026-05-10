@@ -1,6 +1,21 @@
 """Resolve tool registry + executor for an agent (HTTP / cron)."""
 from __future__ import annotations
 
+import hashlib
+import hmac
+import logging
+import os
+import socket
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
+from starlette.requests import Request
+from starlette.responses import Response
+
+if TYPE_CHECKING:
+    from codeagent.core.models import Session
+
 
 def tools_for_agent(agent_id: str):
     try:
@@ -19,22 +34,6 @@ _tools_for_agent = tools_for_agent
 """
 HTTP + WebSocket + webhook (Starlette). Install: pip install 'codeagent[server]'
 """
-
-import hashlib
-import hmac
-import logging
-import os
-import socket
-import threading
-from collections import defaultdict
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any, DefaultDict, Dict, List, Optional, Set
-
-from starlette.requests import Request
-from starlette.responses import Response
-
-from seed.core._session_cache import ACTIVE_CHAT_CANCELS, SESSIONS, WS_BY_SESSION, _memkey
 
 logger = logging.getLogger(__name__)
 
@@ -157,14 +156,10 @@ def _reply_append_tool_summary(reply: str, seg_summary: str) -> str:
         return reply or ""
     try:
         base = (os.environ.get("CODEAGENT_LLM_BASEURL", "") or "").lower()
-        if "api.deepseek.com" in base:
-            if os.environ.get("CODEAGENT_REPLY_TOOL_SUMMARY_DEEPSEEK", "").lower() not in (
-                "1",
-                "true",
-                "yes",
-                "on",
-            ):
-                return reply or ""
+        if "api.deepseek.com" in base and os.environ.get(
+            "CODEAGENT_REPLY_TOOL_SUMMARY_DEEPSEEK", ""
+        ).lower() not in ("1", "true", "yes", "on"):
+            return reply or ""
     except Exception:
         pass
     if os.environ.get("CODEAGENT_REPLY_TOOL_SUMMARY", "1").lower() in (
@@ -323,11 +318,6 @@ def main(host: str = "0.0.0.0", port: int = 8765) -> None:
     uvicorn.run(create_app(), host=host, port=port, log_level="info")
 
 
-import logging
-
-logger = logging.getLogger(__name__)
-
-
 def _webui_root() -> Path:
     # server/../ -> codeagent/ (webui.html and webui/ live here)
     return Path(__file__).resolve().parent.parent
@@ -468,4 +458,4 @@ def get_setup_html() -> str:
 
 # --- Re-exports ---
 
-from codeagent.server.app_factory import create_app  # noqa: F401
+from codeagent.server.app_factory import create_app  # noqa: F401, E402

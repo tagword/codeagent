@@ -11,7 +11,7 @@ from urllib.parse import parse_qs, unquote
 
 logger = logging.getLogger(__name__)
 
-from seed.core.config_plane import project_root
+from seed.core.config_plane import project_root  # noqa: E402
 
 COOKIE_NAME = "ca_webui"
 TOKEN_FILENAME = "codeagent.webui.token"

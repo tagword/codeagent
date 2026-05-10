@@ -214,8 +214,8 @@ def cmd_summary(args):
 CodeAgent CLI - Main entry point
 Provides command routing, tool execution, and session management.
 """
-import argparse
-from typing import Any
+import argparse  # noqa: E402
+from typing import Any  # noqa: E402
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -379,10 +379,10 @@ def main():
 
 
 
-import asyncio
-import contextlib
-import os
-import sys
+import asyncio  # noqa: E402
+import contextlib  # noqa: E402
+import os  # noqa: E402
+import sys  # noqa: E402
 
 
 def cmd_chat(args):
@@ -575,7 +575,7 @@ def cmd_webui_token(args):
 
 
 
-import sys
+import sys  # noqa: E402
 
 
 def cmd_serve(args):
