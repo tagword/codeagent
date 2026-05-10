@@ -68,10 +68,15 @@ function orderSessionsWithPinFirst(sessions, pinSid) {
   return next;
 }
 function highlightSessList(sid) {
+  // 用户点击了某个会话 → 清除其「已完成」标记
+  if (typeof chatCompletedBySid !== 'undefined' && typeof clearSessionCompleted === 'function') {
+    clearSessionCompleted(sid);
+  }
   document.querySelectorAll('#sessList .sess-row').forEach((el) => {
     el.classList.toggle('is-active', el.getAttribute('data-session-id') === sid);
   });
   applyAllSessionRunningStates();
+  applyAllSessionCompletedStates();
 }
 function applySessionRunningState(sid) {
   const k = String(sid || '');
@@ -95,6 +100,27 @@ function applyAllSessionRunningStates() {
     all.forEach(applySessionRunningState);
   } catch (_) {}
 }
+function applySessionCompletedState(sid) {
+  const k = String(sid || '');
+  if (!k) return;
+  let completed = typeof chatCompletedBySid !== 'undefined' && !!chatCompletedBySid[k];
+  // 当前正在查看的会话由 .is-active 控制，不叠加 completed（避免绿色覆盖 accent 高亮）
+  if (typeof sessionId !== 'undefined' && k === String(sessionId)) {
+    completed = false;
+  }
+  // 更新侧边栏列表
+  const rows = document.querySelectorAll('#sessList .sess-row[data-session-id="' + CSS.escape(k) + '"]');
+  rows.forEach((el) => el.classList.toggle('is-completed', completed && !el.classList.contains('is-running')));
+  // 更新树状视图
+  const treeSessions = document.querySelectorAll('.tree-session[data-session-id="' + CSS.escape(k) + '"]');
+  treeSessions.forEach((el) => el.classList.toggle('is-completed', completed && !el.classList.contains('is-running')));
+}
+function applyAllSessionCompletedStates() {
+  try {
+    const all = new Set(Object.keys(chatCompletedBySid || {}));
+    all.forEach(applySessionCompletedState);
+  } catch (_) {}
+}
 
 // ---------------- Session list item rendering ----------------
 
@@ -105,6 +131,12 @@ function buildSessListItem(row) {
   // 检查初始运行状态
   if (typeof chatInflightBySid !== 'undefined' && (chatInflightBySid[row.session_id] || 0) > 0) {
     wrap.classList.add('is-running');
+  }
+  // 检查初始「已完成」状态（刚结束运行的会话显示绿色实心）
+  // 当前查看中的会话不叠加 completed（由 .is-active 控制）
+  var isActiveSess = typeof sessionId !== 'undefined' && row.session_id === sessionId;
+  if (!isActiveSess && typeof chatCompletedBySid !== 'undefined' && !!chatCompletedBySid[row.session_id] && !wrap.classList.contains('is-running')) {
+    wrap.classList.add('is-completed');
   }
 
   const btn = document.createElement('button');

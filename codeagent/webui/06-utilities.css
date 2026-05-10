@@ -73,6 +73,11 @@ body.chat-running .oa-global-progress { opacity: 1; }
   100% { left: 100%; }
 }
 
+.sess-row.is-completed::after,
+.sess-row.is-completed .sess-item__title::after {
+  display: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   details.oa-live-tool.is-running > summary,
   details.oa-live-tool.is-running .oa-live-tool-spinner,

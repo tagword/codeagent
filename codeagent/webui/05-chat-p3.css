@@ -27,6 +27,30 @@
   color: var(--accent);
   font-weight: 600;
 }
+/* ============ 会话「已完成」状态（刚结束运行，绿色实心不闪烁） ============ */
+.sess-row.is-completed .sess-item__channel-dot {
+  background: var(--success);
+  box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.18);
+  animation: none;
+}
+.sess-row.is-completed .sess-item__title {
+  color: var(--success);
+  font-weight: 600;
+}
+.sess-row.is-completed .sess-item-main {
+  background: color-mix(in srgb, var(--success) 6%, transparent);
+}
+/* 树状视图 — 已完成状态 */
+.tree-session.is-completed .tree-session__indicator {
+  background: var(--success);
+  box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.18);
+  animation: none;
+}
+.tree-session.is-completed .tree-session__title {
+  color: var(--success);
+  font-weight: 600;
+}
+
 /* 树状视图 — 运行中状态 */
 .tree-session.is-running .tree-session__row {
   background: var(--accent-softer);
