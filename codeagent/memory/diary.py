@@ -10,9 +10,8 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import date, datetime, timezone, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Optional
 
 from codeagent.core.paths import (
     agent_archive_dir,
@@ -20,7 +19,6 @@ from codeagent.core.paths import (
     agent_memory_dir,
     agent_project_daily_dir,
 )
-
 
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
@@ -38,7 +36,7 @@ def _ensure_dir(p: Path) -> None:
 
 
 def daily_path(
-    agent_id: str, *, day: Optional[date] = None, project_id: Optional[str] = None
+    agent_id: str, *, day: date | None = None, project_id: str | None = None
 ) -> Path:
     day = day or _today_utc()
     if project_id and str(project_id).strip():
@@ -47,7 +45,7 @@ def daily_path(
 
 
 def ensure_today_diary(
-    agent_id: str, *, day: Optional[date] = None, project_id: Optional[str] = None
+    agent_id: str, *, day: date | None = None, project_id: str | None = None
 ) -> Path:
     day = day or _today_utc()
     p = daily_path(agent_id, day=day, project_id=project_id)
@@ -70,8 +68,8 @@ def append_diary_entry(
     agent_id: str,
     *,
     text: str,
-    day: Optional[date] = None,
-    project_id: Optional[str] = None,
+    day: date | None = None,
+    project_id: str | None = None,
 ) -> Path:
     day = day or _today_utc()
     p = ensure_today_diary(agent_id, day=day, project_id=project_id)
@@ -123,7 +121,7 @@ def _archive_daily_dir(
     return ArchiveResult(moved=moved, kept=kept)
 
 
-def archive_old_diaries(agent_id: str, *, keep_days: int = 7, now: Optional[date] = None) -> ArchiveResult:
+def archive_old_diaries(agent_id: str, *, keep_days: int = 7, now: date | None = None) -> ArchiveResult:
     keep_days = int(keep_days)
     now = now or _today_utc()
     acc = ArchiveResult(moved=0, kept=0)

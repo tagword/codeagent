@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Protocol, Tuple
+from typing import Any, Protocol
 
 
 class WorkerProtocol(Protocol):
@@ -12,9 +12,9 @@ class WorkerProtocol(Protocol):
         *,
         session_id: str,
         user_text: str,
-        tools: Optional[List[Dict[str, Any]]] = None,
+        tools: list[dict[str, Any]] | None = None,
         max_tool_rounds: int = 16,
-    ) -> Tuple[str, Dict[str, Any]]:
+    ) -> tuple[str, dict[str, Any]]:
         """Run a single user turn, returning assistant text + metadata."""
 
 
@@ -27,16 +27,16 @@ class Worker:
     Phase 2+: will host an isolated tool-loop with its own tool registry, memory view, etc.
     """
 
-    impl: Optional[WorkerProtocol] = None
+    impl: WorkerProtocol | None = None
 
     def run(
         self,
         *,
         session_id: str,
         user_text: str,
-        tools: Optional[List[Dict[str, Any]]] = None,
+        tools: list[dict[str, Any]] | None = None,
         max_tool_rounds: int = 16,
-    ) -> Tuple[str, Dict[str, Any]]:
+    ) -> tuple[str, dict[str, Any]]:
         if self.impl is None:
             raise RuntimeError("Worker.impl is not configured")
         return self.impl.run(

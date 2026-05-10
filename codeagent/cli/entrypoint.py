@@ -3,10 +3,13 @@ import argparse
 import sys
 from datetime import datetime
 
+from seed_tools import setup_builtin_tools
+
+from .persistence import ensure_session_dir, list_sessions, save_session
+
 # Prefer `codeagent.py` / `python -m codeagent` — this module kept for compatibility.
-from .routing import get_all_commands, find_commands
-from .persistence import save_session, list_sessions, ensure_session_dir
-from seed_tools import ToolRegistry, setup_builtin_tools
+from .routing import find_commands, get_all_commands
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -116,8 +119,7 @@ def handle_commands(args):
             print(f" [{cat}] {c.name}")
 
 def handle_tools(args):
-    registry = ToolRegistry()
-    setup_builtin_tools(registry)
+    registry, _executor = setup_builtin_tools()
     tools = registry.list_all()
     limit = args.limit or 50
     print("=== CodeAgent Tools")

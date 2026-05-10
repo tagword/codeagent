@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import os
@@ -31,22 +32,23 @@ def create_app():
     from starlette.routing import Mount, Route, WebSocketRoute
     from starlette.websockets import WebSocket
 
-    from seed.env_config import apply_codeagent_env_from_config
     from codeagent.server.webui_api_app import build_webui_api_app
+    from seed.integrations.env_config import apply_codeagent_env_from_config
 
     apply_codeagent_env_from_config()
 
     try:
-        from seed.config_plane import ensure_default_config_files
-        from seed.config_plane import project_root as _pr
+        from seed.core.config_plane import ensure_default_config_files
+        from seed.core.config_plane import project_root as _pr
 
         ensure_default_config_files(_pr())
     except Exception:
         logger.exception("bootstrap config failed")
 
-    from seed.config_plane import project_root as project_root_fn
-    from . import _memkey, get_app_html, get_setup_html
     from codeagent.web.auth_impl import WebUIAuthMiddleware, get_webui_token
+    from seed.core.config_plane import project_root as project_root_fn
+
+    from . import _memkey, get_app_html, get_setup_html
 
     project_root = project_root_fn()
 
@@ -59,10 +61,8 @@ def create_app():
         msg.setdefault("session_id", sid)
         msg.setdefault("agent_id", aid)
         for ws in list(WS_BY_SESSION.get(mkey, ())):
-            try:
+            with contextlib.suppress(Exception):
                 await ws.send_json(msg)
-            except Exception:
-                pass
 
     async def homepage(_: Request) -> HTMLResponse:
         from starlette.responses import RedirectResponse
@@ -83,20 +83,21 @@ def create_app():
         return HTMLResponse(get_setup_html())
 
     async def api_chat(request: Request) -> JSONResponse:
-        from seed.agent_context import set_active_llm_session
-        from seed.agent_runtime import (
+        from seed.core.agent_context import set_active_llm_session
+        from seed.core.agent_runtime import (
             build_api_projection_messages,
             default_system_prompt,
             maybe_compact_context_messages,
             merge_llm_tail_into_full,
             run_llm_tool_loop,
         )
-        from seed.llm_exec import LLMError
-        from seed.llm_presets import llm_executor_from_resolved, resolve_preset
-        from seed.llm_sess import load_or_create_chat_session, merge_fresh_system, persist_chat_session
-        from seed.mem_bridge import apply_episodic_to_messages
+        from seed.core.llm_exec import LLMError
+        from seed.core.llm_presets import llm_executor_from_resolved, resolve_preset
+        from seed.core.llm_sess import load_or_create_chat_session, merge_fresh_system, persist_chat_session
+        from seed.core.mem_bridge import apply_episodic_to_messages
+        from seed.integrations.session_title import maybe_llm_refresh_session_title
+
         from . import SESSIONS, tools_for_agent
-        from seed.session_title import maybe_llm_refresh_session_title
 
         try:
             body = await request.json()
@@ -132,7 +133,7 @@ def create_app():
 
         chat_sess.messages.append({"role": "user", "content": message})
         try:
-            from seed.transcript_store import append_transcript_entries
+            from seed.integrations.transcript_store import append_transcript_entries
 
             append_transcript_entries(session_id, [chat_sess.messages[-1]], agent_id=agent_id)
         except Exception:
@@ -160,18 +161,16 @@ def create_app():
         )
 
         # ── WS 广播回调 ──
-        from seed.chat_events import reset_chat_event_emitter, set_chat_event_emitter
+        from seed.core.chat_events import reset_chat_event_emitter, set_chat_event_emitter
 
         main_loop = asyncio.get_event_loop()
         emitter_token = None
 
         def _emit_progress_from_worker(evt: dict) -> None:
-            try:
+            with contextlib.suppress(Exception):
                 asyncio.run_coroutine_threadsafe(
                     _broadcast_session_event(agent_id, session_id, evt), main_loop
                 )
-            except Exception:
-                pass
 
         emitter_token = set_chat_event_emitter(_emit_progress_from_worker)
 
@@ -229,7 +228,7 @@ def create_app():
                     _stream_placeholder_created[0] = True
                 if chat_sess.messages and chat_sess.messages[-1].get("_streaming"):
                     chat_sess.messages[-1]["content"] = full_text
-                try:
+                with contextlib.suppress(Exception):
                     asyncio.run_coroutine_threadsafe(
                         _broadcast_session_event(agent_id, session_id, {
                             "type": "text_delta",
@@ -238,8 +237,6 @@ def create_app():
                             "text": full_text,
                         }), main_loop
                     )
-                except Exception:
-                    pass
             except Exception:
                 pass
 
@@ -270,7 +267,7 @@ def create_app():
                 for t in (tool_trace or [])
             ]
             import logging as _lg; _lg.getLogger("ws_debug").info("DEBUG: text_done tool_trace=%d entries, reply=%r", len(trace_out_ws), (reply or '')[:60])
-            try:
+            with contextlib.suppress(Exception):
                 asyncio.run_coroutine_threadsafe(
                     _broadcast_session_event(agent_id, session_id, {
                         "type": "text_done",
@@ -281,9 +278,7 @@ def create_app():
                         "tools_used": tools_used or [],
                     }), main_loop
                 )
-            except Exception:
-                pass
-            try:
+            with contextlib.suppress(Exception):
                 asyncio.run_coroutine_threadsafe(
                     _broadcast_session_event(agent_id, session_id, {
                         "type": "reply",
@@ -294,12 +289,10 @@ def create_app():
                         "tools_used": tools_used or [],
                     }), main_loop
                 )
-            except Exception:
-                pass
 
             tail = merge_llm_tail_into_full(chat_sess.messages, api_msgs, n_before_ref[0])
             try:
-                from seed.transcript_store import append_transcript_entries
+                from seed.integrations.transcript_store import append_transcript_entries
 
                 if tail:
                     append_transcript_entries(session_id, tail, agent_id=agent_id)
@@ -332,35 +325,36 @@ def create_app():
                 }
             )
         except LLMError as e:
-            try:
+            with contextlib.suppress(Exception):
                 chat_sess.messages.pop()
-            except Exception:
-                pass
             return JSONResponse({"detail": str(e)}, status_code=502)
         finally:
             set_active_llm_session(None)
             if emitter_token:
-                try:
+                with contextlib.suppress(Exception):
                     reset_chat_event_emitter(emitter_token)
-                except Exception:
-                    pass
 
     async def api_chat_stop(_: Request) -> JSONResponse:
         return JSONResponse({"active": False})
 
-    def _site_icon_path() -> Path:
-        return Path(__file__).resolve().parent.parent / "icon.png"
+    def _resolve_site_icon_path() -> Path | None:
+        """``icon.png`` may live next to the ``codeagent`` package or at the repo root."""
+        pkg_root = Path(__file__).resolve().parent.parent
+        for candidate in (pkg_root / "icon.png", pkg_root.parent / "icon.png"):
+            if candidate.is_file():
+                return candidate
+        return None
 
     async def icon_png(_: Request) -> Response:
-        p = _site_icon_path()
-        if not p.is_file():
+        p = _resolve_site_icon_path()
+        if p is None:
             return Response(status_code=404)
         return Response(content=p.read_bytes(), media_type="image/png")
 
     async def favicon_ico(_: Request) -> Response:
         """Browsers default to /favicon.ico; serve same PNG as /icon.png."""
-        p = _site_icon_path()
-        if not p.is_file():
+        p = _resolve_site_icon_path()
+        if p is None:
             return Response(status_code=404)
         return Response(
             content=p.read_bytes(),
@@ -396,14 +390,14 @@ def create_app():
     @asynccontextmanager
     async def _lifespan(_app: Starlette):
         try:
-            from seed.cron_sched import start_cron_scheduler
+            from seed.integrations.cron_sched import start_cron_scheduler
 
             start_cron_scheduler()
         except Exception as exc:
             logger.warning("cron scheduler startup failed: %s", exc)
         yield
         try:
-            from seed.cron_sched import shutdown_cron_scheduler
+            from seed.integrations.cron_sched import shutdown_cron_scheduler
 
             shutdown_cron_scheduler()
         except Exception:

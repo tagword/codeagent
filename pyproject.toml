@@ -1,12 +1,44 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "codeagent"
+version = "1.0.0"
+description = "LLM agent with Markdown config, tool loop, Web UI, sessions, memory, and webhooks"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.9"
+dependencies = [
+    "seed>=1.0.0",
+    "seed-tools>=1.0.0",
+]
+
+[project.optional-dependencies]
+server = [
+    "uvicorn[standard]>=0.30.0",
+    "starlette>=0.37.0",
+    "apscheduler>=3.10.0",
+]
+dev = ["pytest>=7.0", "ruff>=0.4.0", "bandit>=1.7.0"]
+yaml = ["pyyaml>=6.0"]
+
+[project.scripts]
+codeagent = "codeagent.cli.main:main"
+codeagent-core = "codeagent.cli.main:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["codeagent*"]
+
 # ──────────────────────────────────────────────────────────────────
 #  Tool configuration: pytest, bandit, ruff
-#  Build system remains in setup.py (no conflict)
 # ──────────────────────────────────────────────────────────────────
 
 [tool.pytest.ini_options]
 minversion = "7.0"
 testpaths = ["tests"]
-pythonpath = ["seed", "seed_engine", "seed_tools", "seed_services", "."]
+pythonpath = ["."]
 addopts = "-v --tb=short"
 filterwarnings = ["ignore::DeprecationWarning"]
 
@@ -40,4 +72,4 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["seed", "seed_engine", "seed_tools", "seed_services", "codeagent"]
+known-first-party = ["seed", "codeagent"]

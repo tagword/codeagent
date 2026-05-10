@@ -1,5 +1,7 @@
 venv/
+.venv/
 config/codeagent.env
+config/seed.env
 config/codeagent.webui.token
 __pycache__/
 *.pyc

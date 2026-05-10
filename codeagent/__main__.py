@@ -1,6 +1,6 @@
 """Allow ``python -m codeagent`` from the repository root."""
-import sys
 import os
+import sys
 
 # Ensure repo root is on sys.path.
 repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

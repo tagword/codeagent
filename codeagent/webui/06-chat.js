@@ -23,7 +23,7 @@
         credentials: 'same-origin',
         body: JSON.stringify({
           session_id: greetSid, agent_id: agentId, project_id: projectId,
-          message: '请根据当前 config/*.md 向用户主动打招呼，并用 2-4 条要点说明下一步如何配置/使用（包括 codeagent.env 与 skills/插件可选项）。'
+          message: '请根据当前 config/*.md 向用户主动打招呼，并用 2-4 条要点说明下一步如何配置/使用（包括 config/seed.env 与 skills/插件可选项）。'
         })
       });
       const j = await r.json().catch(() => ({}));

@@ -14,7 +14,7 @@ import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from starlette.applications import Starlette
 from starlette.requests import Request
@@ -33,7 +33,7 @@ def _json_default_transcript(o: Any) -> Any:
     return str(o)
 
 
-def _transcript_payload_json_safe(payload: Dict[str, Any]) -> Dict[str, Any]:
+def _transcript_payload_json_safe(payload: dict[str, Any]) -> dict[str, Any]:
     """Round-trip through JSON so Starlette JSONResponse never raises TypeError."""
     try:
         return json.loads(json.dumps(payload, default=_json_default_transcript))
@@ -66,8 +66,8 @@ def _git_proxy_path(root: Path) -> Path:
     return root / "config" / "codeagent.git.proxy.json"
 
 
-def _parse_env_file(path: Path) -> Dict[str, str]:
-    out: Dict[str, str] = {}
+def _parse_env_file(path: Path) -> dict[str, str]:
+    out: dict[str, str] = {}
     if not path.is_file():
         return out
     try:
@@ -88,7 +88,7 @@ def _parse_env_file(path: Path) -> Dict[str, str]:
     return out
 
 
-def _write_env_file_merge(path: Path, updates: Dict[str, str]) -> None:
+def _write_env_file_merge(path: Path, updates: dict[str, str]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     cur = _parse_env_file(path)
     cur.update(updates)
@@ -96,10 +96,14 @@ def _write_env_file_merge(path: Path, updates: Dict[str, str]) -> None:
     path.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
 
 
-def _env_chat_view(root: Path) -> Dict[str, str]:
-    p = root / "config" / "codeagent.env"
-    file_vals = _parse_env_file(p)
-    out: Dict[str, str] = {}
+def _env_chat_view(root: Path) -> dict[str, str]:
+    from seed.integrations.env_config import ENV_FILENAME, LEGACY_ENV_FILENAME
+
+    p_seed = root / "config" / ENV_FILENAME
+    p_leg = root / "config" / LEGACY_ENV_FILENAME
+    file_vals = dict(_parse_env_file(p_leg))
+    file_vals.update(_parse_env_file(p_seed))
+    out: dict[str, str] = {}
     for k in _ENV_CHAT_KEYS:
         if k in os.environ:
             out[k] = os.environ[k]
@@ -120,7 +124,7 @@ def _env_chat_view(root: Path) -> Dict[str, str]:
     return out
 
 
-def _safe_under(base: Path, rel: str) -> Optional[Path]:
+def _safe_under(base: Path, rel: str) -> Path | None:
     rel = (rel or "").strip().lstrip("/").replace("\\", "/")
     if not rel or ".." in Path(rel).parts:
         return None
@@ -134,8 +138,8 @@ def _safe_under(base: Path, rel: str) -> Optional[Path]:
     return None
 
 
-def _project_fs_dir(agent_id: str, project_id: str) -> Optional[Path]:
-    from seed.proj_reg import get_project
+def _project_fs_dir(agent_id: str, project_id: str) -> Path | None:
+    from seed.core.proj_reg import get_project
 
     pr = get_project(agent_id, project_id)
     if not pr:
@@ -147,7 +151,7 @@ def _project_fs_dir(agent_id: str, project_id: str) -> Optional[Path]:
     return p if p.is_dir() else None
 
 
-def _git_cwd(body: Dict[str, Any], agent_id: str, project_root: Path) -> Path:
+def _git_cwd(body: dict[str, Any], agent_id: str, project_root: Path) -> Path:
     pid = str(body.get("project_id") or "").strip()
     if pid:
         d = _project_fs_dir(agent_id, pid)
@@ -156,7 +160,7 @@ def _git_cwd(body: Dict[str, Any], agent_id: str, project_root: Path) -> Path:
     return project_root
 
 
-async def _run_git(cwd: Path, argv: List[str]) -> Tuple[int, str, str]:
+async def _run_git(cwd: Path, argv: list[str]) -> tuple[int, str, str]:
     try:
         proc = await asyncio.create_subprocess_exec(
             "git",
@@ -173,7 +177,7 @@ async def _run_git(cwd: Path, argv: List[str]) -> Tuple[int, str, str]:
     return int(proc.returncode or 0), out, err
 
 
-def _split_git_args(args: Any) -> List[str]:
+def _split_git_args(args: Any) -> list[str]:
     if isinstance(args, list):
         return [str(x) for x in args]
     s = str(args or "").strip()
@@ -186,9 +190,9 @@ def _locate_session_file(
     handle: str,
     agent_id: str,
     project_id_hint: str,
-) -> Optional[Path]:
-    from seed.llm_sess import _find_session_file
-    from seed.proj_reg import list_projects
+) -> Path | None:
+    from seed.core.llm_sess import _find_session_file
+    from seed.core.proj_reg import list_projects
 
     if project_id_hint:
         p = _find_session_file(handle, agent_id, project_id_hint)
@@ -207,7 +211,7 @@ def _locate_session_file(
     return None
 
 
-async def _llm_probe_response(body: Dict[str, Any]) -> JSONResponse:
+async def _llm_probe_response(body: dict[str, Any]) -> JSONResponse:
     base = str(body.get("base_url") or "").rstrip("/")
     model = str(body.get("model") or "").strip()
     key = str(body.get("api_key") or "").strip()
@@ -217,7 +221,7 @@ async def _llm_probe_response(body: Dict[str, Any]) -> JSONResponse:
     if not (base.startswith("http://") or base.startswith("https://")):
         return JSONResponse({"detail": "base_url must be an http(s) URL"}, status_code=400)
 
-    def probe() -> Tuple[bool, str]:
+    def probe() -> tuple[bool, str]:
         url = base + "/models"
         req = urllib.request.Request(url, method="GET")
         if key and scheme.lower() != "none":
@@ -252,8 +256,8 @@ def _archive_session_path(path: Path) -> bool:
 
 def _transcript_json_for_session(
     sess: Any,
-    before_block_index: Optional[int],
-) -> Dict[str, Any]:
+    before_block_index: int | None,
+) -> dict[str, Any]:
     from . import (
         _webui_transcript_partition_user_blocks,
         _webui_transcript_rows_from_session,
@@ -295,7 +299,7 @@ def _transcript_json_for_session(
         has_more = start > 0
         truncated_start = has_more
 
-    messages: List[Dict[str, Any]] = []
+    messages: list[dict[str, Any]] = []
     for b in sel:
         messages.extend(b)
 
@@ -320,31 +324,24 @@ def _transcript_json_for_session(
 def build_webui_api_app(project_root: Path) -> Starlette:
     project_root = project_root.resolve()
 
-    from seed.config_plane import CONFIG_FILENAMES, ensure_default_config_files
-    from seed.config_plane import project_root as project_root_fn
-    from seed.cron_sched import (
-        cron_status_for_ui,
-        delete_cron_job,
-        load_cron_config,
-        reload_cron_scheduler,
-        save_cron_job,
-        write_cron_config,
-    )
-    from seed.env_config import ENV_FILENAME
-    from seed.llm_presets import (
+    from codeagent.core.settings import plugins_public_view, save_plugins_from_ui
+    from codeagent.web.auth_impl import COOKIE_NAME, get_webui_token, make_webui_cookie_value
+    from seed.core.config_plane import CONFIG_FILENAMES, ensure_default_config_files
+    from seed.core.config_plane import project_root as project_root_fn
+    from seed.core.llm_presets import (
+        _validate_preset,
         get_default_preset_id,
         load_presets,
         save_presets,
         set_default_preset_id,
-        _validate_preset,
     )
-    from seed.llm_sess import (
+    from seed.core.llm_sess import (
         archive_stored_llm_session,
         delete_stored_llm_session,
         list_stored_llm_sessions_meta,
+        load_chat_session_from_disk,
     )
-    from seed.llm_sess import load_chat_session_from_disk
-    from seed.proj_reg import (
+    from seed.core.proj_reg import (
         create_project,
         delete_project,
         list_project_plan_files,
@@ -352,11 +349,18 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         rename_project,
         update_project_path,
     )
-    from seed.proj_todos import delete_todo, list_todos, update_todo
-    from . import SESSIONS
-    from . import _memkey
-    from codeagent.core.settings import plugins_public_view, save_plugins_from_ui
-    from codeagent.web.auth_impl import COOKIE_NAME, get_webui_token, make_webui_cookie_value
+    from seed.core.proj_todos import delete_todo, list_todos, update_todo
+    from seed.integrations.cron_sched import (
+        cron_status_for_ui,
+        delete_cron_job,
+        load_cron_config,
+        reload_cron_scheduler,
+        save_cron_job,
+        write_cron_config,
+    )
+    from seed.integrations.env_config import ENV_FILENAME
+
+    from . import SESSIONS, _memkey
 
     ensure_default_config_files(project_root_fn())
 
@@ -395,7 +399,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
             return JSONResponse({"detail": "invalid token"}, status_code=401)
         from codeagent.web.auth_impl import ws_query_token_bridge_enabled
 
-        payload: Dict[str, Any] = {"ok": True}
+        payload: dict[str, Any] = {"ok": True}
         if ws_query_token_bridge_enabled():
             # Lets embedded / cookie-less WebSocket clients pass ?webui_token= on /ws (opt-in; see webui_auth).
             payload["ws_query_token"] = tok
@@ -667,11 +671,12 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         clone_url = str(body.get("clone_url") or "").strip()
         template = str(body.get("template") or "").strip()
         remote = body.get("remote")
-        messages: List[str] = []
-        row: Dict[str, Any] = {}
+        messages: list[str] = []
+        row: dict[str, Any] = {}
         try:
-            from codeagent.core.paths import agent_projects_data_dir, ensure_agent_scaffold
             from seed_tools import setup_builtin_tools
+
+            from codeagent.core.paths import agent_projects_data_dir, ensure_agent_scaffold
 
             ensure_agent_scaffold(aid)
 
@@ -889,9 +894,9 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         if not pid:
             return JSONResponse({"plans": []})
         try:
-            from seed.proj_reg.delete_project import get_project_data_subdir
+            from seed.core.paths import agent_project_data_subdir
 
-            plans_dir = Path(get_project_data_subdir(aid, pid, "plans"))
+            plans_dir = Path(agent_project_data_subdir(aid, pid, "plans"))
             rels = list_project_plan_files(aid, pid)
             plans = []
             for rel in rels:
@@ -979,7 +984,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
             ).strip() or "default"
             pid = (request.query_params.get("project_id") or "").strip()
             bb = request.query_params.get("before_block_index")
-            before_i: Optional[int] = None
+            before_i: int | None = None
             if bb is not None and str(bb).strip() != "":
                 try:
                     before_i = int(bb)
@@ -1059,7 +1064,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
             return JSONResponse({"detail": "no known keys"}, status_code=400)
         p = project_root / "config" / ENV_FILENAME
         _write_env_file_merge(p, updates)
-        return JSONResponse({"ok": True, "hint": "已写入 config/codeagent.env；重启进程后完全生效。"})
+        return JSONResponse({"ok": True, "hint": "已写入 config/seed.env；重启进程后完全生效。"})
 
     async def api_llm_presets_get(_: Request) -> JSONResponse:
         return JSONResponse({"presets": load_presets(), "default_id": get_default_preset_id()})
@@ -1245,7 +1250,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         scheme = str(body.get("scheme") or "http")
         key = "http" if scheme == "http" else "https"
         path = _git_proxy_path(project_root)
-        data: Dict[str, Any] = {}
+        data: dict[str, Any] = {}
         if path.is_file():
             try:
                 raw = json.loads(path.read_text(encoding="utf-8"))

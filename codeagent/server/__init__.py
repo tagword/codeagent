@@ -34,7 +34,7 @@ from typing import Any, DefaultDict, Dict, List, Optional, Set
 from starlette.requests import Request
 from starlette.responses import Response
 
-from seed._session_cache import SESSIONS, WS_BY_SESSION, ACTIVE_CHAT_CANCELS, _memkey
+from seed.core._session_cache import ACTIVE_CHAT_CANCELS, SESSIONS, WS_BY_SESSION, _memkey
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +77,7 @@ async def _module_favicon(_: Request) -> Response:
 # is NOT to halt, but to keep the agent going with a *different* approach
 # (different tool, different resource, or HTTP-layer fallback) so the user's
 # task actually progresses instead of looping on a broken path.
-_AUTO_CONTINUE_DOMAIN_PLAYBOOKS: Dict[str, str] = {
+_AUTO_CONTINUE_DOMAIN_PLAYBOOKS: dict[str, str] = {
     "browser_": (
         "上一段连续在 browser_* 域失败（调试超时 / 目标 ws 僵尸 / 405 /json/new）。"
         "**禁止**再对同一 target_ws_url 重试同一操作。请换一条思路继续完成用户原本的任务：\n"
@@ -115,7 +115,7 @@ _AUTO_CONTINUE_DOMAIN_PLAYBOOKS: Dict[str, str] = {
 }
 
 
-def _auto_continue_nudge(loop_meta: Optional[Dict[str, Any]]) -> str:
+def _auto_continue_nudge(loop_meta: dict[str, Any] | None) -> str:
     """Pick the auto-continue message for the next segment.
 
     If the previous segment ended with a tail streak of same-domain failures,
@@ -133,7 +133,7 @@ def _auto_continue_nudge(loop_meta: Optional[Dict[str, Any]]) -> str:
         return _DEFAULT_AUTO_CONTINUE_NUDGE
     streak = int(loop_meta.get("failure_streak") or 0)
     recent_errors = loop_meta.get("recent_errors") or []
-    lines: List[str] = [
+    lines: list[str] = [
         f"【策略切换触发】上一段连续 {streak} 次 tool 调用失败，均落在 `{dom}` 域。",
     ]
     if isinstance(recent_errors, list) and recent_errors:
@@ -178,14 +178,14 @@ def _reply_append_tool_summary(reply: str, seg_summary: str) -> str:
     return (r + "\n\n" + s) if r else s
 
 
-def _webui_transcript_rows_from_session(sess: Session, max_chars: int) -> List[Dict[str, Any]]:
+def _webui_transcript_rows_from_session(sess: Session, max_chars: int) -> list[dict[str, Any]]:
     """Flatten session to user/assistant rows for Web UI replay (same shape as before)."""
     try:
         rc_max = int(os.environ.get("CODEAGENT_WEBUI_TRANSCRIPT_REASONING_MAX_CHARS", "50000"))
     except ValueError:
         rc_max = 50000
     rc_max = max(0, min(rc_max, 500_000))
-    raw: List[Dict[str, Any]] = []
+    raw: list[dict[str, Any]] = []
     for m in sess.messages:
         if not isinstance(m, dict):
             continue
@@ -197,7 +197,7 @@ def _webui_transcript_rows_from_session(sess: Session, max_chars: int) -> List[D
         c = str(m.get("content") or "")
         if len(c) > max_chars:
             c = c[: max_chars - 24] + "\n…[内容已截断]"
-        row: Dict[str, Any] = {"role": str(role), "content": c}
+        row: dict[str, Any] = {"role": str(role), "content": c}
         tt = m.get("tool_trace")
         if isinstance(tt, list) and tt:
             row["tool_trace"] = tt
@@ -208,10 +208,10 @@ def _webui_transcript_rows_from_session(sess: Session, max_chars: int) -> List[D
     return raw
 
 
-def _webui_transcript_partition_user_blocks(rows: List[Dict[str, Any]]) -> List[List[Dict[str, Any]]]:
+def _webui_transcript_partition_user_blocks(rows: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
     """Each block starts at a user message; following assistant rows attach until the next user."""
-    blocks: List[List[Dict[str, Any]]] = []
-    cur: List[Dict[str, Any]] = []
+    blocks: list[list[dict[str, Any]]] = []
+    cur: list[dict[str, Any]] = []
     for row in rows:
         if row.get("role") == "user":
             if cur:
@@ -255,10 +255,10 @@ def _request_listen_port(request: Any) -> int:
         return 8765
 
 
-def _guess_lan_ipv4_addresses() -> List[str]:
+def _guess_lan_ipv4_addresses() -> list[str]:
     """Best-effort LAN IPv4 list for sharing Web UI / webhook URL (no extra deps)."""
     seen: set[str] = set()
-    ordered: List[str] = []
+    ordered: list[str] = []
 
     def add(ip: str) -> None:
         if not ip or ip.startswith("127."):
@@ -317,7 +317,6 @@ def _print_serve_access_hints(host: str, port: int) -> None:
 def main(host: str = "0.0.0.0", port: int = 8765) -> None:
     import uvicorn
 
-    from codeagent.server.app_factory import create_app
 
     # Cron 调度在 Starlette on_startup 里启动（AsyncIOScheduler 需要已有运行中的事件循环）。
     _print_serve_access_hints(host, port)
@@ -334,13 +333,13 @@ def _webui_root() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
-def _persist_long_user_input(*, agent_id: str, session_id: str, text: str) -> Optional[str]:
+def _persist_long_user_input(*, agent_id: str, session_id: str, text: str) -> str | None:
     """
     Save long raw user input to disk and return an absolute path hint.
     Best-effort; failures do not block chat.
     """
     try:
-        from seed.llm_sess import llm_sessions_dir
+        from seed.core.llm_sess import llm_sessions_dir
 
         base = Path(llm_sessions_dir(agent_id)) / "_user_inputs"
         base.mkdir(parents=True, exist_ok=True)
@@ -359,7 +358,7 @@ def _summarize_user_input_with_fallback(
     model: str,
     max_tokens: int,
 ) -> str:
-    from seed.llm_exec import get_llm_executor
+    from seed.core.llm_exec import get_llm_executor
 
     sum_url = os.environ.get("CODEAGENT_USER_INPUT_SUMMARY_BASEURL", "").strip()
     sum_model = os.environ.get("CODEAGENT_USER_INPUT_SUMMARY_MODEL", "").strip()
@@ -395,7 +394,7 @@ def _summarize_user_input_with_fallback(
     return (content or "").strip()
 
 
-def _verify_webhook_signature(body: bytes, sig: Optional[str]) -> bool:
+def _verify_webhook_signature(body: bytes, sig: str | None) -> bool:
     secret = os.environ.get("CODEAGENT_WEBHOOK_SECRET", "").strip()
     if not secret:
         logger.warning("CODEAGENT_WEBHOOK_SECRET unset — rejecting all webhook/in requests")
@@ -447,7 +446,7 @@ def get_setup_html() -> str:
         "setup_test.html",
         "setup_tail.html",
     )
-    parts: List[str] = []
+    parts: list[str] = []
     for name in names:
         p = parts_dir / name
         if not p.is_file():

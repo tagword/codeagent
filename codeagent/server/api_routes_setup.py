@@ -183,7 +183,7 @@ async def api_ui_config_paths(_: Request) -> JSONResponse:
     """Return important paths for the config page."""
     root = str(project_root.resolve())
     try:
-        from codeagent.core.paths import agent_skills_dir, agent_persona_dir
+        from codeagent.core.paths import agent_persona_dir, agent_skills_dir
         aid = os.environ.get("CODEAGENT_AGENT_ID", "default")
         skills_path = str(agent_skills_dir(aid, base=project_root).resolve())
         persona_path = str(agent_persona_dir(aid, base=project_root).resolve())
@@ -199,9 +199,7 @@ async def api_ui_config_paths(_: Request) -> JSONResponse:
 async def api_ui_projects_plans(request: Request) -> JSONResponse:
     """List *-plan.md files from both user project dir and Agent data dir."""
     params = dict(request.query_params)
-    project_id = params.get("project_id", "")
-    aid = params.get("agent_id", "") or os.environ.get("CODEAGENT_AGENT_ID", "default")
+    params.get("project_id", "")
+    params.get("agent_id", "") or os.environ.get("CODEAGENT_AGENT_ID", "default")
 
-    plans = []
-    seen_names: set = set()
 

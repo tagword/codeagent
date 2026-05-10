@@ -7,3 +7,7 @@ Architecture:
 """
 
 __version__ = "1.0.0"
+
+# Compat: bind ``generate`` / ``generate_stream`` onto ``seed``'s LLMAPIExecutor when missing.
+import codeagent.llm.executor  # noqa: F401
+

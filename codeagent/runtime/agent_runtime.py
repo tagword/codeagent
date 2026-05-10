@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from seed.agent_runtime import (  # noqa: F401
+from seed.core.agent_runtime import (  # noqa: F401
     build_api_projection_messages,
     default_system_prompt,
     format_tool_segment_summary,

@@ -13,32 +13,33 @@ from __future__ import annotations
 
 import json
 import os
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Dict, Iterable, Set, Tuple
+
+from seed_tools import ToolExecutor, ToolRegistry, setup_builtin_tools
 
 from codeagent.core.paths import agent_home
-from seed_tools import ToolExecutor, ToolRegistry, setup_builtin_tools
 
 
 @dataclass
 class ToolLayerRule:
-    allow: Set[str]
-    deny: Set[str]
-    allow_prefixes: Tuple[str, ...]
-    deny_prefixes: Tuple[str, ...]
+    allow: set[str]
+    deny: set[str]
+    allow_prefixes: tuple[str, ...]
+    deny_prefixes: tuple[str, ...]
 
 
-def _as_set(xs: object) -> Set[str]:
+def _as_set(xs: object) -> set[str]:
     if not isinstance(xs, list):
         return set()
-    out: Set[str] = set()
+    out: set[str] = set()
     for x in xs:
         if isinstance(x, str) and x.strip():
             out.add(x.strip())
     return out
 
 
-def _as_prefixes(xs: object) -> Tuple[str, ...]:
+def _as_prefixes(xs: object) -> tuple[str, ...]:
     if not isinstance(xs, list):
         return ()
     out = []
@@ -50,7 +51,7 @@ def _as_prefixes(xs: object) -> Tuple[str, ...]:
     return tuple(out)
 
 
-def _load_tools_json(agent_id: str) -> Dict[str, object]:
+def _load_tools_json(agent_id: str) -> dict[str, object]:
     p = agent_home(agent_id) / "tools.json"
     if not p.is_file():
         return {}
@@ -61,7 +62,7 @@ def _load_tools_json(agent_id: str) -> Dict[str, object]:
     return raw if isinstance(raw, dict) else {}
 
 
-def _layer_rule(raw: Dict[str, object], key: str) -> ToolLayerRule:
+def _layer_rule(raw: dict[str, object], key: str) -> ToolLayerRule:
     d = raw.get(key)
     if not isinstance(d, dict):
         d = {}
@@ -74,28 +75,26 @@ def _layer_rule(raw: Dict[str, object], key: str) -> ToolLayerRule:
 
 
 def _match_prefix(name: str, prefixes: Iterable[str]) -> bool:
-    for p in prefixes:
-        if p and name.startswith(p):
-            return True
-    return False
+    return any(p and name.startswith(p) for p in prefixes)
 
 
 # Default innate policy: keep things that are mostly read-only / low risk.
 # Users can override via agents/<id>/tools.json if desired.
-_INNATE_DENY_PREFIXES: Tuple[str, ...] = ()
-_INNATE_DENY_NAMES: Set[str] = {
+_INNATE_DENY_PREFIXES: tuple[str, ...] = ()
+_INNATE_DENY_NAMES: set[str] = {
     # write/exec/high-risk by default
     "file_write",
     "file_edit",
     "bash_exec",
     "bash_tool",
     "notebook_edit_tool",
-    "codeagent_cron_apply",  # replaces entire cron JSON + reload
+    "seed_cron_apply",
+    "codeagent_cron_apply",  # legacy alias
 }
 
 
-def _default_innate_allowed(all_names: Set[str]) -> Set[str]:
-    out: Set[str] = set()
+def _default_innate_allowed(all_names: set[str]) -> set[str]:
+    out: set[str] = set()
     for n in all_names:
         if n in _INNATE_DENY_NAMES:
             continue
@@ -105,7 +104,7 @@ def _default_innate_allowed(all_names: Set[str]) -> Set[str]:
     return out
 
 
-def _apply_rule(base: Set[str], *, rule: ToolLayerRule, all_names: Set[str]) -> Set[str]:
+def _apply_rule(base: set[str], *, rule: ToolLayerRule, all_names: set[str]) -> set[str]:
     out = set(base)
     if rule.allow_prefixes:
         out |= {n for n in all_names if _match_prefix(n, rule.allow_prefixes)}
@@ -118,10 +117,10 @@ def _apply_rule(base: Set[str], *, rule: ToolLayerRule, all_names: Set[str]) -> 
     return out
 
 
-_CACHE: Dict[str, Tuple[ToolRegistry, ToolExecutor]] = {}
+_CACHE: dict[str, tuple[ToolRegistry, ToolExecutor]] = {}
 
 
-def get_tools_for_agent(agent_id: str) -> Tuple[ToolRegistry, ToolExecutor]:
+def get_tools_for_agent(agent_id: str) -> tuple[ToolRegistry, ToolExecutor]:
     """
     Build or return cached (registry, executor) for an agent.
 

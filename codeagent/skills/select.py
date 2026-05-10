@@ -4,11 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List
 
 from codeagent.core.paths import agent_skills_dir
+from seed.core.routing import score_entries
 from seed.models import CommandEntry
-from seed.routing import score_entries
 
 
 @dataclass
@@ -30,11 +29,11 @@ def _skill_description_from_file(path: Path, *, max_lines: int = 10, max_chars: 
     return take
 
 
-def list_agent_skill_entries(agent_id: str) -> List[CommandEntry]:
+def list_agent_skill_entries(agent_id: str) -> list[CommandEntry]:
     d = agent_skills_dir(agent_id)
     if not d.is_dir():
         return []
-    out: List[CommandEntry] = []
+    out: list[CommandEntry] = []
     for p in sorted(d.glob("*.md")):
         sid = p.stem.strip()
         if not sid:
@@ -44,13 +43,13 @@ def list_agent_skill_entries(agent_id: str) -> List[CommandEntry]:
     return out
 
 
-def select_skills(agent_id: str, *, user_text: str, k: int = 3) -> List[SelectedSkill]:
+def select_skills(agent_id: str, *, user_text: str, k: int = 3) -> list[SelectedSkill]:
     entries = list_agent_skill_entries(agent_id)
     if not entries:
         return []
     picked = score_entries(user_text or "", entries, limit=max(1, int(k)))
     d = agent_skills_dir(agent_id)
-    out: List[SelectedSkill] = []
+    out: list[SelectedSkill] = []
     for e in picked[: max(1, int(k))]:
         path = (d / f"{e.name}.md").resolve()
         out.append(SelectedSkill(skill_id=e.name, path=path, description=e.description or ""))

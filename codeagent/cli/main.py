@@ -1,19 +1,18 @@
 from __future__ import annotations
 
-
 import os
 import subprocess
 import sys
 import time
 from datetime import datetime
-from typing import Set
 
-from seed_tools import ToolRegistry, setup_builtin_tools
-from seed.persistence import ensure_session_dir, list_sessions, save_session
-from seed.routing import find_commands, get_all_commands, get_command
+from seed_tools import setup_builtin_tools
+
+from seed.core.persistence import ensure_session_dir, list_sessions, save_session
+from seed.core.routing import find_commands, get_all_commands, get_command
 
 
-def _pids_listening_on_port_windows(port: int) -> Set[int]:
+def _pids_listening_on_port_windows(port: int) -> set[int]:
     """
     Returns process IDs listening on TCP port using `netstat -ano`.
     Works on Windows; best-effort parsing.
@@ -31,7 +30,7 @@ def _pids_listening_on_port_windows(port: int) -> Set[int]:
     except Exception:
         return set()
     out = cp.stdout or ""
-    pids: Set[int] = set()
+    pids: set[int] = set()
     needle = f":{int(port)}"
     for line in out.splitlines():
         line = line.strip()
@@ -119,21 +118,21 @@ def cmd_run(args):
 
     ensure_session_dir()
     session_id = args.save if args.save else f"agent-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
-    
+
     matched = find_commands(prompt, limit=5)
     matches = [c for c in matched if hasattr(c, 'name') and c]
-    
+
     print("=== CodeAgent Run Result")
     print(f"Session ID: {session_id}")
     print(f"Prompt: {prompt}")
     print(f"Matched commands: {len(matches)}")
-    
+
     for cmd_entry in matched:
         name = cmd_entry.name if hasattr(cmd_entry, 'name') else repr(cmd_entry)
         cmd = get_command(name)
         if cmd:
             print(f" - {name}: {cmd.description}")
-    
+
     if args.save:
         save_session(session_id, [prompt], 0, 0)
         print(f"Session saved to: ~/.codeagent/sessions/{session_id}.json")
@@ -142,13 +141,13 @@ def cmd_route(args):
     """Handle route subcommand."""
     prompt = getattr(args, 'prompt', '')
     limit = getattr(args, 'limit', 20)
-    
+
     print("=== CodeAgent Route Result")
     print(f"Query: {prompt}")
-    
+
     matched = find_commands(prompt, limit=limit)
     print(f"Matches found: {len(matched)}")
-    
+
     for cmd in matched[:limit]:
         name = cmd.name if hasattr(cmd, 'name') else repr(cmd)
         desc = cmd.description if hasattr(cmd, 'description') else ""
@@ -159,10 +158,10 @@ def cmd_commands(args):
     all_cmds = get_all_commands()
     limit = getattr(args, 'limit', 50)
     result_cmds = all_cmds[:limit]
-    
+
     print("=== CodeAgent Commands")
     print(f"Total commands: {len(result_cmds)}")
-    
+
     for cmd in result_cmds:
         cat = "default"
         if hasattr(cmd, 'category') and cmd.category:
@@ -174,28 +173,27 @@ def cmd_commands(args):
 
 def cmd_tools(args):
     """Handle tools subcommand."""
-    registry = ToolRegistry()
-    setup_builtin_tools(registry)
+    registry, _executor = setup_builtin_tools()
     tools = registry.list_all()
     limit = getattr(args, 'limit', 50)
     result_tools = tools[:limit]
-    
+
     print("=== CodeAgent Tools")
     print(f"Total tools: {len(result_tools)}")
-    
+
     for tool in result_tools:
         print(f" - [basic]: {tool.name} - {tool.description}")
 
 def cmd_summary(args):
     """Handle summary subcommand."""
     session_id = getattr(args, 'session', None)
-    
+
     print("=== CodeAgent Session Summary")
-    
+
     if session_id:
         save_dir = os.path.expanduser("~/.codeagent/sessions")
         file_path = os.path.join(save_dir, f"{session_id}.json")
-        
+
         if not os.path.exists(file_path):
             print(f"Warning: Session file not found: {file_path}")
             sessions = list_sessions()
@@ -217,15 +215,12 @@ CodeAgent CLI - Main entry point
 Provides command routing, tool execution, and session management.
 """
 import argparse
-import sys
-import os
-import subprocess
-from typing import Any, Dict
+from typing import Any
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 
-def _win_no_window_kwargs() -> Dict[str, Any]:
+def _win_no_window_kwargs() -> dict[str, Any]:
     """Suppress the black cmd window when this CLI helper runs under a windowed
     parent (e.g. ``CodeAgentTray.exe``). No-op on POSIX."""
     if os.name != "nt":
@@ -238,7 +233,7 @@ def _win_no_window_kwargs() -> Dict[str, Any]:
 def main():
     """Main CLI entry point."""
 
-    from seed.env_config import apply_codeagent_env_from_config
+    from seed.integrations.env_config import apply_codeagent_env_from_config
 
     apply_codeagent_env_from_config()
 
@@ -247,7 +242,7 @@ def main():
         description='CodeAgent: Autonomous agent for task execution with command routing and session management',
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    
+
     parser.add_argument('--version', action='version', version='CodeAgent v1.0.0')
     subparsers = parser.add_subparsers(dest='command', help='Available commands')
 
@@ -293,12 +288,12 @@ def main():
     chat_parser.add_argument(
         '--session',
         '-S',
-        help='LLM chat session id: resume/save transcript under <CODEAGENT_PROJECT_ROOT>/llm_sessions/ (override CODEAGENT_LLM_SESSIONS_DIR)',
+        help='LLM chat session id: resume/save under agents/<agent>/sessions/llm_sessions (override SEED_LLM_SESSIONS_DIR)',
     )
     chat_parser.add_argument(
         '--llm',
         action='store_true',
-        help='Use CODEAGENT_LLM_BASEURL / CODEAGENT_LLM_MODEL and builtin tools (multi-turn tool loop); optional config/codeagent.env',
+        help='Use SEED_LLM_BASEURL / SEED_LLM_MODEL (aliases CODEAGENT_*) and builtin tools; optional config/seed.env',
     )
     chat_parser.add_argument('--max-tool-rounds', type=int, default=16, help='Max LLM/tool cycles per user line')
 
@@ -334,7 +329,7 @@ def main():
 
     cfg_parser = subparsers.add_parser('config', help='Manage Markdown config under config/')
     cfg_sub = cfg_parser.add_subparsers(dest='cfg_cmd', help='Config action')
-    cfg_init = cfg_sub.add_parser('init', help='Create default agent.md, identity.md, soul.md, tools.md, user.md')
+    cfg_sub.add_parser('init', help='Create default agent.md, identity.md, soul.md, tools.md, user.md')
 
     wt_parser = subparsers.add_parser(
         "webui-token",
@@ -385,11 +380,9 @@ def main():
 
 
 import asyncio
+import contextlib
 import os
 import sys
-from datetime import datetime
-
-from seed.routing import find_commands
 
 
 def cmd_chat(args):
@@ -425,30 +418,31 @@ def cmd_chat(args):
 def _cmd_chat_llm(args):
 
     from seed_tools import setup_builtin_tools
-    from seed.llm_exec import LLMError
-    from seed.llm_presets import llm_executor_from_resolved, resolve_preset
-    from seed.agent_context import set_active_llm_session
-    from seed.agent_runtime import (
+
+    from seed.core.agent_context import set_active_llm_session
+    from seed.core.agent_runtime import (
         build_api_projection_messages,
         default_system_prompt,
         maybe_compact_context_messages,
         merge_llm_tail_into_full,
         run_llm_tool_loop,
     )
-    from seed.llm_sess import (
+    from seed.core.llm_exec import LLMError
+    from seed.core.llm_presets import llm_executor_from_resolved, resolve_preset
+    from seed.core.llm_sess import (
         load_or_create_chat_session,
         merge_fresh_system,
         persist_chat_session,
     )
-    from seed.mem_bridge import apply_episodic_to_messages
-    from seed.session_title import maybe_llm_refresh_session_title
+    from seed.core.mem_bridge import apply_episodic_to_messages
+    from seed.integrations.session_title import maybe_llm_refresh_session_title
 
     name = getattr(args, 'session', None) or 'cli-chat'
     max_rounds = getattr(args, 'max_tool_rounds', 16) or 16
 
     registry, executor = setup_builtin_tools()
     llm = llm_executor_from_resolved(resolve_preset(None))
-    from seed.config_plane import project_root as _project_root
+    from seed.core.config_plane import project_root as _project_root
 
     project_root = _project_root()
     chat_sess = load_or_create_chat_session(name)
@@ -469,7 +463,7 @@ def _cmd_chat_llm(args):
             break
         chat_sess.messages.append({"role": "user", "content": line})
         try:
-            from seed.transcript_store import append_transcript_entries
+            from seed.integrations.transcript_store import append_transcript_entries
 
             append_transcript_entries(name, [chat_sess.messages[-1]], agent_id=None)
         except Exception:
@@ -496,7 +490,7 @@ def _cmd_chat_llm(args):
             )
             tail = merge_llm_tail_into_full(chat_sess.messages, api_msgs, n_before)
             try:
-                from seed.transcript_store import append_transcript_entries
+                from seed.integrations.transcript_store import append_transcript_entries
 
                 if tail:
                     append_transcript_entries(name, tail, agent_id=None)
@@ -505,17 +499,13 @@ def _cmd_chat_llm(args):
             print(reply)
             if tools_used:
                 print(f"  [tools] {', '.join(tools_used)}")
-            try:
+            with contextlib.suppress(Exception):
                 persist_chat_session(chat_sess)
-            except Exception:
-                pass
-            try:
+            with contextlib.suppress(Exception):
                 maybe_llm_refresh_session_title(llm, chat_sess)
-            except Exception:
-                pass
             if os.environ.get("CODEAGENT_MEMORY_LOG", "1").lower() not in ("0", "false", "no"):
                 try:
-                    from seed.mem_sys import MemorySystem
+                    from seed.core.mem_sys import MemorySystem
 
                     mem = MemorySystem(base_path=project_root)
                     mem.log_experience(
@@ -539,10 +529,10 @@ def cmd_webui_token(args):
     from codeagent.web.auth_impl import TOKEN_FILENAME
 
     # cmd_webui_token can be invoked directly; ensure env file is loaded.
-    from seed.env_config import apply_codeagent_env_from_config
+    from seed.integrations.env_config import apply_codeagent_env_from_config
 
     apply_codeagent_env_from_config()
-    from seed.config_plane import project_root as _project_root
+    from seed.core.config_plane import project_root as _project_root
 
     root = _project_root()
     cfg = root / "config"
@@ -567,10 +557,8 @@ def cmd_webui_token(args):
             sys.exit(1)
         token = secrets.token_urlsafe(32)
         path.write_text(token + "\n", encoding="utf-8")
-        try:
+        with contextlib.suppress(OSError, NotImplementedError, AttributeError):
             os.chmod(path, 0o600)
-        except (OSError, NotImplementedError, AttributeError):
-            pass
         print(f"Written: {path}")
         print(f"Token (save it): {token}")
         return
@@ -578,10 +566,8 @@ def cmd_webui_token(args):
     if act == "reset":
         token = secrets.token_urlsafe(32)
         path.write_text(token + "\n", encoding="utf-8")
-        try:
+        with contextlib.suppress(OSError, NotImplementedError, AttributeError):
             os.chmod(path, 0o600)
-        except (OSError, NotImplementedError, AttributeError):
-            pass
         print(f"Written: {path}")
         print(f"New token: {token}")
         return
@@ -590,8 +576,6 @@ def cmd_webui_token(args):
 
 
 import sys
-
-from seed.persistence import list_sessions, save_session
 
 
 def cmd_serve(args):
@@ -621,17 +605,17 @@ def cmd_serve_tray(args):
 
 
 def cmd_config(args):
-    from seed.config_plane import ensure_default_config_files, project_root
+    from seed.core.config_plane import ensure_default_config_files, project_root
 
     sub = getattr(args, 'cfg_cmd', None)
     if sub == 'init':
         root = project_root()
         ensure_default_config_files(root)
-        ex = root / "config" / "codeagent.env.example"
+        ex = root / "config" / "seed.env.example"
         print(f"Default Markdown written under: {root / 'config'}")
         print("Tip: optional plugin skills live in config/skills/ directory.")
         if ex.is_file():
-            print(f"Context/LLM env template: {ex}  -> copy to config/codeagent.env if you want repo-local settings.")
+            print(f"Context/LLM env template: {ex}  -> copy to config/seed.env if you want repo-local settings.")
         return
     print("Usage: codeagent config init")
 
@@ -640,7 +624,7 @@ def cmd_session(args):
     """Handle session subcommand."""
     action = getattr(args, 'action', 'list')
     session_id = getattr(args, 'session_id', None)
-    
+
     if action == 'list':
         sessions = list_sessions()
         print("=== Session List")
@@ -650,7 +634,7 @@ def cmd_session(args):
     elif action == 'help':
         print("Available actions: list, save, load, delete, help")
     elif action == 'delete' and session_id:
-        from seed.persistence import delete_session
+        from seed.core.persistence import delete_session
         if delete_session(session_id):
             print(f"Session deleted: {session_id}")
         else:

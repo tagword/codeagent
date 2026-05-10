@@ -2,5 +2,5 @@
 
 from __future__ import annotations
 
-from seed.llm_sess import *  # noqa: F401,F403
+from seed.core.llm_sess import *  # noqa: F401,F403
 

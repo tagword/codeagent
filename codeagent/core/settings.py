@@ -4,28 +4,28 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
-from seed.config_plane import CONFIG_FILENAMES, config_dir
+from seed.core.config_plane import CONFIG_FILENAMES, config_dir
 
 logger = logging.getLogger(__name__)
 
 PLUGINS_FILENAME = "codeagent.plugins.json"
 
 
-def _defaults() -> Dict[str, Any]:
+def _defaults() -> dict[str, Any]:
     return {
         "config_md_enabled": list(CONFIG_FILENAMES),
         "plugins": {},
     }
 
 
-def _plugins_path(base: Optional[Path] = None) -> Path:
+def _plugins_path(base: Path | None = None) -> Path:
     cfg = config_dir() if base is None else base.resolve() / "config"
     return cfg / PLUGINS_FILENAME
 
 
-def load_plugins(base: Optional[Path] = None) -> Dict[str, Any]:
+def load_plugins(base: Path | None = None) -> dict[str, Any]:
     d = _defaults()
     path = _plugins_path(base)
     if not path.is_file():
@@ -51,12 +51,12 @@ def load_plugins(base: Optional[Path] = None) -> Dict[str, Any]:
     return d
 
 
-def save_plugins(data: Dict[str, Any], base: Optional[Path] = None) -> None:
+def save_plugins(data: dict[str, Any], base: Path | None = None) -> None:
     path = _plugins_path(base)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
-def get_system_prompt_filenames(base: Optional[Path] = None) -> List[str]:
+def get_system_prompt_filenames(base: Path | None = None) -> list[str]:
     data = load_plugins(base) if base is not None else load_plugins()
     enabled = data.get("config_md_enabled") or list(CONFIG_FILENAMES)
     if not enabled:
@@ -68,11 +68,11 @@ def get_system_prompt_filenames(base: Optional[Path] = None) -> List[str]:
     return ordered
 
 
-def get_tool_exclude_prefixes() -> Tuple[str, ...]:
+def get_tool_exclude_prefixes() -> tuple[str, ...]:
     return ()
 
 
-def plugins_public_view() -> Dict[str, Any]:
+def plugins_public_view() -> dict[str, Any]:
     d = load_plugins()
     en = set(d.get("config_md_enabled") or CONFIG_FILENAMES)
     return {
@@ -82,7 +82,7 @@ def plugins_public_view() -> Dict[str, Any]:
     }
 
 
-def save_plugins_from_ui(body: Dict[str, Any]) -> Dict[str, Any]:
+def save_plugins_from_ui(body: dict[str, Any]) -> dict[str, Any]:
     current = load_plugins()
     enabled = body.get("config_md_enabled")
     if enabled is not None:

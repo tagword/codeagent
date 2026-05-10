@@ -1,12 +1,12 @@
 """
-Setup script for CodeAgent (Web UI + Server).
+Legacy setuptools hook — prefer the repository root:
 
-Install with:
-    pip install -e webui/   →  editable install from the webui directory
+    pip install -e '.[server]'
+
+Packaging metadata lives in ``pyproject.toml`` at the repo root.
 """
 
-from setuptools import setup, find_packages
-
+from setuptools import find_packages, setup
 
 # ── Actual setup call ──────────────────────────────────────────────────
 setup(

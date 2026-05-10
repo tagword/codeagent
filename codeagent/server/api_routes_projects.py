@@ -6,7 +6,7 @@ async def api_ui_projects_list(request: Request) -> JSONResponse:
     ).strip() or "default"
     try:
         from codeagent.core.paths import ensure_agent_scaffold
-        from seed.proj_reg import list_projects
+        from seed.core.proj_reg import list_projects
 
         ensure_agent_scaffold(aid)
         rows = list_projects(aid)
@@ -34,9 +34,10 @@ async def api_ui_projects_create(request: Request) -> JSONResponse:
     remote = body.get("remote")
     messages = []
     try:
-        from codeagent.core.paths import ensure_agent_scaffold
-        from seed.proj_reg import create_project
         import subprocess
+
+        from codeagent.core.paths import ensure_agent_scaffold
+        from seed.core.proj_reg import create_project
 
         ensure_agent_scaffold(aid)
 
@@ -77,17 +78,16 @@ async def api_ui_projects_create(request: Request) -> JSONResponse:
         project_dir = Path(proj_path) if proj_path else None
 
         # 处理模板模式：scaffold 生成骨架
-        if source == "template" and template:
-            if project_dir and project_dir.is_dir():
-                try:
-                    from seed_tools import setup_builtin_tools
-                    reg, _ = setup_builtin_tools()
-                    scaffold_fn = reg.handlers.get("scaffold")
-                    if scaffold_fn:
-                        scaffold_fn(template=template, name=name, path=str(project_dir))
-                        messages.append(f"🏗️ 已从 {template} 模板创建")
-                except Exception as e:
-                    messages.append(f"⚠️ 模板创建失败: {e}")
+        if source == "template" and template and project_dir and project_dir.is_dir():
+            try:
+                from seed_tools import setup_builtin_tools
+                reg, _ = setup_builtin_tools()
+                scaffold_fn = reg.handlers.get("scaffold")
+                if scaffold_fn:
+                    scaffold_fn(template=template, name=name, path=str(project_dir))
+                    messages.append(f"🏗️ 已从 {template} 模板创建")
+            except Exception as e:
+                messages.append(f"⚠️ 模板创建失败: {e}")
 
         # Git 初始化
         git_dir = project_dir or Path.cwd()

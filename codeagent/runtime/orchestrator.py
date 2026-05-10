@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from .worker import Worker
 
@@ -17,7 +17,7 @@ class Orchestrator:
     then merge results back into a single user-facing reply and shared session.
     """
 
-    workers: List[Worker] = field(default_factory=list)
+    workers: list[Worker] = field(default_factory=list)
 
     def run(
         self,
@@ -25,8 +25,8 @@ class Orchestrator:
         session_id: str,
         user_text: str,
         max_tool_rounds: int = 16,
-        metadata: Optional[Dict[str, Any]] = None,
-    ) -> Tuple[str, Dict[str, Any]]:
+        metadata: dict[str, Any] | None = None,
+    ) -> tuple[str, dict[str, Any]]:
         if not self.workers:
             raise RuntimeError("Orchestrator has no workers configured")
         # v0: just use the first worker (single-agent behavior).

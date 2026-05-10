@@ -7,12 +7,11 @@ import logging
 import os
 import time
 from pathlib import Path
-from typing import Optional
 from urllib.parse import parse_qs, unquote
 
 logger = logging.getLogger(__name__)
 
-from seed.config_plane import project_root
+from seed.core.config_plane import project_root
 
 COOKIE_NAME = "ca_webui"
 TOKEN_FILENAME = "codeagent.webui.token"
@@ -22,12 +21,12 @@ def _project_root() -> Path:
     return project_root()
 
 
-def _token_file_path(base: Optional[Path] = None) -> Path:
+def _token_file_path(base: Path | None = None) -> Path:
     root = base if base is not None else _project_root()
     return root / "config" / TOKEN_FILENAME
 
 
-def get_webui_token(project_root: Optional[Path] = None) -> str:
+def get_webui_token(project_root: Path | None = None) -> str:
     raw = os.environ.get("CODEAGENT_WEBUI_TOKEN", "").strip()
     if raw:
         return raw
@@ -40,7 +39,7 @@ def get_webui_token(project_root: Optional[Path] = None) -> str:
         return ""
 
 
-def webui_auth_active(project_root: Optional[Path] = None) -> bool:
+def webui_auth_active(project_root: Path | None = None) -> bool:
     return bool(get_webui_token(project_root))
 
 
@@ -55,7 +54,7 @@ def make_webui_cookie_value(token: str, ttl_sec: int = 604800) -> str:
     return f"{exp}.{sig}"
 
 
-def verify_webui_cookie(token: str, cookie_val: Optional[str]) -> bool:
+def verify_webui_cookie(token: str, cookie_val: str | None) -> bool:
     if not token or not cookie_val or "." not in cookie_val:
         return False
     try:
@@ -71,7 +70,7 @@ def verify_webui_cookie(token: str, cookie_val: Optional[str]) -> bool:
         return False
 
 
-def _setup_incomplete(project_root: Optional[Path] = None) -> bool:
+def _setup_incomplete(project_root: Path | None = None) -> bool:
     """True until ``config/codeagent.setup.json`` exists with ``\"done\": true``."""
     root = Path(project_root).resolve() if project_root is not None else _project_root()
     marker = root / "config" / "codeagent.setup.json"
@@ -93,9 +92,7 @@ def is_setup_bootstrap_route(path: str, method: str) -> bool:
     m = (method or "").upper()
     if path == "/api/ui/llm/presets" and m in ("GET", "HEAD", "POST", "OPTIONS"):
         return True
-    if path == "/api/ui/llm/presets/default" and m in ("POST", "OPTIONS"):
-        return True
-    return False
+    return bool(path == "/api/ui/llm/presets/default" and m in ("POST", "OPTIONS"))
 
 
 def is_public_webui_route(path: str, method: str) -> bool:
@@ -114,9 +111,7 @@ def is_public_webui_route(path: str, method: str) -> bool:
         return True
     if path == "/api/ui/auth/logout" and method == "POST":
         return True
-    if method == "GET" and path in ("/icon.png", "/favicon.ico", "/health"):
-        return True
-    return False
+    return bool(method == "GET" and path in ("/icon.png", "/favicon.ico", "/health"))
 
 
 def get_login_html() -> str:
@@ -151,10 +146,7 @@ def ws_query_token_bridge_enabled() -> bool:
 
 def _parse_query_params(scope: dict) -> dict[str, list[str]]:
     raw = scope.get("query_string") or b""
-    if isinstance(raw, bytes):
-        qs = raw.decode("latin-1", errors="replace")
-    else:
-        qs = str(raw)
+    qs = raw.decode("latin-1", errors="replace") if isinstance(raw, bytes) else str(raw)
     return parse_qs(qs, keep_blank_values=False)
 
 
@@ -173,7 +165,7 @@ def _raw_token_matches(server_token: str, presented: str) -> bool:
     return hmac.compare_digest(a, b)
 
 
-def _read_cookie_from_scope(scope: dict, name: str) -> Optional[str]:
+def _read_cookie_from_scope(scope: dict, name: str) -> str | None:
     prefix = name + "="
     for k, v in scope.get("headers") or []:
         key = k.decode("latin-1") if isinstance(k, bytes) else str(k)

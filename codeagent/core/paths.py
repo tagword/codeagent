@@ -1,25 +1,28 @@
-"""Agent filesystem layout under ``CODEAGENT_PROJECT_ROOT`` (multi-agent aware)."""
+"""CodeAgent filesystem layout — re-exports kernel paths + CodeAgent default persona files."""
+
 from __future__ import annotations
 
-import os
+import contextlib
 from pathlib import Path
-from typing import Optional
 
-
-def _project_root() -> Path:
-    from seed.config_plane import project_root
-
-    return project_root()
-
-
-def agent_id_default() -> str:
-    return (os.environ.get("CODEAGENT_AGENT_ID", "") or "default").strip() or "default"
-
-
-def agent_home(agent_id: str) -> Path:
-    aid = (agent_id or "").strip() or agent_id_default()
-    return _project_root() / "agents" / aid
-
+from seed.core.config_plane import project_root as _kernel_project_root
+from seed.core.paths import (
+    agent_archive_dir,
+    agent_daily_dir,
+    agent_home,
+    agent_id_default,
+    agent_memory_dir,
+    agent_persona_dir,
+    agent_persona_memory_path,
+    agent_project_archive_dir,
+    agent_project_daily_dir,
+    agent_project_data_dir,
+    agent_project_data_subdir,
+    agent_projects_data_dir,
+    agent_projects_registry_dir,
+    agent_skills_dir,
+    ensure_agent_dirs,
+)
 
 # Default persona Markdown filenames (same as CONFIG_FILENAMES in config_plane).
 _DEFAULT_PERSONA_FILENAMES = [
@@ -69,7 +72,7 @@ def _ensure_default_persona_files(persona_dir: Path) -> None:
             "- **代码分析**: `code_check`, `code_analyze`, `project`, `refactor`, `test_gen`\n"
             "- **项目管理**: `todo_tool`, `diagram`, `deploy`, `deps_check`\n"
             "- **数据库**: `db`\n"
-            "- **记忆/配置**: `memory_search`, `codeagent_cron_*`, `artifact_read`\n"
+            "- **记忆/配置**: `memory_search`, `seed_cron_*`（兼容 `codeagent_cron_*`）, `artifact_read`\n"
             "\n"
             "对于不在上述列表中的工具，按需使用即可。\n"
         ),
@@ -89,85 +92,34 @@ def _ensure_default_persona_files(persona_dir: Path) -> None:
         if not p.is_file():
             body = defaults.get(fname, "")
             if body:
-                try:
+                with contextlib.suppress(OSError):
                     p.write_text(body, encoding="utf-8")
-                except OSError:
-                    pass
 
 
-def ensure_agent_scaffold(agent_id: str, base: Optional[Path] = None) -> Path:
-    root = Path(base).resolve() if base is not None else _project_root()
+def ensure_agent_scaffold(agent_id: str, base: Path | None = None) -> Path:
+    """Ensure agent dirs exist and seed default CodeAgent persona Markdown if missing."""
+    root = Path(base).resolve() if base is not None else _kernel_project_root()
     aid = (agent_id or "").strip() or agent_id_default()
-    home = root / "agents" / aid
-    for sub in ("persona", "skills", "sessions"):
-        (home / sub).mkdir(parents=True, exist_ok=True)
-    # Ensure default persona *.md files if missing
+    home = ensure_agent_dirs(aid, base=root)
     _ensure_default_persona_files(home / "persona")
     return home
 
 
-def agent_persona_dir(agent_id: str, base: Optional[Path] = None) -> Path:
-    return ensure_agent_scaffold(agent_id, base) / "persona"
-
-
-def agent_skills_dir(agent_id: str, base: Optional[Path] = None) -> Path:
-    return ensure_agent_scaffold(agent_id, base) / "skills"
-
-
-def agent_memory_dir(agent_id: str) -> Path:
-    p = agent_home(agent_id) / "memory"
-    p.mkdir(parents=True, exist_ok=True)
-    return p
-
-
-def agent_persona_memory_path(agent_id: str) -> Path:
-    return agent_memory_dir(agent_id)
-
-
-def agent_projects_registry_dir(agent_id: str) -> Path:
-    p = agent_home(agent_id) / "projects"
-    p.mkdir(parents=True, exist_ok=True)
-    return p
-
-
-def agent_projects_data_dir(agent_id: str) -> Path:
-    p = agent_home(agent_id) / "projects-data"
-    p.mkdir(parents=True, exist_ok=True)
-    return p
-
-
-def agent_project_data_dir(agent_id: str, project_id: str) -> Path:
-    pid = (project_id or "").strip()
-    d = agent_projects_data_dir(agent_id) / pid
-    d.mkdir(parents=True, exist_ok=True)
-    return d
-
-
-def agent_project_data_subdir(agent_id: str, project_id: str, sub: str) -> Path:
-    d = agent_project_data_dir(agent_id, project_id) / sub
-    d.mkdir(parents=True, exist_ok=True)
-    return d
-
-
-def agent_daily_dir(agent_id: str) -> Path:
-    p = agent_memory_dir(agent_id) / "daily"
-    p.mkdir(parents=True, exist_ok=True)
-    return p
-
-
-def agent_archive_dir(agent_id: str) -> Path:
-    p = agent_memory_dir(agent_id) / "archive"
-    p.mkdir(parents=True, exist_ok=True)
-    return p
-
-
-def agent_project_daily_dir(agent_id: str, project_id: str) -> Path:
-    p = agent_project_data_subdir(agent_id, project_id, "memory") / "daily"
-    p.mkdir(parents=True, exist_ok=True)
-    return p
-
-
-def agent_project_archive_dir(agent_id: str, project_id: str) -> Path:
-    p = agent_project_data_subdir(agent_id, project_id, "memory") / "archive"
-    p.mkdir(parents=True, exist_ok=True)
-    return p
+__all__ = [
+    "agent_archive_dir",
+    "agent_daily_dir",
+    "agent_home",
+    "agent_id_default",
+    "agent_memory_dir",
+    "agent_persona_dir",
+    "agent_persona_memory_path",
+    "agent_project_archive_dir",
+    "agent_project_daily_dir",
+    "agent_project_data_dir",
+    "agent_project_data_subdir",
+    "agent_projects_data_dir",
+    "agent_projects_registry_dir",
+    "agent_skills_dir",
+    "ensure_agent_dirs",
+    "ensure_agent_scaffold",
+]
