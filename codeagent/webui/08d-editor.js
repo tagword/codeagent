@@ -54,23 +54,11 @@
   window.webuiRefreshFileTreeIfVisible = refreshFileTreeIfVisible;
 
   function _init() {
-    // 监听模式切换 - 当切换到 files 模式时渲染文件树
-    var origSwitch = window.switchMode;
-    var _origSwitch = window.switchSidebarMode;
-    // 尝试 hook 活动栏切换
-    document.addEventListener('click', function(e) {
-      var btn = e.target.closest('[data-mode="files"]');
-      if (btn) {
-        setTimeout(function() {
-          refreshFileTreeIfVisible();
-        }, 50);
-      }
-    });
-    // 如果 stats 按钮存在，在 DOM 加载完后初始化
-    if (document.querySelector('[data-mode="files"]')) {
-      // 先尝试加载 Monaco（预加载）
-      _loadMonaco();
-    }
+    // 监听模式切换 - 当切换到 files 模式时渲染文件树（由 switchActivityMode 触发）
+    // 文件树由 switchActivityMode('files') 内部自动触发刷新
+    // 预加载 Monaco 编辑器（首次进入文件模式时会按需加载）
+    // 这里不再依赖 activity bar 的 [data-mode="files"] 按钮
+    // 因为该按钮已移至 topbar
   }
 
   // =============================================
