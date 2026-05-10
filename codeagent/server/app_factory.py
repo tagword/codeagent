@@ -99,7 +99,7 @@ def create_app():
         from seed.integrations.session_title import maybe_llm_refresh_session_title
         import threading
 
-        from . import SESSIONS, _DEFAULT_AUTO_CONTINUE_NUDGE, _running_sessions, tools_for_agent, ACTIVE_CHAT_CANCELS
+        from . import SESSIONS, _DEFAULT_AUTO_CONTINUE_NUDGE, _running_sessions, tools_for_agent, ACTIVE_CHAT_CANCELS, PENDING_INJECTIONS
 
         try:
             body = await request.json()
@@ -109,7 +109,6 @@ def create_app():
         session_id = str(body.get("session_id") or "web-chat").strip() or "web-chat"
         agent_id = str(body.get("agent_id") or os.environ.get("CODEAGENT_AGENT_ID", "default")).strip() or "default"
         _run_mkey = _memkey(agent_id, session_id)
-        _running_sessions.add(_run_mkey)
         try:
             project_id = str(body.get("project_id") or "").strip()
             if project_id == "__unassigned__":
@@ -117,6 +116,23 @@ def create_app():
             message = str(body.get("message") or "").strip()
             if not message:
                 return JSONResponse({"detail": "message required"}, status_code=400)
+
+            # ── 同 session 并发注入 ──
+            # 如果 session 已在处理中，将消息入队（下一轮工具循环会自动捡起）
+            existing_queue = PENDING_INJECTIONS.get(_run_mkey)
+            if existing_queue is not None:
+                from datetime import datetime, timezone
+                existing_queue.append({
+                    "role": "user",
+                    "content": message,
+                    "ts": datetime.now(timezone.utc).isoformat(),
+                })
+                return JSONResponse(
+                    {"queued": True, "session_id": session_id, "agent_id": agent_id},
+                    status_code=202,
+                )
+            PENDING_INJECTIONS[_run_mkey] = []
+            _running_sessions.add(_run_mkey)
 
             mkey = _memkey(agent_id, session_id)
             try:
@@ -270,6 +286,13 @@ def create_app():
                 except Exception:
                     pass
 
+            # ── 运行时消息注入：在每轮工具循环开始前捡起队列中的新消息 ──
+            def _drain_pending_injections() -> list:
+                msgs = list(PENDING_INJECTIONS.get(_run_mkey, []))
+                if msgs:
+                    PENDING_INJECTIONS[_run_mkey].clear()
+                return msgs
+
             try:
                 # ── auto_continue 配置 ──
                 _ac_on = os.environ.get("CODEAGENT_CHAT_AUTO_CONTINUE_ON_LIMIT", "0").strip() in (
@@ -296,6 +319,7 @@ def create_app():
                             on_round_persist=_on_tool_round_persist,
                             on_text_delta=_on_text_delta,
                             on_reasoning_delta=_on_reasoning_delta,
+                            on_check_pending_messages=_drain_pending_injections,
                         )
                         _all_trace.extend(_seg_trace or [])
                         for _t in (_seg_used or []):
@@ -333,6 +357,7 @@ def create_app():
                         on_round_persist=_on_tool_round_persist,
                         on_text_delta=_on_text_delta,
                         on_reasoning_delta=_on_reasoning_delta,
+                        on_check_pending_messages=_drain_pending_injections,
                     )
 
                 # ── WS: 广播 text_done + reply（两分支共享） ──
@@ -429,6 +454,7 @@ def create_app():
 
         finally:
             _running_sessions.discard(_run_mkey)
+            PENDING_INJECTIONS.pop(_run_mkey, None)
             ACTIVE_CHAT_CANCELS.pop(_run_mkey, None)
             if _cancel_token is not None:
                 with contextlib.suppress(Exception):
