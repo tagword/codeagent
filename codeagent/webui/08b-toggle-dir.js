@@ -14,7 +14,7 @@
       .then(function(r) { return r.json(); })
       .then(function(data) {
         children.innerHTML = '';
-        var items = data.items || [];
+        var items = data.files || data.items || [];
         if (items.length === 0) {
           children.innerHTML = '<div class="file-tree__loading" style="padding-left:20px;">(空)</div>';
           return;
