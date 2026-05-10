@@ -107,6 +107,8 @@ def create_app():
         session_id = str(body.get("session_id") or "web-chat").strip() or "web-chat"
         agent_id = str(body.get("agent_id") or os.environ.get("CODEAGENT_AGENT_ID", "default")).strip() or "default"
         project_id = str(body.get("project_id") or "").strip()
+        if project_id == "__unassigned__":
+            project_id = ""
         message = str(body.get("message") or "").strip()
         if not message:
             return JSONResponse({"detail": "message required"}, status_code=400)
@@ -255,18 +257,71 @@ def create_app():
                 pass
 
         try:
-            reply, _meta, tools_used, tool_trace, _loop_meta = await run_llm_tool_loop(
-                llm,
-                exe,
-                messages=api_msgs,
-                registry=reg,
-                max_tool_rounds=max_rounds,
-                on_round_persist=_on_tool_round_persist,
-                on_text_delta=_on_text_delta,
-                on_reasoning_delta=_on_reasoning_delta,
+            # ── auto_continue 配置 ──
+            _ac_on = os.environ.get("CODEAGENT_CHAT_AUTO_CONTINUE_ON_LIMIT", "0").strip() in (
+                "1", "true", "yes",
             )
+            _max_seg = int(os.environ.get("CODEAGENT_CHAT_AUTO_CONTINUE_MAX_SEGMENTS", "4"))
+            _max_seg = max(1, min(_max_seg, 50))
 
-            # ── WS: 广播 text_done + reply ──
+            if _ac_on:
+                from . import _auto_continue_nudge
+
+                _segment = 0
+                _all_trace: list[dict] = []
+                _all_used: list[str] = []
+                _final_reply = ""
+                _final_meta: dict = {}
+
+                while _segment < _max_seg:
+                    _seg_reply, __, _seg_used, _seg_trace, _seg_meta = await run_llm_tool_loop(
+                        llm, exe,
+                        messages=api_msgs,
+                        registry=reg,
+                        max_tool_rounds=max_rounds,
+                        on_round_persist=_on_tool_round_persist,
+                        on_text_delta=_on_text_delta,
+                        on_reasoning_delta=_on_reasoning_delta,
+                    )
+                    _all_trace.extend(_seg_trace or [])
+                    for _t in (_seg_used or []):
+                        if _t not in _all_used:
+                            _all_used.append(_t)
+                    if _seg_reply:
+                        _final_reply = _seg_reply
+                    _final_meta = _seg_meta or {}
+
+                    if _seg_meta.get("stopped_reason") != "max_tool_rounds":
+                        break
+
+                    _segment += 1
+                    if _segment >= _max_seg:
+                        break
+
+                    # Reset per-segment markers for next loop
+                    _last_trace_len[0] = 0
+                    # Inject nudge as user message to continue
+                    # n_before_ref deliberately NOT reset — nudge must be
+                    # picked up by _on_tool_round_persist in the next segment
+                    _nudge = _auto_continue_nudge(_seg_meta)
+                    api_msgs.append({"role": "user", "content": _nudge})
+
+                reply = _final_reply
+                tools_used = _all_used
+                tool_trace = _all_trace
+                _loop_meta = _final_meta
+            else:
+                reply, _meta, tools_used, tool_trace, _loop_meta = await run_llm_tool_loop(
+                    llm, exe,
+                    messages=api_msgs,
+                    registry=reg,
+                    max_tool_rounds=max_rounds,
+                    on_round_persist=_on_tool_round_persist,
+                    on_text_delta=_on_text_delta,
+                    on_reasoning_delta=_on_reasoning_delta,
+                )
+
+            # ── WS: 广播 text_done + reply（两分支共享） ──
             trace_out_ws = [
                 {"tool": t.get("name", ""), "arguments": t.get("arguments", ""), "result": t.get("result", "")}
                 for t in (tool_trace or [])

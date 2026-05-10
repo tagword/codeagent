@@ -42,6 +42,9 @@ def _transcript_payload_json_safe(payload: dict[str, Any]) -> dict[str, Any]:
         return json.loads(json.dumps(payload, default=str))
 
 
+# 左侧栏「未分类」虚拟项目 ID
+_UNASSIGNED_PROJECT_ID = "__unassigned__"
+
 _ENV_CHAT_KEYS = (
     "CODEAGENT_CHAT_AUTO_CONTINUE_ON_LIMIT",
     "CODEAGENT_CHAT_AUTO_CONTINUE_MAX_SEGMENTS",
@@ -136,6 +139,11 @@ def _safe_under(base: Path, rel: str) -> Path | None:
     except OSError:
         return None
     return None
+
+
+def _resolve_project_id(pid: str) -> str:
+    """将 ``__unassigned__`` 映射为空字符串，其余原样返回。"""
+    return "" if pid == _UNASSIGNED_PROJECT_ID else pid
 
 
 def _project_fs_dir(agent_id: str, project_id: str) -> Path | None:
@@ -651,6 +659,20 @@ def build_webui_api_app(project_root: Path) -> Starlette:
 
             ensure_agent_scaffold(aid)
             rows = list_projects(aid)
+            # 检查默认目录是否有未分类会话，有则添加虚拟项目
+            from seed.core.llm_sess import list_stored_llm_sessions_meta
+
+            unassigned = list_stored_llm_sessions_meta(
+                limit=1, agent_id=aid,
+                filter_by_project=True, filter_project_id="",
+            )
+            if unassigned:
+                rows = list(rows)
+                rows.insert(0, {
+                    "id": _UNASSIGNED_PROJECT_ID,
+                    "name": "未分类",
+                    "path": "",
+                })
         except Exception as e:
             return JSONResponse({"detail": str(e)}, status_code=500)
         return JSONResponse({"projects": rows, "agent_id": aid})
@@ -858,6 +880,8 @@ def build_webui_api_app(project_root: Path) -> Starlette:
             return JSONResponse({"detail": "invalid json"}, status_code=400)
         aid = str(body.get("agent_id") or "").strip()
         pid = str(body.get("project_id") or "").strip()
+        if pid == _UNASSIGNED_PROJECT_ID:
+            return JSONResponse({"detail": "cannot rename virtual project"}, status_code=400)
         new_name = str(body.get("name") or "").strip()
         if not rename_project(aid, pid, new_name):
             return JSONResponse({"detail": "rename failed"}, status_code=400)
@@ -870,6 +894,8 @@ def build_webui_api_app(project_root: Path) -> Starlette:
             return JSONResponse({"detail": "invalid json"}, status_code=400)
         aid = str(body.get("agent_id") or "").strip()
         pid = str(body.get("project_id") or "").strip()
+        if pid == _UNASSIGNED_PROJECT_ID:
+            return JSONResponse({"detail": "cannot delete virtual project"}, status_code=400)
         if not delete_project(aid, pid):
             return JSONResponse({"detail": "delete failed"}, status_code=400)
         return JSONResponse({"ok": True})
@@ -881,6 +907,8 @@ def build_webui_api_app(project_root: Path) -> Starlette:
             return JSONResponse({"detail": "invalid json"}, status_code=400)
         aid = str(body.get("agent_id") or "").strip()
         pid = str(body.get("project_id") or "").strip()
+        if pid == _UNASSIGNED_PROJECT_ID:
+            return JSONResponse({"detail": "virtual project has no path"}, status_code=400)
         path = str(body.get("path") or "").strip()
         if not update_project_path(aid, pid, path):
             return JSONResponse({"detail": "update failed"}, status_code=400)
@@ -891,7 +919,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         aid = (request.query_params.get("agent_id") or "").strip() or os.environ.get(
             "CODEAGENT_AGENT_ID", "default"
         ).strip() or "default"
-        if not pid:
+        if not pid or pid == _UNASSIGNED_PROJECT_ID:
             return JSONResponse({"plans": []})
         try:
             from seed.core.paths import agent_project_data_subdir
@@ -927,7 +955,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
             "CODEAGENT_AGENT_ID", "default"
         ).strip() or "default"
         sid = (request.query_params.get("session_id") or "").strip()
-        if not pid:
+        if not pid or pid == _UNASSIGNED_PROJECT_ID:
             return JSONResponse({"todos": []})
         rows = list_todos(aid, pid, session_id=sid or None)
         return JSONResponse({"todos": rows})
@@ -965,7 +993,12 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         except ValueError:
             lim = 80
         pid = (request.query_params.get("project_id") or "").strip()
-        if pid:
+        if pid == _UNASSIGNED_PROJECT_ID:
+            rows = list_stored_llm_sessions_meta(
+                limit=lim, agent_id=aid,
+                filter_by_project=True, filter_project_id="",
+            )
+        elif pid:
             rows = list_stored_llm_sessions_meta(
                 limit=lim,
                 agent_id=aid,
@@ -982,7 +1015,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
             aid = (request.query_params.get("agent_id") or "").strip() or os.environ.get(
                 "CODEAGENT_AGENT_ID", "default"
             ).strip() or "default"
-            pid = (request.query_params.get("project_id") or "").strip()
+            pid = _resolve_project_id((request.query_params.get("project_id") or "").strip())
             bb = request.query_params.get("before_block_index")
             before_i: int | None = None
             if bb is not None and str(bb).strip() != "":
@@ -1019,7 +1052,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
             return JSONResponse({"detail": "invalid json"}, status_code=400)
         sid = str(body.get("session_id") or "").strip()
         aid = str(body.get("agent_id") or "").strip()
-        pid = str(body.get("project_id") or "").strip()
+        pid = _resolve_project_id(str(body.get("project_id") or "").strip())
         ok = archive_stored_llm_session(sid, aid, pid or None)
         if not ok:
             loc = _locate_session_file(sid, aid, pid)
@@ -1036,7 +1069,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
             return JSONResponse({"detail": "invalid json"}, status_code=400)
         sid = str(body.get("session_id") or "").strip()
         aid = str(body.get("agent_id") or "").strip()
-        pid = str(body.get("project_id") or "").strip()
+        pid = _resolve_project_id(str(body.get("project_id") or "").strip())
         ok = delete_stored_llm_session(sid, aid, pid or None)
         if not ok:
             loc = _locate_session_file(sid, aid, pid)

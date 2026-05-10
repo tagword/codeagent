@@ -365,7 +365,11 @@ function createProjectNode(pr) {
 
   var icon = document.createElement('span');
   icon.className = 'tree-project__icon';
-  icon.innerHTML = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M3 6.5h3L6.5 5H12a1 1 0 011 1v7a1 1 0 01-1 1H4a1 1 0 01-1-1v-6.5z" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linejoin="round"/><path d="M3 6.5V5.5a1 1 0 011-1h2.5L8 5" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linejoin="round"/></svg>';
+  if (pid === '__unassigned__') {
+    icon.innerHTML = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M2 3h12v10H2V3zm1 1v5h3l1 2h2l1-2h3V4H3z" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linejoin="round"/></svg>';
+  } else {
+    icon.innerHTML = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M3 6.5h3L6.5 5H12a1 1 0 011 1v7a1 1 0 01-1 1H4a1 1 0 01-1-1v-6.5z" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linejoin="round"/><path d="M3 6.5V5.5a1 1 0 011-1h2.5L8 5" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linejoin="round"/></svg>';
+  }
   row.appendChild(icon);
 
   var name = document.createElement('span');
@@ -632,12 +636,16 @@ function showProjectContextMenu(e, pid, name) {
   menu.className = 'tree-context-menu';
   menu.style.left = e.clientX + 'px';
   menu.style.top = e.clientY + 'px';
-  var items = [
-    {label: '重命名', action: function() { renameProject(pid, name); }},
-    {label: '项目目录', action: function() { showProjectDirectoryDialog(pid); }},
-    {label: '复制 ID', action: function() { copyToClipboard(pid); }},
-    {label: '删除项目', action: function() { deleteProject(pid); }, dangerous: true}
-  ];
+  var isUnassigned = pid === '__unassigned__';
+  var items = [];
+  if (!isUnassigned) {
+    items.push({label: '重命名', action: function() { renameProject(pid, name); }});
+    items.push({label: '项目目录', action: function() { showProjectDirectoryDialog(pid); }});
+  }
+  items.push({label: '复制 ID', action: function() { copyToClipboard(pid); }});
+  if (!isUnassigned) {
+    items.push({label: '删除项目', action: function() { deleteProject(pid); }, dangerous: true});
+  }
   items.forEach(function(item) {
     var btn = document.createElement('button');
     btn.className = 'tree-context-menu__item' + (item.dangerous ? ' tree-context-menu__item--danger' : '');
@@ -764,6 +772,10 @@ function deleteSession(sid, pid) {
       }
       refreshSessionsUnderProject(pid || projectId);
       syncTreeSessionActiveHighlight();
+      // 未分类会话删除后可能空了，刷新项目列表以移除虚拟项目
+      if ((pid || projectId) === '__unassigned__' && typeof refreshProjects === 'function') {
+        refreshProjects();
+      }
       if (typeof refreshSessionList === 'function') refreshSessionList().catch(function() {});
     } else alert('删除失败');
   }).catch(function() { alert('删除失败'); });
