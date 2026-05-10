@@ -19,6 +19,12 @@ build/
 .tmp/
 team-knowledge-base/
 
+# Backup files (keep locally)
+*.bak
+
+# Root-level icon is redundant (server/icon.png is the canonical one)
+/icon.png
+
 # Internal development plans — keep locally; not published with the OSS repo
 *-plan.md
 plans/
