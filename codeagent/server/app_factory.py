@@ -95,9 +95,11 @@ def create_app():
         from seed.core.llm_presets import llm_executor_from_resolved, resolve_preset
         from seed.core.llm_sess import load_or_create_chat_session, merge_fresh_system, persist_chat_session
         from seed.core.mem_bridge import apply_episodic_to_messages
+        from seed.core.chat_events import set_chat_cancel_checker, reset_chat_cancel_checker
         from seed.integrations.session_title import maybe_llm_refresh_session_title
+        import threading
 
-        from . import SESSIONS, _DEFAULT_AUTO_CONTINUE_NUDGE, _running_sessions, tools_for_agent
+        from . import SESSIONS, _DEFAULT_AUTO_CONTINUE_NUDGE, _running_sessions, tools_for_agent, ACTIVE_CHAT_CANCELS
 
         try:
             body = await request.json()
@@ -183,6 +185,14 @@ def create_app():
                     )
 
             emitter_token = set_chat_event_emitter(_emit_progress_from_worker)
+
+            # ── 停止信号：接线到 ACTIVE_CHAT_CANCELS ──
+            _cancel_token = None
+            try:
+                _cancel_event = ACTIVE_CHAT_CANCELS.setdefault(_run_mkey, threading.Event())
+                _cancel_token = set_chat_cancel_checker(lambda: _cancel_event.is_set())
+            except Exception:
+                pass
 
             n_before = len(api_msgs)
             n_before_ref = [n_before]
@@ -419,9 +429,25 @@ def create_app():
 
         finally:
             _running_sessions.discard(_run_mkey)
+            ACTIVE_CHAT_CANCELS.pop(_run_mkey, None)
+            if _cancel_token is not None:
+                with contextlib.suppress(Exception):
+                    reset_chat_cancel_checker(_cancel_token)
 
-    async def api_chat_stop(_: Request) -> JSONResponse:
-        return JSONResponse({"active": False})
+    async def api_chat_stop(request: Request) -> JSONResponse:
+        try:
+            body = await request.json()
+        except Exception:
+            return JSONResponse({"detail": "invalid json"}, status_code=400)
+        from . import ACTIVE_CHAT_CANCELS, _memkey
+        session_id = (body.get("session_id") or "web-chat").strip()
+        agent_id = (body.get("agent_id") or "").strip() or "default"
+        _run_mkey = _memkey(agent_id, session_id)
+        cancel_event = ACTIVE_CHAT_CANCELS.get(_run_mkey)
+        if cancel_event:
+            cancel_event.set()
+            return JSONResponse({"cancelled": True})
+        return JSONResponse({"cancelled": False, "reason": "not_running"})
 
     def _resolve_site_icon_path() -> Path | None:
         """``icon.png`` may live next to the ``codeagent`` package or at the repo root."""
