@@ -1,5 +1,15 @@
 var _activeMode = null;
 
+function _syncFileBtnState() {
+  var fileBtn = document.getElementById('btnToggleFiles');
+  if (!fileBtn) return;
+  if (_activeMode === 'files') {
+    fileBtn.classList.add('is-active');
+  } else {
+    fileBtn.classList.remove('is-active');
+  }
+}
+
 function switchActivityMode(mode) {
   // git 模式不走页面切换，由 09-git.js 的点击拦截处理
   if (mode === 'git') return;
@@ -56,6 +66,7 @@ function switchActivityMode(mode) {
   }
   try { localStorage.setItem('oa_activity_mode', mode); } catch (_) {}
   syncTopbarChatShortcutUi();
+  _syncFileBtnState();
 }
 
 function syncTopbarChatShortcutUi() {
@@ -100,4 +111,30 @@ function restoreActivityMode() {
     });
   }
   restoreActivityMode();
+
+  // ======== 文件按钮（topbar 切换） ========
+  var fileBtn = document.getElementById('btnToggleFiles');
+  if (fileBtn) {
+    _syncFileBtnState();
+
+    fileBtn.addEventListener('click', function() {
+      if (_activeMode === 'files') {
+        switchActivityMode('chat');
+      } else {
+        // 关闭顶层面板：Plan/Todo/Git
+        ['planPanel','todoPanel','gitPanel'].forEach(function(id) {
+          var p = document.getElementById(id);
+          if (p && p.style.display !== 'none') {
+            p.style.display = 'none';
+            try { localStorage.setItem('oa_' + id.replace('Panel','').toLowerCase() + '_panel_open', '0'); } catch (_) {}
+          }
+        });
+        ['btnTogglePlans','btnToggleTodos','btnToggleGit'].forEach(function(id) {
+          var b = document.getElementById(id);
+          if (b) b.classList.remove('is-active');
+        });
+        switchActivityMode('files');
+      }
+    });
+  }
 })();
