@@ -88,5 +88,5 @@ async function deleteTodoApi(todoId) {
   } catch (_) {}
 }
 
-document.addEventListener('project-changed', () => { if (todoIsVisible()) refreshTodos(); });
-document.addEventListener('session-changed', () => { if (todoIsVisible()) refreshTodos(); });
+window.addEventListener('project-changed', () => { if (todoIsVisible()) refreshTodos(); });
+window.addEventListener('session-changed', () => { if (todoIsVisible()) refreshTodos(); });
