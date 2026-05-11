@@ -34,8 +34,8 @@ cd codeagent
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
 
-# 安装（含 Web UI 依赖）
-pip install -e '.[server]'
+# 安装（默认含 Starlette + Uvicorn Web UI 支持）
+pip install -e .
 ```
 
 ### 启动 Web UI
