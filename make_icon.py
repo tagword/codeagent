@@ -76,5 +76,40 @@ def main():
     print(f"✅  {ICNS.name}  ({ICNS.stat().st_size / 1024:.0f} KB)")
 
 
+# ── 菜单栏图标（从 icon.png 去除白色背景） ─────────────
+def _make_tray():
+    """从 icon.png 生成菜单栏图标：白色背景变透明，深色内容保留。"""
+    src = ROOT / "icon.png"
+    if not src.exists():
+        print("⚠️  icon.png 不存在，跳过托盘图标生成")
+        return
+
+    big = Image.open(src).convert("RGBA")
+    sizes = [(22, 22), (44, 44)]
+    for tw, th in sizes:
+        resized = big.resize((tw, th), Image.LANCZOS)
+        out = Image.new("RGBA", (tw, th), (0, 0, 0, 0))
+
+        for x in range(tw):
+            for y in range(th):
+                r, g, b, a = resized.getpixel((x, y))
+                if a == 0:
+                    continue
+                # 亮度 → 白色背景变透明，深色保留
+                brightness = (r + g + b) / 3.0
+                # 平滑 alpha：亮度 130→255 对应 alpha 255→0
+                alpha = int(255 * max(0, min(1, (130 - brightness) / 130)))
+                if alpha > 0:
+                    out.putpixel((x, y), (r, g, b, alpha))
+
+        name = "tray_icon.png" if tw == 22 else "tray_icon@2x.png"
+        out.save(ROOT / name)
+        # 统计
+        total = tw * th
+        opaque = sum(1 for x in range(tw) for y in range(th) if out.getpixel((x,y))[3] > 0)
+        print(f"✅  {name}  ({tw}x{th}) — {opaque}/{total} 不透明 ({100*opaque//total}%)")
+
+
 if __name__ == "__main__":
     main()
+    _make_tray()
