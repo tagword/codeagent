@@ -10,8 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from starlette.requests import Request
-from starlette.responses import Response
+
 
 if TYPE_CHECKING:
     from codeagent.core.models import Session
@@ -60,28 +59,7 @@ _DEFAULT_AUTO_CONTINUE_NUDGE = (
 )
 
 
-async def _module_icon_png(_: Request) -> Response:
-    """Serve icon.png (module-level to avoid Cython closure signature loss)."""
-    p = Path(__file__).resolve().parent / "icon.png"
-    if not p.is_file():
-        return Response(status_code=404)
-    return Response(
-        content=p.read_bytes(),
-        media_type="image/png",
-        headers={"Cache-Control": "public, max-age=86400"},
-    )
 
-
-async def _module_favicon(_: Request) -> Response:
-    """Serve favicon.ico → icon.png (module-level to avoid Cython closure signature loss)."""
-    p = Path(__file__).resolve().parent / "icon.png"
-    if not p.is_file():
-        return Response(status_code=404)
-    return Response(
-        content=p.read_bytes(),
-        media_type="image/png",
-        headers={"Cache-Control": "public, max-age=86400"},
-    )
 
 
 # Domain-specific "switch strategy" playbooks. Triggered when the previous
