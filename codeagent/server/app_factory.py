@@ -117,6 +117,9 @@ def create_app():
             if not message:
                 return JSONResponse({"detail": "message required"}, status_code=400)
 
+            # ── 确保 _cancel_token 在 finnally 之前已初始化 ──
+            _cancel_token = None
+
             # ── 同 session 并发注入 ──
             # 如果 session 已在处理中，将消息入队（下一轮工具循环会自动捡起）
             existing_queue = PENDING_INJECTIONS.get(_run_mkey)
@@ -203,7 +206,6 @@ def create_app():
             emitter_token = set_chat_event_emitter(_emit_progress_from_worker)
 
             # ── 停止信号：接线到 ACTIVE_CHAT_CANCELS ──
-            _cancel_token = None
             try:
                 _cancel_event = ACTIVE_CHAT_CANCELS.setdefault(_run_mkey, threading.Event())
                 _cancel_token = set_chat_cancel_checker(lambda: _cancel_event.is_set())
