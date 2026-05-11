@@ -23,11 +23,11 @@ jobs:
           pip install -e .
           pip install pyinstaller pillow
 
-      - name: Generate icon (.icns)
-        run: python make_icon.py
+      - name: Generate icon (.icns + tray)
+        run: python build/make_icon.py
 
       - name: Build .app
-        run: pyinstaller CodeAgent.spec
+        run: pyinstaller CodeAgent.spec -y
 
       - name: Create DMG
         run: |

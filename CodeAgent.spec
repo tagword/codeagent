@@ -1,43 +1,23 @@
 # -*- mode: python ; coding: utf-8 -*-
 """
-CodeAgent PyInstaller Spec — macOS .app + DMG
-
-Build:
-    pyinstaller CodeAgent.spec
+CodeAgent macOS .app — 使用方式: pyinstaller CodeAgent.spec
 """
 import os
 from pathlib import Path
 
-ROOT = Path(SPECPATH)  # noqa: F405 — 由 PyInstaller 注入
+ROOT = Path(SPECPATH)  # noqa: F405 — PyInstaller 注入变量
 
 # ── 隐式导入 ─────────────────────────────────────────────
-_hidden = [
-    # CodeAgent 核心
-    "codeagent.server",
-    "codeagent.tools",
-    "codeagent.hooks",
-    "codeagent.llm",
-    "codeagent.memory",
-    "codeagent.agent",
-    "codeagent.webui",
-    "codeagent.webui.setup",
-    # uvicorn 动态加载子模块
-    "uvicorn",
+_hiddenimports = [
+    # uvicorn 动态加载的模块
     "uvicorn.logging",
     "uvicorn.loops.auto",
     "uvicorn.protocols.http.auto",
     "uvicorn.lifespan.on",
     "uvicorn.lifespan.off",
-    # 菜单栏
-    "rumps",
-    # PIL (PyInstaller 可能漏)
-    "PIL",
-    "PIL.Image",
-    "PIL.ImageDraw",
-    "PIL.ImageFilter",
 ]
 
-# ── 排除项 ───────────────────────────────────────────────
+# ── 排除（精简体积） ──────────────────────────────────────
 _excludes = [
     "tkinter",
     "test",
@@ -45,38 +25,30 @@ _excludes = [
     "distutils",
     "setuptools",
     "pip",
-    "email",
-    "http.cookiejar",
-    "http.cookies",
 ]
 
-# ── 数据文件 ─────────────────────────────────────────────
-webui_root = ROOT / "codeagent" / "webui"
-_webui = [
+# ── WebUI 静态资源 ────────────────────────────────────────
+_webui_datas = [
     (str(p), "codeagent/webui")
-    for p in sorted(webui_root.rglob("*"))
+    for p in sorted((ROOT / "codeagent" / "webui").rglob("*"))
     if p.is_file()
 ]
 
-_top = [
+_top_datas = [
     (str(p), "codeagent")
     for p in (ROOT / "codeagent").iterdir()
     if p.is_file() and p.suffix in {".html", ".css", ".js"}
 ]
 
-_dat = _webui + _top + [
-    (str(ROOT / "tray_icon.png"), "."),
-    (str(ROOT / "icon.png"), "."),
-    (str(ROOT / "codeagent.icns"), "."),
-]
+_datas = _webui_datas + _top_datas
 
-# ────────────────────────────────────────────────────────
+# ── Analysis ─────────────────────────────────────────────
 a = Analysis(
     ["package_launcher.py"],
     pathex=[str(ROOT)],
     binaries=[],
-    datas=_dat,
-    hiddenimports=_hidden,
+    datas=_datas,
+    hiddenimports=_hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -87,17 +59,18 @@ a = Analysis(
 
 pyz = PYZ(a.pure)
 
+# ── 可执行文件 ───────────────────────────────────────────
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
+    [],
     exclude_binaries=True,
     name="CodeAgent",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=False,    # ← 不弹终端
+    console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
@@ -106,6 +79,7 @@ exe = EXE(
     icon=["codeagent.icns"],
 )
 
+# ── 收集依赖 ─────────────────────────────────────────────
 coll = COLLECT(
     exe,
     a.binaries,
@@ -116,6 +90,7 @@ coll = COLLECT(
     name="CodeAgent",
 )
 
+# ── macOS .app ──────────────────────────────────────────
 app = BUNDLE(
     coll,
     name="CodeAgent.app",
@@ -127,6 +102,6 @@ app = BUNDLE(
         "CFBundleDisplayName": "CodeAgent",
         "CFBundleName": "CodeAgent",
         "NSHighResolutionCapable": True,
-        "LSUIElement": True,  # ← 关键：启动后不显示 Dock 图标（纯菜单栏）
+        "NSHumanReadableCopyright": "© 2025 CodeAgent",
     },
 )
