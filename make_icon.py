@@ -13,9 +13,28 @@ from pathlib import Path
 from PIL import Image
 
 ROOT = Path(__file__).parent.resolve()
-SIZES = [16, 32, 64, 128, 256, 512]
+# macOS 标准 iconset 文件清单：(stem, 1x_px, 2x_px)
+# 生成 10 个文件，覆盖全部 Retina 密度
+_ICON_FILES: list[tuple[str, int, int]] = [
+    ("icon_16x16",     16,    32),
+    ("icon_32x32",     32,    64),
+    ("icon_128x128",  128,   256),
+    ("icon_256x256",  256,   512),
+    ("icon_512x512",  512,  1024),
+]
 ICONSET = ROOT / "build" / "CodeAgent.iconset"
 ICNS = ROOT / "codeagent.icns"
+
+# 源图 896×896；1024 需轻度 upscale
+_SRC_MAX = 896
+
+
+def _write_img(size: int, filename: str, src_img: Image.Image) -> None:
+    """缩放并写入 iconset 文件。有 upscale 时提示。"""
+    if size > _SRC_MAX:
+        print(f"  ⚠️  {filename}: 源图 {_SRC_MAX}px → upscale {size}px")
+    img = src_img.resize((size, size), Image.LANCZOS)
+    img.save(ICONSET / filename)
 
 
 def _make_icns():
@@ -28,10 +47,9 @@ def _make_icns():
     big = Image.open(src).convert("RGBA")
     ICONSET.mkdir(parents=True, exist_ok=True)
 
-    for s in SIZES:
-        big.resize((s, s), Image.LANCZOS).save(ICONSET / f"icon_{s}x{s}.png")
-        if s * 2 <= 512:
-            big.resize((s * 2, s * 2), Image.LANCZOS).save(ICONSET / f"icon_{s}x{s}@2x.png")
+    for stem, px1, px2 in _ICON_FILES:
+        _write_img(px1, f"{stem}.png", big)
+        _write_img(px2, f"{stem}@2x.png", big)
 
     subprocess.run(["iconutil", "-c", "icns", str(ICONSET), "-o", str(ICNS)],
                    check=True)
