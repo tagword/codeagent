@@ -12,7 +12,7 @@ rm -rf "${STAGING}" "${DMG}"
 
 echo "==> Stage"
 mkdir -p "${STAGING}"
-cp -Rp "${APP}" "${STAGING}/CodeAgent.app"
+ditto "${APP}" "${STAGING}/CodeAgent.app"
 ln -s /Applications "${STAGING}/Applications"
 
 APP_SIZE="$(du -sm "${APP}" | cut -f1)"
