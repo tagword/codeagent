@@ -76,7 +76,25 @@
 
     // --- Step 3: Start ---
 
-    $('btnStart').onclick = () => {
+    $('btnStart').onclick = async () => {
+      // Auto-login with the freshly generated token before redirect,
+      // otherwise the user lands on the login screen without having
+      // saved the token (bad UX).
+      if (lastToken) {
+        try {
+          setMsg('msg3', '登录中…');
+          const r = await postJson('/api/ui/auth', { token: lastToken });
+          if (r.ws_query_token) {
+            try { sessionStorage.setItem('oa_webui_ws_token', r.ws_query_token); } catch (_) {}
+          } else {
+            try { sessionStorage.removeItem('oa_webui_ws_token'); } catch (_) {}
+          }
+        } catch (e) {
+          // If auto-login fails, still redirect — user can paste the
+          // token manually on the login page (it's preserved in lastToken).
+          console.warn('auto-login failed', e);
+        }
+      }
       location.href = '/?setup_done=1';
     };
   </script>
