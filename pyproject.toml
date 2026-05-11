@@ -12,14 +12,11 @@ requires-python = ">=3.9"
 dependencies = [
     "seed>=1.0.0",
     "seed-tools>=1.0.0",
+    "uvicorn[standard]>=0.30.0",
+    "starlette>=0.37.0",
 ]
 
 [project.optional-dependencies]
-server = [
-    "uvicorn[standard]>=0.30.0",
-    "starlette>=0.37.0",
-    "apscheduler>=3.10.0",
-]
 dev = ["pytest>=7.0", "ruff>=0.4.0", "bandit>=1.7.0"]
 yaml = ["pyyaml>=6.0"]
 

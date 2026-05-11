@@ -1,7 +1,9 @@
 """
 Legacy setuptools hook — prefer the repository root:
 
-    pip install -e '.[server]'
+    pip install -e .
+
+Server dependencies (starlette + uvicorn) are now included by default.
 
 Packaging metadata lives in ``pyproject.toml`` at the repo root.
 """
@@ -19,16 +21,14 @@ setup(
     install_requires=[
         "requests>=2.28.0",
         "ddgs>=9.14.0",
+        "uvicorn[standard]>=0.30.0",
+        "starlette>=0.37.0",
+        "apscheduler>=3.10.0",
     ],
     extras_require={
         "yaml": ["pyyaml>=6.0"],
         "dev": ["pytest>=7.0", "ruff>=0.4.0", "bandit>=1.7.0"],
         "lint": ["ruff>=0.4.0", "bandit>=1.7.0"],
-        "server": [
-            "uvicorn[standard]>=0.30.0",
-            "starlette>=0.37.0",
-            "apscheduler>=3.10.0",
-        ],
     },
     entry_points={
         "console_scripts": [
