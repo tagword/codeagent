@@ -32,7 +32,7 @@ _tools_for_agent = tools_for_agent
 
 
 """
-HTTP + WebSocket + webhook (Starlette). Install: pip install 'codeagent[server]'
+HTTP + WebSocket + webhook (Starlette). Available by default with pip install codeagent.
 """
 
 logger = logging.getLogger(__name__)

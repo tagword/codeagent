@@ -301,8 +301,7 @@ def main():
         'serve',
         help=(
             'HTTP: GET /, POST /api/chat, WS /ws; optional Web UI token (codeagent webui-token init); '
-            'webhooks stay public — pip install codeagent[server]。'
-            '默认 --host 0.0.0.0：启动时会打印本机与局域网 URL，便于其它设备打开配置或填写 Webhook。'
+            'webhooks. 默认 --host 0.0.0.0：启动时会打印本机与局域网 URL，便于其它设备打开配置或填写 Webhook。'
         ),
     )
     serve_parser.add_argument(
@@ -584,7 +583,7 @@ def cmd_serve(args):
     except ImportError as e:
         print(f"无法加载 HTTP 服务模块: {e}", file=sys.stderr)
         print(
-            "请先安装 Web 依赖，例如在仓库根目录执行: pip install -e '.[server]'",
+            "请确认已安装 server 依赖: pip install 'codeagent'（默认已包含 starlette + uvicorn）",
             file=sys.stderr,
         )
         sys.exit(1)
