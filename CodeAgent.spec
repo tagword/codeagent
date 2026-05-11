@@ -34,11 +34,14 @@ _webui_datas = [
     if p.is_file()
 ]
 
-_top_datas = [
-    (str(p), "codeagent")
-    for p in (ROOT / "codeagent").iterdir()
-    if p.is_file() and p.suffix in {".html", ".css", ".js"}
-]
+# ── 项目根目录文件（包含 tray_icon.png） ──────────────────
+_top_datas = []
+for p in (ROOT / "codeagent").iterdir():
+    if p.is_file() and p.suffix in {".html", ".css", ".js"}:
+        _top_datas.append((str(p), "codeagent"))
+# 打包后的 tray_icon.png 放在 package_launcher.py 同级
+_tray_icon = str(ROOT / "tray_icon.png")
+_top_datas.append((_tray_icon, "."))
 
 _datas = _webui_datas + _top_datas
 
