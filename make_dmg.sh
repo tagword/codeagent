@@ -21,7 +21,9 @@ hdiutil create -size "${DMG_SIZE}m" -type SPARSE \
   "${TMP_IMG}" 2>/dev/null
 
 echo "==> Mount & stage"
-MOUNT="$(hdiutil attach -nobrowse "${TMP_IMG}" 2>&1 | tail -1 | awk '{print $NF}')"
+MOUNT="/tmp/codeagent-dmg-$$"
+hdiutil attach -nobrowse -mountpoint "${MOUNT}" "${TMP_IMG}" 2>/dev/null
+echo "    Mount: ${MOUNT}"
 cp -Rp "${APP}" "${MOUNT}/CodeAgent.app"
 ln -sf /Applications "${MOUNT}/Applications"
 hdiutil detach "${MOUNT}" 2>/dev/null

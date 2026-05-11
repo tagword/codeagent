@@ -25,14 +25,12 @@ _ICON_FILES: list[tuple[str, int, int]] = [
 ICONSET = ROOT / "build" / "CodeAgent.iconset"
 ICNS = ROOT / "codeagent.icns"
 
-# 源图 896×896；1024 需轻度 upscale
-_SRC_MAX = 896
-
 
 def _write_img(size: int, filename: str, src_img: Image.Image) -> None:
     """缩放并写入 iconset 文件。有 upscale 时提示。"""
-    if size > _SRC_MAX:
-        print(f"  ⚠️  {filename}: 源图 {_SRC_MAX}px → upscale {size}px")
+    src_max = max(src_img.size)
+    if size > src_max:
+        print(f"  ⚠️  {filename}: 源图 {src_max}px → upscale {size}px")
     img = src_img.resize((size, size), Image.LANCZOS)
     img.save(ICONSET / filename)
 
