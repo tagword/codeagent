@@ -82,7 +82,7 @@ source .venv/bin/activate
 pip install --upgrade pip -q
 
 # ── 安装 CodeAgent ──────────────────────────────────────────────────
-info "安装 CodeAgent（默认包含 Starlette + Uvicorn + APScheduler）..."
+info "安装 CodeAgent（默认包含 Starlette + Uvicorn + 代码检测/审计工具）..."
 pip install -e . -q
 ok "CodeAgent 安装完成"
 

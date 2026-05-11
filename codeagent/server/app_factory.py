@@ -478,9 +478,13 @@ def create_app():
         return JSONResponse({"cancelled": False, "reason": "not_running"})
 
     def _resolve_site_icon_path() -> Path | None:
-        """``icon.png`` may live next to the ``codeagent`` package or at the repo root."""
+        """``icon.png`` may live next to the ``codeagent`` package, inside ``server/``, or at the repo root."""
         pkg_root = Path(__file__).resolve().parent.parent
-        for candidate in (pkg_root / "icon.png", pkg_root.parent / "icon.png"):
+        for candidate in (
+            pkg_root / "server" / "icon.png",   # shipped with the package
+            pkg_root / "icon.png",               # next to the codeagent package
+            pkg_root.parent / "icon.png",        # at the repo / project root
+        ):
             if candidate.is_file():
                 return candidate
         return None
