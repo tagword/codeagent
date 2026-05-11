@@ -756,7 +756,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
                 cwd=str(git_dir),
             )
             if git_init.returncode == 0:
-                messages.append("📦 Git 仓库已初始化")
+                messages.append("📦 项目目录已初始化")
                 name_check = await asyncio.to_thread(
                     subprocess.run,
                     ["git", "config", "user.name"],
@@ -800,7 +800,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
                     if commit_out.returncode == 0 and "nothing to commit" not in (
                         commit_out.stdout or ""
                     ).lower():
-                        messages.append("✅ 初始提交完成")
+                        messages.append("✅ 初始化完成")
 
             if remote and isinstance(remote, dict):
                 provider = remote.get("provider", "github")
