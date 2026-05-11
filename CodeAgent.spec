@@ -1,12 +1,36 @@
 # -*- mode: python ; coding: utf-8 -*-
+from pathlib import Path
 
+ROOT = Path(SPECPATH)  # noqa: F405
+
+# ── 数据文件 ──────────────────────────────────────────────
+_datas = []
+
+# 托盘图标（放置于 Resources 根目录 = sys._MEIPASS）
+for _name in ("tray_icon.png", "tray_icon@2x.png"):
+    _p = ROOT / _name
+    if _p.exists():
+        _datas.append((str(_p), "."))
+
+# WebUI 静态资源
+_webui = ROOT / "codeagent" / "webui"
+if _webui.is_dir():
+    for p in sorted(_webui.rglob("*")):
+        if p.is_file():
+            _datas.append((str(p), "codeagent/webui"))
 
 a = Analysis(
     ['package_launcher.py'],
-    pathex=[],
+    pathex=[str(ROOT)],
     binaries=[],
-    datas=[],
-    hiddenimports=['uvicorn.logging', 'uvicorn.loops.auto', 'uvicorn.protocols.http.auto', 'uvicorn.lifespan.on', 'uvicorn.lifespan.off'],
+    datas=_datas,
+    hiddenimports=[
+        'uvicorn.logging',
+        'uvicorn.loops.auto',
+        'uvicorn.protocols.http.auto',
+        'uvicorn.lifespan.on',
+        'uvicorn.lifespan.off',
+    ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -47,5 +71,8 @@ app = BUNDLE(
     coll,
     name='CodeAgent.app',
     icon='codeagent.icns',
-    bundle_identifier=None,
+    bundle_identifier='com.codeagent.app',
+    info_plist={
+        'LSUIElement': True,  # 纯托盘，不显示 Dock 图标
+    },
 )
