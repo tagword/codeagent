@@ -38,8 +38,10 @@
           throw new Error(j.detail || r.statusText);
         }
         // 显示后端返回的消息（如推送结果等）
+        // Note: j.message already contains emoji (e.g. "✅ 初始提交完成"),
+        // so we do NOT add another '✅ ' prefix — that would double it.
         if (j.message) {
-          _updateProjectProgress('✅ ' + j.message.split('\n').pop());
+          _updateProjectProgress(j.message.split('\n').pop());
           setTimeout(_hideProjectProgress, 2000);
         } else {
           _hideProjectProgress();
