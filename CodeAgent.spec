@@ -19,6 +19,16 @@ if _webui.is_dir():
         if p.is_file():
             _datas.append((str(p), "codeagent/webui"))
 
+# 主 HTML 模板（app_factory.py 运行时通过 __file__ 相对路径加载）
+_webui_html = ROOT / "codeagent" / "webui.html"
+if _webui_html.exists():
+    _datas.append((str(_webui_html), "codeagent"))
+
+# 网站图标（server/icon.png — 同样通过 __file__ 相对路径定位）
+_server_icon = ROOT / "codeagent" / "server" / "icon.png"
+if _server_icon.exists():
+    _datas.append((str(_server_icon), "codeagent/server"))
+
 a = Analysis(
     ['package_launcher.py'],
     pathex=[str(ROOT)],
