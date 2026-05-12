@@ -22,9 +22,6 @@ team-knowledge-base/
 # Backup files (keep locally)
 *.bak
 
-# Root-level icon is redundant (server/icon.png is the canonical one)
-/icon.png
-
 # Internal dev scripts
 /refresh_title.py
 

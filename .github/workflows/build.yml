@@ -1,0 +1,93 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install pyinstaller pillow
+
+      - name: Generate icon (.icns + tray)
+        run: python make_icon.py
+
+      - name: Build .app
+        run: pyinstaller CodeAgent.spec -y
+
+      - name: Create DMG
+        run: |
+          APP="dist/CodeAgent.app"
+          STAGING="build/dmg-staging"
+          mkdir -p "${STAGING}"
+          ditto "${APP}" "${STAGING}/CodeAgent.app"
+          ln -s /Applications "${STAGING}/Applications"
+          hdiutil create \
+            -fs HFS+ -volname "CodeAgent" \
+            -srcfolder "${STAGING}" \
+            -size "$(($(du -sm "${APP}" | cut -f1) + 50))m" \
+            -format UDZO -imagekey zlib-level=9 \
+            "dist/CodeAgent-mac.dmg"
+
+      - name: Upload DMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: CodeAgent-mac
+          path: dist/CodeAgent-mac.dmg
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install pyinstaller
+
+      - name: Build with PyInstaller
+        run: pyinstaller CodeAgent.spec --distpath dist
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CodeAgent-win
+          path: dist/CodeAgent.exe
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build-macos, build-windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            CodeAgent-mac/CodeAgent-mac.dmg
+            CodeAgent-win/CodeAgent-win.exe
+          generate_release_notes: true
