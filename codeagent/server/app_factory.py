@@ -177,12 +177,27 @@ def create_app():
             else:
                 set_active_project_episodic(False)
 
+            # backward-compat: seed 1.0.0 没有 cursor 参数
+            import inspect as _inspect
+            _sig = _inspect.signature(build_api_projection_messages)
+            _cursor_supported = "cursor" in _sig.parameters
+            _kwargs = {}
+            if _cursor_supported:
+                _kwargs["cursor"] = (
+                    chat_sess.metadata.get("cursor")
+                    if isinstance(chat_sess.metadata, dict) else None
+                )
             api_msgs = build_api_projection_messages(
                 chat_sess.messages,
                 max_user_rounds=max_hist,
                 skills_suffix=None,
+                **_kwargs,
             )
-            await asyncio.to_thread(maybe_compact_context_messages, api_msgs, llm)
+            compact_result = await asyncio.to_thread(maybe_compact_context_messages, api_msgs, llm)
+            if compact_result:
+                b_idx = compact_result["boundary_idx"]
+                if 0 <= b_idx < len(chat_sess.messages):
+                    chat_sess.messages[b_idx]["_compact_summary"] = compact_result["compact_summary"]
             apply_episodic_to_messages(
                 api_msgs,
                 project_root,
@@ -477,6 +492,72 @@ def create_app():
             return JSONResponse({"cancelled": True})
         return JSONResponse({"cancelled": False, "reason": "not_running"})
 
+    async def api_chat_rollback(request: Request) -> JSONResponse:
+        """Roll back session to a given message index — subsequent turns will project from there.
+
+        POST body::
+
+            {"session_id": "...", "agent_id": "...", "message_idx": 42}
+
+        Response::
+
+            {"ok": true, "message_idx": 42, "messages_since": [<messages from idx onwards>]}
+        """
+        from seed.core.llm_sess import load_or_create_chat_session, persist_chat_session
+        from . import _running_sessions, _memkey
+
+        try:
+            body = await request.json()
+        except Exception:
+            return JSONResponse({"detail": "invalid json"}, status_code=400)
+
+        session_id = str(body.get("session_id") or "web-chat").strip() or "web-chat"
+        agent_id = str(body.get("agent_id") or os.environ.get("CODEAGENT_AGENT_ID", "default")).strip() or "default"
+        # 0 = system message, so minimal sensible value is 1
+        message_idx = int(body.get("message_idx", 1))
+
+        _run_mkey = _memkey(agent_id, session_id)
+        if _run_mkey in _running_sessions:
+            return JSONResponse({"detail": "session is currently running, stop it first"}, status_code=409)
+
+        chat_sess = load_or_create_chat_session(session_id, agent_id)
+
+        if not isinstance(chat_sess.metadata, dict):
+            chat_sess.metadata = {}
+
+        # Clamp to valid range
+        max_idx = len(chat_sess.messages) - 1
+        if message_idx < 0:
+            message_idx = 0
+        if message_idx > max_idx:
+            return JSONResponse(
+                {"detail": f"message_idx {message_idx} out of range (max {max_idx})"},
+                status_code=422,
+            )
+
+        chat_sess.metadata["cursor"] = {
+            "mode": "head",
+            "from_idx": message_idx,
+        }
+        persist_chat_session(chat_sess, agent_id)
+
+        # Broadcast rollback event via websocket
+        try:
+            await _broadcast_session_event(agent_id, session_id, {
+                "type": "rollback",
+                "message_idx": message_idx,
+            })
+        except Exception:
+            pass
+
+        # Return messages from rollback point for UI refresh
+        messages_since = chat_sess.messages[message_idx:]
+        return JSONResponse({
+            "ok": True,
+            "message_idx": message_idx,
+            "messages_since": messages_since,
+        })
+
     def _resolve_site_icon_path() -> Path | None:
         """``icon.png`` may live next to the ``codeagent`` package, inside ``server/``, or at the repo root."""
         pkg_root = Path(__file__).resolve().parent.parent
@@ -556,6 +637,7 @@ def create_app():
         Mount("/api/ui", app=build_webui_api_app(project_root)),
         Route("/api/chat", api_chat, methods=["POST"]),
         Route("/api/chat/stop", api_chat_stop, methods=["POST"]),
+        Route("/api/chat/rollback", api_chat_rollback, methods=["POST"]),
         WebSocketRoute("/ws", websocket_chat),
         WebSocketRoute("/ws/{path:path}", websocket_chat),
     ]

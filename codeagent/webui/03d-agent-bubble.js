@@ -36,6 +36,47 @@ function bubble(role, text, opts) {
   const label = role === 'user' ? '你' : '助手';
   const ts = formatBubbleTime(at);
   meta.textContent = ts ? label + ' · ' + ts : label;
+
+  // ── 存储原始消息索引（来自 transcript API 的 idx 字段）用于回滚 ──
+  var msgIdx = (opts && opts.idx != null) ? opts.idx : null;
+  if (msgIdx != null) wrap.setAttribute('data-msg-idx', String(msgIdx));
+
+  if (role === 'user') {
+    (function addRollbackBtn(mEl, wrapEl) {
+      var rb = document.createElement('span');
+      rb.className = 'rollback-btn';
+      rb.textContent = '↩ 回滚';
+      rb.title = '从这条消息之后重新开始对话';
+      rb.addEventListener('click', async function (e) {
+        e.stopPropagation();
+        var idx = wrapEl.getAttribute('data-msg-idx');
+        if (!idx) { alert('无法确定消息索引，请刷新页面后重试。'); return; }
+        if (confirm('确定从第 ' + idx + ' 条消息之后回滚？此后所有消息将被忽略，但不会删除。')) {
+          try {
+            var r = await fetch('/api/chat/rollback', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'same-origin',
+              body: JSON.stringify({
+                session_id: sessionId,
+                agent_id: agentId,
+                message_idx: parseInt(idx, 10)
+              })
+            });
+            var j = await r.json();
+            if (!r.ok) { alert('回滚失败：' + (j.detail || r.statusText)); return; }
+            // 清除现有 log，重新加载 transcript
+            if (typeof clearLog === 'function') clearLog();
+            if (typeof loadTranscriptIntoLog === 'function') {
+              await loadTranscriptIntoLog();
+            }
+          } catch (err) { alert('回滚请求失败：' + err.message); }
+        }
+      });
+      mEl.appendChild(document.createTextNode(' '));
+      mEl.appendChild(rb);
+    })(meta, wrap);
+  }
   const b = document.createElement('div');
   b.className = 'bubble bubble-' + role;
   if (role === 'agent') b.innerHTML = buildAgentBubbleInnerHtml(text, [], null);

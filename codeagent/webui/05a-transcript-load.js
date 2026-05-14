@@ -62,7 +62,8 @@ async function loadOlderTranscriptChunk() {
     const rows = j.messages || [];
     rows.slice().reverse().forEach((m) => {
       const ts = m.ts;
-      const o = { at: ts, prepend: true };
+      const idx = m.idx;
+      const o = { at: ts, prepend: true, idx: idx };
       if (m.role === 'user') bubble('user', m.content || '', o);
       else {
         // 拆分渲染：工具链各自独立展示，保持与实时执行一致的样式
@@ -101,7 +102,8 @@ async function loadTranscriptIntoLog(skipTreeRefresh) {
     const rows = j.messages || [];
     rows.forEach((m) => {
       const ts = m.ts;
-      const skip = { skipScroll: true, at: ts };
+      const idx = m.idx;
+      const skip = { skipScroll: true, at: ts, idx: idx };
       if (m.role === 'user') bubble('user', m.content || '', skip);
       else {
         // 拆分渲染：工具链各自独立展示
