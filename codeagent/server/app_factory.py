@@ -206,6 +206,7 @@ def create_app():
             reg, exe = tools_for_agent(agent_id)
             set_active_llm_session(session_id)
             from seed.core.agent_context import set_active_project_episodic
+            from seed.core.proj_reg import get_project
             if project_id:
                 set_active_project_episodic(True, project_id)
             else:
@@ -221,10 +222,26 @@ def create_app():
                     chat_sess.metadata.get("cursor")
                     if isinstance(chat_sess.metadata, dict) else None
                 )
+            # ── 工作目录注入 ──
+            _work_dir_suffix = ""
+            if project_id:
+                _proj = get_project(agent_id, project_id)
+                if _proj:
+                    _raw = str(_proj.get("path") or "").strip()
+                    if _raw:
+                        _wd = str(Path(_raw).expanduser().resolve())
+                        _work_dir_suffix = (
+                            "\n\n"
+                            "## Workspace\n\n"
+                            f"当前工作目录：`{_wd}`\n\n"
+                            "执行 shell 命令时，工作目录默认为此路径。"
+                            "除非有充分理由，否则请在此目录下操作，不要 cd 到其他目录。\n"
+                        )
+
             api_msgs = build_api_projection_messages(
                 chat_sess.messages,
                 max_user_rounds=max_hist,
-                skills_suffix=None,
+                skills_suffix=_work_dir_suffix or None,
                 **_kwargs,
             )
             compact_result = await asyncio.to_thread(maybe_compact_context_messages, api_msgs, llm)
