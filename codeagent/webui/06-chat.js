@@ -117,14 +117,24 @@ sendBtn.onclick = async () => {
     }
     // 保存 token_usage 供 finally 使用（const j 在 try 块内，finally 不可访问）
     window._lastTokenUsage = j.token_usage || null;
+    window._lastCost = j.cost || null;
+    window._lastAccumulatedCost = j.accumulated_cost || null;
   } catch (e) { if (sessionId === requestSid) systemMsg('err', String(e)); }
   finally {
     bumpChatInflight(requestSid, -1);
     // 消息交换完成后更新 token 用量指示器（优先用 API 精确计数）
     var tu = window._lastTokenUsage;
     if (tu && typeof updateTokenUsage === 'function') {
+      // 合并 cost 和 accumulated_cost（如果有）
+      if (window._lastCost || window._lastAccumulatedCost) {
+        tu = Object.assign({}, tu);
+        if (window._lastCost) tu.cost = window._lastCost;
+        if (window._lastAccumulatedCost) tu.accumulated_cost = window._lastAccumulatedCost;
+      }
       updateTokenUsage(tu);
       window._lastTokenUsage = null;
+      window._lastCost = null;
+      window._lastAccumulatedCost = null;
     } else if (typeof recalcTokenUsageFromDom === 'function') {
       setTimeout(recalcTokenUsageFromDom, 50);
     }

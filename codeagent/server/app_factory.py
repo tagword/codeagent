@@ -326,6 +326,7 @@ def create_app():
                     _all_used: list[str] = []
                     _final_reply = ""
                     _final_meta: dict = {}
+                    _acc_usage: dict = {}
 
                     while _segment < _max_seg:
                         _seg_reply, __, _seg_used, _seg_trace, _seg_meta = await run_llm_tool_loop(
@@ -345,6 +346,14 @@ def create_app():
                         if _seg_reply:
                             _final_reply = _seg_reply
                         _final_meta = _seg_meta or {}
+                        # 累加每个 segment 的 usage
+                        _seg_u = (_seg_meta or {}).get("usage_summary", {}) or {}
+                        if _seg_u:
+                            for _k in ("prompt_tokens", "completion_tokens", "total_tokens",
+                                       "prompt_cache_hit_tokens", "prompt_cache_miss_tokens"):
+                                _v = _seg_u.get(_k, 0)
+                                if isinstance(_v, (int, float)):
+                                    _acc_usage[_k] = _acc_usage.get(_k, 0) + int(_v)
 
                         if _seg_meta.get("stopped_reason") != "max_tool_rounds":
                             break
@@ -365,6 +374,8 @@ def create_app():
                     tools_used = _all_used
                     tool_trace = _all_trace
                     _loop_meta = _final_meta
+                    if _acc_usage:
+                        _loop_meta["usage_summary"] = _acc_usage
                 else:
                     reply, _meta, tools_used, tool_trace, _loop_meta = await run_llm_tool_loop(
                         llm, exe,
@@ -450,30 +461,57 @@ def create_app():
                     }
                     for t in tool_trace
                 ]
-                # ── Token 用量精确计算（DeepSeek tokenizer） ──
+                # ── Token 用量精确计算（基于 API 返回的 usage） ──
                 try:
-                    from codeagent.core.token_counter import count_messages as _count_tokens
-                    _usage = _count_tokens(chat_sess.messages)
+                    from codeagent.core.pricing import calculate_cost as _calc_cost, format_cost as _fmt_cost
+
+                    # 1. 从 _loop_meta 提取 API 返回的 usage_summary（已累加多轮/多段）
+                    _api_usage = dict(_loop_meta.get("usage_summary", {}) or {})
+
+                    # 2. 累加到 session 级别（跨请求持久化）
+                    _prev = chat_sess.metadata.get("accumulated_usage", {}) or {}
+                    _acc = {}
+                    for _k in ("prompt_tokens", "completion_tokens", "total_tokens",
+                               "prompt_cache_hit_tokens", "prompt_cache_miss_tokens"):
+                        _v = _api_usage.get(_k, 0)
+                        if not isinstance(_v, (int, float)):
+                            _v = 0
+                        _acc[_k] = int(_prev.get(_k, 0) or 0) + int(_v)
+                    _acc["last_request_usage"] = _api_usage  # 本轮增量，用于展示
+                    chat_sess.metadata["accumulated_usage"] = _acc
+
+                    # 3. 计算费用
+                    _model_name = getattr(llm, 'model', '')
+                    _cost_info = _calc_cost(_model_name, _api_usage)
+                    _total_cost_info = _calc_cost(_model_name, _acc)
+
+                    # 4. 构造 WS 事件
                     _ws_evt = {
                         "type": "context_usage",
                         "session_id": session_id,
                         "agent_id": agent_id,
-                        "body_bytes": _usage.get("total_tokens", 0) * 4,  # 兼容旧字段
-                        "compact_min_bytes": _usage.get("total_tokens", 0) * 4,
-                        "token_usage": _usage,
+                        "body_bytes": (_api_usage.get("total_tokens", 0) or 0) * 4,
+                        "compact_min_bytes": (_api_usage.get("total_tokens", 0) or 0) * 4,
+                        "token_usage": _api_usage,
+                        "accumulated_usage": _acc,
+                        "cost": _cost_info,
+                        "accumulated_cost": _total_cost_info,
                     }
                     asyncio.run_coroutine_threadsafe(
                         _broadcast_session_event(agent_id, session_id, _ws_evt), main_loop
                     )
                 except Exception:
-                    _usage = {}
+                    _api_usage = {}
+                    _cost_info = {}
                 return JSONResponse(
                     {
                         "reply": reply,
                         "session_id": session_id,
                         "tools_used": tools_used,
                         "tool_trace": trace_out,
-                        "token_usage": _usage,
+                        "token_usage": _api_usage,
+                        "cost": _cost_info,
+                        "accumulated_cost": _total_cost_info,
                     }
                 )
             except LLMError as e:
