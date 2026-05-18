@@ -121,6 +121,10 @@ async function loadTranscriptIntoLog(skipTreeRefresh) {
     if (typeof recalcTokenUsageFromDom === 'function') {
       setTimeout(recalcTokenUsageFromDom, 100);
     }
+    // 加载侧边栏费用汇总
+    if (j.accumulated_usage && typeof updateSidebarCost === 'function') {
+      updateSidebarCost(j.accumulated_usage);
+    }
     await refreshSessionList();
     if (!skipTreeRefresh && typeof refreshSessionsUnderProject === 'function') {
       refreshSessionsUnderProject(projectId);

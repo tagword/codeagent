@@ -5,8 +5,8 @@ function setTokenContextMax(maxTokens) {
   _tokenContextMax = maxTokens > 0 ? maxTokens : 200000;
 }
 
-/** 更新 token 用量指示器（含费用信息）
- *  @param {number|Object} curOrUsage - bodyBytes 或 {total_tokens, content_tokens, cost, accumulated_cost}
+/** 更新 token 用量指示器（仅 token 用量，不含费用）
+ *  @param {number|Object} curOrUsage - bodyBytes 或 {total_tokens, content_tokens}
  *  @param {number} [compactMinBytes] - 兼容旧格式的 min_bytes
  */
 function updateTokenUsage(curOrUsage, compactMinBytes) {
@@ -14,55 +14,61 @@ function updateTokenUsage(curOrUsage, compactMinBytes) {
   if (!el) return;
   var curTokens = 0;
   var maxTokens = _tokenContextMax;
-  var costObj = null;
-  var accCostObj = null;
-  // 支持对象格式 { total_tokens, content_tokens, cost, accumulated_cost }
   if (typeof curOrUsage === 'object' && curOrUsage !== null) {
     curTokens = curOrUsage.total_tokens || 0;
     if (curOrUsage.context_limit) maxTokens = curOrUsage.context_limit;
     if (curOrUsage.compact_min_bytes) maxTokens = Math.round(curOrUsage.compact_min_bytes / 4);
-    // 提取费用信息
-    if (curOrUsage.cost) costObj = curOrUsage.cost;
-    if (curOrUsage.accumulated_cost) accCostObj = curOrUsage.accumulated_cost;
   } else {
     curTokens = Math.round((curOrUsage || 0) / 4);
     if (compactMinBytes > 0) maxTokens = Math.round(compactMinBytes / 4);
   }
-  if (curTokens <= 0 && !accCostObj) { el.style.display = 'none'; return; }
+  if (curTokens <= 0) { el.style.display = 'none'; return; }
   el.style.display = 'inline-flex';
   var pct = Math.round(Math.min((curTokens / maxTokens) * 100, 100));
   var label = (curTokens >= 1000 ? (curTokens / 1000).toFixed(1) + 'k' : String(curTokens))
     + '/' + (maxTokens >= 1000 ? (maxTokens / 1000).toFixed(0) + 'k' : String(maxTokens));
-  // 如果有费用信息，加在 label 后面
-  if (accCostObj && accCostObj.total_cost > 0) {
-    var c = accCostObj.total_cost;
-    var costStr = c < 0.01 ? '\u00A5' + c.toFixed(4) : (c < 1 ? '\u00A5' + c.toFixed(3) : '\u00A5' + c.toFixed(2));
-    label += ' \u00B7 ' + costStr;
-  }
   el.textContent = '\uD83D\uDCCA ' + label;
-  // Tooltip 显示详细信息
-  var tip = '\u4E0A\u4E0B\u6587 ' + curTokens.toLocaleString() + ' tokens / ' + maxTokens.toLocaleString() + ' tokens (' + pct + '%)';
-  var modelName = '';
-  if (costObj && costObj.model) modelName = costObj.model;
-  if (accCostObj && accCostObj.total_cost > 0) {
-    var acc = accCostObj.total_cost;
-    var accStr = acc < 0.01 ? '\u00A5' + acc.toFixed(4) : (acc < 1 ? '\u00A5' + acc.toFixed(3) : '\u00A5' + acc.toFixed(2));
-    tip += '\n\u8FD0\u884C\u8D39\u7528\uFF1A' + accStr;
-    if (modelName) tip += ' (' + modelName + ')';
-    if (costObj && costObj.total_cost > 0) {
-      var req = costObj.total_cost;
-      var reqStr = req < 0.01 ? '\u00A5' + req.toFixed(4) : (req < 1 ? '\u00A5' + req.toFixed(3) : '\u00A5' + req.toFixed(2));
-      tip += '\n\u672C\u6B21\uFF1A' + reqStr;
-    }
-  } else if (costObj && costObj.total_cost > 0) {
-    var req = costObj.total_cost;
-    var reqStr = req < 0.01 ? '\u00A5' + req.toFixed(4) : (req < 1 ? '\u00A5' + req.toFixed(3) : '\u00A5' + req.toFixed(2));
-    tip += '\n\u672C\u6B21\uFF1A' + reqStr;
-    if (modelName) tip += ' (' + modelName + ')';
-  }
-  el.title = tip;
+  el.title = '\u4E0A\u4E0B\u6587 ' + curTokens.toLocaleString() + ' tokens / ' + maxTokens.toLocaleString() + ' tokens (' + pct + '%)';
   el.classList.toggle('is-warm', pct >= 60 && pct < 85);
   el.classList.toggle('is-hot', pct >= 85);
+}
+
+/** 更新侧边栏费用汇总
+ *  @param {Object} accUsage - accumulated_usage 对象（含 per_model, total_cost）
+ */
+function updateSidebarCost(accUsage) {
+  var el = document.getElementById('sidebarCost');
+  if (!el) return;
+  if (!accUsage || !accUsage.per_model) { el.style.display = 'none'; return; }
+  el.style.display = '';
+  // 计算总费用（遍历 per_model）
+  var totalCost = 0;
+  var lines = [];
+  for (var model in accUsage.per_model) {
+    var md = accUsage.per_model[model];
+    var tok = md.total_tokens || 0;
+    var cost = 0;
+    // 从 per_model 的 cached / accumulated_cost 计算
+    if (md.accumulated_cost) cost = md.accumulated_cost;
+    totalCost += cost;
+    var modelLabel = model.replace(/^deepseek-/, 'DS ');
+    var tokStr = tok >= 1000 ? (tok / 1000).toFixed(1) + 'k' : String(tok);
+    var costStr = cost < 0.01 ? '\u00A5' + cost.toFixed(4) : (cost < 1 ? '\u00A5' + cost.toFixed(3) : '\u00A5' + cost.toFixed(2));
+    lines.push({ model: modelLabel, tokens: tokStr, cost: costStr });
+  }
+  var html = '<div class="cost__list">';
+  for (var i = 0; i < lines.length; i++) {
+    var l = lines[i];
+    html += '<div class="cost__row"><span class="cost__model">' + l.model + '</span>'
+      + '<span class="cost__tokens">' + l.tokens + '</span>'
+      + '<span class="cost__amount">' + l.cost + '</span></div>';
+  }
+  if (lines.length > 1) {
+    var totalStr = totalCost < 0.01 ? '\u00A5' + totalCost.toFixed(4) : (totalCost < 1 ? '\u00A5' + totalCost.toFixed(3) : '\u00A5' + totalCost.toFixed(2));
+    html += '<div class="cost__row cost__row--total"><span class="cost__model">\u5408\u8BA1</span><span class="cost__tokens"></span><span class="cost__amount">' + totalStr + '</span></div>';
+  }
+  html += '</div>';
+  el.innerHTML = html;
 }
 
 /** 从 DOM 中所有气泡内容重新估算 token 用量（WS/API 不可用时的 fallback）
@@ -132,17 +138,17 @@ function connectWs() {
       }
       if (j.type === 'context_usage') {
         if (j.session_id === sessionId) {
-          // 优先使用包含 token_usage + cost 的合并对象
+          // 更新输入区的 token 用量指示器
           if (j.token_usage) {
-            // 把 cost 和 accumulated_cost 合并到 token_usage 对象中一起传入
-            var merged = Object.assign({}, j.token_usage);
-            if (j.cost) merged.cost = j.cost;
-            if (j.accumulated_cost) merged.accumulated_cost = j.accumulated_cost;
-            updateTokenUsage(merged, j.compact_min_bytes);
+            updateTokenUsage(j.token_usage, j.compact_min_bytes);
           } else {
             const cur = Number(j.body_bytes || 0);
             const minb = Number(j.compact_min_bytes || 0);
             updateTokenUsage(cur, minb);
+          }
+          // 更新侧边栏费用汇总
+          if (j.accumulated_usage && typeof updateSidebarCost === 'function') {
+            updateSidebarCost(j.accumulated_usage);
           }
         }
         return;

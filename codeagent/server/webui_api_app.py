@@ -325,6 +325,11 @@ def _transcript_json_for_session(
             "first_block_index": first_idx,
             "has_more_older": has_more,
             "truncated_start": truncated_start,
+            "accumulated_usage": (
+                sess.metadata.get("accumulated_usage")
+                if isinstance(sess.metadata, dict)
+                else None
+            ),
         }
     )
 
