@@ -172,7 +172,7 @@ def _webui_transcript_rows_from_session(sess: Session, max_chars: int) -> list[d
         rc_max = 50000
     rc_max = max(0, min(rc_max, 500_000))
     raw: list[dict[str, Any]] = []
-    for m in sess.messages:
+    for i, m in enumerate(sess.messages):
         if not isinstance(m, dict):
             continue
         role = m.get("role")
@@ -183,7 +183,7 @@ def _webui_transcript_rows_from_session(sess: Session, max_chars: int) -> list[d
         c = str(m.get("content") or "")
         if len(c) > max_chars:
             c = c[: max_chars - 24] + "\n…[内容已截断]"
-        row: dict[str, Any] = {"role": str(role), "content": c}
+        row: dict[str, Any] = {"role": str(role), "content": c, "idx": i}
         tt = m.get("tool_trace")
         if isinstance(tt, list) and tt:
             row["tool_trace"] = tt
