@@ -117,6 +117,10 @@ async function loadTranscriptIntoLog(skipTreeRefresh) {
       }
     });
     requestAnimationFrame(() => { requestAnimationFrame(() => scrollLogForce()); });
+    // 转录加载完成后粗略估算 token 用量
+    if (typeof recalcTokenUsageFromDom === 'function') {
+      setTimeout(recalcTokenUsageFromDom, 100);
+    }
     await refreshSessionList();
     if (!skipTreeRefresh && typeof refreshSessionsUnderProject === 'function') {
       refreshSessionsUnderProject(projectId);

@@ -116,7 +116,13 @@ sendBtn.onclick = async () => {
       }
     }
   } catch (e) { if (sessionId === requestSid) systemMsg('err', String(e)); }
-  finally { bumpChatInflight(requestSid, -1); }
+  finally {
+    bumpChatInflight(requestSid, -1);
+    // 消息交换完成后更新 token 用量指示器
+    if (typeof recalcTokenUsageFromDom === 'function') {
+      setTimeout(recalcTokenUsageFromDom, 50);
+    }
+  }
 };
 
 stopBtn.onclick = async () => {
