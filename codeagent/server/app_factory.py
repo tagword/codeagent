@@ -520,8 +520,12 @@ def create_app():
                     # 1. 从 _loop_meta 提取 API 返回的 usage_summary（已累加多轮/多段）
                     _api_usage = dict(_loop_meta.get("usage_summary", {}) or {})
 
-                    # 2. 累加到 session 级别（跨请求持久化）
+                    # 2. 获取模型名
+                    _model_name = getattr(llm, 'model', '')
+
+                    # 3. 累加到 session 级别（per-model + 汇总）
                     _prev = chat_sess.metadata.get("accumulated_usage", {}) or {}
+                    # 汇总字段累加
                     _acc = {}
                     for _k in ("prompt_tokens", "completion_tokens", "total_tokens",
                                "prompt_cache_hit_tokens", "prompt_cache_miss_tokens"):
@@ -529,15 +533,37 @@ def create_app():
                         if not isinstance(_v, (int, float)):
                             _v = 0
                         _acc[_k] = int(_prev.get(_k, 0) or 0) + int(_v)
-                    _acc["last_request_usage"] = _api_usage  # 本轮增量，用于展示
+                    # per-model 字段累加
+                    _prev_per_model = _prev.get("per_model", {}) or {}
+                    _pm = dict(_prev_per_model.get(_model_name, {}))
+                    for _k in ("prompt_tokens", "completion_tokens", "total_tokens",
+                               "prompt_cache_hit_tokens", "prompt_cache_miss_tokens"):
+                        _v = _api_usage.get(_k, 0)
+                        if not isinstance(_v, (int, float)):
+                            _v = 0
+                        _pm[_k] = int(_pm.get(_k, 0) or 0) + int(_v)
+                    _prev_per_model[_model_name] = _pm
+                    _acc["per_model"] = _prev_per_model
+                    # 本轮增量 + 费用信息
+                    _cost_info = _calc_cost(_model_name, _api_usage)
+                    _acc["last_request"] = {
+                        "model": _model_name,
+                        "usage": _api_usage,
+                        "cost": _cost_info,
+                    }
                     chat_sess.metadata["accumulated_usage"] = _acc
 
-                    # 3. 计算费用
-                    _model_name = getattr(llm, 'model', '')
-                    _cost_info = _calc_cost(_model_name, _api_usage)
-                    _total_cost_info = _calc_cost(_model_name, _acc)
+                    # 4. 计算累计费用（每个模型分别算再汇总）
+                    _total_cost_val = 0.0
+                    for _mname, _mdata in _prev_per_model.items():
+                        _mcost = _calc_cost(_mname, _mdata)
+                        _total_cost_val += _mcost.get("total_cost", 0)
+                    _total_cost_info = {
+                        "total_cost": round(_total_cost_val, 6),
+                        "currency": "CNY",
+                    }
 
-                    # 4. 构造 WS 事件
+                    # 5. 构造 WS 事件
                     _ws_evt = {
                         "type": "context_usage",
                         "session_id": session_id,
@@ -548,6 +574,7 @@ def create_app():
                         "accumulated_usage": _acc,
                         "cost": _cost_info,
                         "accumulated_cost": _total_cost_info,
+                        "model": _model_name,
                     }
                     asyncio.run_coroutine_threadsafe(
                         _broadcast_session_event(agent_id, session_id, _ws_evt), main_loop
@@ -564,6 +591,8 @@ def create_app():
                         "token_usage": _api_usage,
                         "cost": _cost_info,
                         "accumulated_cost": _total_cost_info,
+                        "accumulated_usage": _acc,
+                        "model": _model_name,
                     }
                 )
             except LLMError as e:
