@@ -1,3 +1,52 @@
+// ── Token 用量更新 ────────────────────────────────────────────
+let _tokenContextMax = 200000; // 默认 200k tokens，后续可从模型配置读取
+
+function setTokenContextMax(maxTokens) {
+  _tokenContextMax = maxTokens > 0 ? maxTokens : 200000;
+}
+
+function updateTokenUsage(bodyBytes, compactMinBytes) {
+  var el = document.getElementById('tokenUsage');
+  if (!el) return;
+  // bytes → tokens 粗估（÷ 4）
+  var curTokens = Math.round((bodyBytes || 0) / 4);
+  var maxTokens = _tokenContextMax;
+  if (compactMinBytes > 0) {
+    // 用 compactMinBytes 反推上限，更贴合实际模型的上下文窗口
+    maxTokens = Math.round(compactMinBytes / 4);
+  }
+  if (curTokens <= 0) { el.style.display = 'none'; return; }
+  el.style.display = 'inline-flex';
+  var pct = Math.round((curTokens / maxTokens) * 100);
+  var label = (curTokens >= 1000 ? (curTokens / 1000).toFixed(1) + 'k' : String(curTokens))
+    + '/' + (maxTokens >= 1000 ? (maxTokens / 1000).toFixed(0) + 'k' : String(maxTokens));
+  el.textContent = '📊 ' + label;
+  el.title = '上下文约 ' + curTokens.toLocaleString() + ' tokens / ' + maxTokens.toLocaleString() + ' tokens (' + pct + '%)';
+  el.classList.toggle('is-warm', pct >= 60 && pct < 85);
+  el.classList.toggle('is-hot', pct >= 85);
+}
+
+/** 从 DOM 中所有气泡内容重新估算 token 用量（compact 后调用） */
+function recalcTokenUsageFromDom() {
+  var totalBytes = 0;
+  var bubbles = document.querySelectorAll('.bubble');
+  bubbles.forEach(function (b) {
+    var text = b.textContent || '';
+    // 粗估 UTF-8 字节数
+    for (var i = 0; i < text.length; i++) {
+      var code = text.charCodeAt(i);
+      if (code < 0x80) totalBytes += 1;
+      else if (code < 0x800) totalBytes += 2;
+      else if (code < 0xD800 || code >= 0xE000) totalBytes += 3;
+      else { i++; totalBytes += 4; } // surrogate pair
+    }
+  });
+  // 每条消息的系统开销粗估（角色标记、格式等）
+  totalBytes += bubbles.length * 80;
+  var compactMinBytes = _tokenContextMax * 4; // 反推阈值
+  updateTokenUsage(totalBytes, compactMinBytes);
+}
+
 function connectWs() {
   if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
   if (ws) { try { ws.close(); } catch (e) {} ws = undefined; }
@@ -29,14 +78,18 @@ function connectWs() {
         return;
       }
       if (j.type === 'context_compact') {
-        if (j.session_id === sessionId) systemMsg('info', '上下文已压缩（compact）：丢弃 ' + (j.dropped_messages || 0) + ' 条历史消息，保留最近 ' + (j.kept_user_rounds || 0) + ' 轮。');
+        if (j.session_id === sessionId) {
+          systemMsg('info', '上下文已压缩（compact）：丢弃 ' + (j.dropped_messages || 0) + ' 条历史消息，保留最近 ' + (j.kept_user_rounds || 0) + ' 轮。');
+          // compact 后用量会骤降，重新从 DOM 估算
+          recalcTokenUsageFromDom();
+        }
         return;
       }
       if (j.type === 'context_usage') {
         if (j.session_id === sessionId) {
           const cur = Number(j.body_bytes || 0);
           const minb = Number(j.compact_min_bytes || 0);
-          if (cur > 0 && minb > 0) systemMsg('info', '上下文用量接近阈值：约 ' + Math.round((cur / minb) * 100) + '%（' + cur + '/' + minb + ' bytes）。达到阈值将触发 compact。');
+          updateTokenUsage(cur, minb);
         }
         return;
       }
@@ -73,6 +126,7 @@ function connectWs() {
         markWsTextDone(sessionId);
         markLiveProgressSeen(sessionId);
         if (webuiSessionsEnabled) refreshSessionList().catch(function() {});
+        if (typeof recalcTokenUsageFromDom === 'function') recalcTokenUsageFromDom();
         return;
       }
       if (j.type !== 'reply') return;
@@ -85,6 +139,7 @@ function connectWs() {
       } else {
         bubble('agent', j.text || '', { at: Date.now(), toolTrace: j.tool_trace || [] });
       }
+      if (typeof recalcTokenUsageFromDom === 'function') recalcTokenUsageFromDom();
       if (webuiSessionsEnabled) refreshSessionList().catch(() => {});
     } catch (_) {}
   };
