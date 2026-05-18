@@ -54,7 +54,7 @@ function showNewCronJobForm() {
   var wrap = document.createElement('div'); wrap.className = 'cron-card-wrap is-new';
   var editWrap = document.createElement('div'); editWrap.className = 'cron-edit-wrap'; editWrap.style.display = 'block';
   var editStatus = document.createElement('div'); editStatus.className = 'status-line';
-  var emptyJob = { id: '', enabled: true, cron: '0 8 * * *', agent_id: 'default', session_id: '', prompt: '', timezone: '', max_tool_rounds: 12 };
+  var emptyJob = { id: '', enabled: true, cron: '0 8 * * *', agent_id: 'default', session_id: '', prompt: '', timezone: '', max_tool_rounds: 12, max_continuations: 0 };
   editWrap.innerHTML = buildCronEditFormHTML(emptyJob);
   editWrap.appendChild(editStatus);
   editWrap.querySelector('.cron-cancel-btn').addEventListener('click', function() { wrap.remove(); });
@@ -67,6 +67,7 @@ function showNewCronJobForm() {
     var prompt = editWrap.querySelector('.cron-fld-prompt').value.trim();
     var tz = editWrap.querySelector('.cron-fld-tz').value.trim();
     var maxRounds = parseInt(editWrap.querySelector('.cron-fld-rounds').value) || 12;
+    var maxContinuations = parseInt(editWrap.querySelector('.cron-fld-continuations').value) || 0;
     var enabled = editWrap.querySelector('.cron-fld-enabled').checked;
     var projectId = editWrap.querySelector('.cron-fld-project').value.trim();
     if (!name) { editStatus.textContent = '任务名称不能为空'; editStatus.classList.add('is-err'); return; }
@@ -75,7 +76,7 @@ function showNewCronJobForm() {
     try {
       var title = name.trim();
       var jobId = cronSafeJobId(title);
-      var kv = { id: jobId, title: title, enabled: enabled, cron: freqToCron(freq), agent_id: agent || 'default', session_id: session || ('cron-' + jobId), prompt: prompt, max_tool_rounds: maxRounds };
+      var kv = { id: jobId, title: title, enabled: enabled, cron: freqToCron(freq), agent_id: agent || 'default', session_id: session || ('cron-' + jobId), prompt: prompt, max_tool_rounds: maxRounds, max_continuations: maxContinuations };
       if (tz) kv.timezone = tz;
       if (projectId) kv.project_id = projectId;
       var r = await fetch('/api/ui/cron/job', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(kv) });

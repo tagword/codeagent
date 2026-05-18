@@ -22,6 +22,7 @@
     var prompt = editWrap.querySelector('.cron-fld-prompt').value.trim();
     var tz = editWrap.querySelector('.cron-fld-tz').value.trim();
     var maxRounds = parseInt(editWrap.querySelector('.cron-fld-rounds').value) || 12;
+    var maxContinuations = parseInt(editWrap.querySelector('.cron-fld-continuations').value) || 0;
     var enabled = editWrap.querySelector('.cron-fld-enabled').checked;
     var projectId = editWrap.querySelector('.cron-fld-project').value.trim();
     if (!name) { editStatus.textContent = '任务名称不能为空'; editStatus.classList.add('is-err'); return; }
@@ -39,6 +40,7 @@
         session_id: session || ('cron-' + origJobId),
         prompt: prompt,
         max_tool_rounds: maxRounds,
+        max_continuations: maxContinuations,
       };
       if (tz) kv.timezone = tz;
       if (projectId) kv.project_id = projectId;
@@ -118,6 +120,7 @@ function buildCronEditFormHTML(j) {
     + '<textarea class="cron-fld-prompt" placeholder="【定时任务】输入 prompt…">' + escAttr(j.prompt || '') + '</textarea></div>'
     + '<div><label class="form-label">时区（可选，默认 UTC）</label><input class="cron-fld-tz" type="text" value="' + escAttr(j.timezone || '') + '" placeholder="Asia/Shanghai"/></div>'
     + '<div><label class="form-label">最大工具调用轮数</label><input class="cron-fld-rounds" type="number" min="1" max="32" value="' + (j.max_tool_rounds || 12) + '"/></div>'
+    + '<div><label class="form-label">最大续接段数</label><input class="cron-fld-continuations" type="number" min="0" max="20" value="' + (j.max_continuations || 0) + '"/><div class="cron-form-desc">轮数用完自动续接，0=不续接</div></div>'
     + '<div class="cron-form-full row-actions" style="margin-top:0;">'
     + '  <button type="button" class="btn btn--primary btn--sm cron-save-btn">保存</button>'
     + '  <button type="button" class="btn btn--subtle btn--sm cron-cancel-btn">取消</button>'
