@@ -13,6 +13,40 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+# ── Monkey-patch seed's _stream_llm_round to accumulate usage across multi-round tool calls ──
+# 放在模块级别而非 .venv 内 seed 包，确保 seed 重装不会丢失此功能
+import contextvars as _contextvars
+import seed.core.agent_runtime as _seed_ar
+
+_usage_ctx = _contextvars.ContextVar[str]('_usage_ctx', default=None)
+"""Context variable keyed by a unique token, holding a dict: {usage_summary: {}}."""
+
+_usage_registry: dict[str, dict] = {}
+"""Registry of per-call usage accumulators, keyed by unique token."""
+
+_orig_stream_llm_round = _seed_ar._stream_llm_round
+
+
+def _patched_stream_llm_round(llm, messages, tool_schema, on_text_delta, on_reasoning_delta):
+    """Wrapper that accumulates usage metadata from each LLM round."""
+    content, tool_calls, meta = _orig_stream_llm_round(
+        llm, messages, tool_schema, on_text_delta, on_reasoning_delta
+    )
+    token = _usage_ctx.get()
+    if token and token in _usage_registry:
+        round_usage = meta.get("usage", {}) if isinstance(meta, dict) else {}
+        if round_usage:
+            us = _usage_registry[token].setdefault("usage_summary", {})
+            for _k in ("prompt_tokens", "completion_tokens", "total_tokens",
+                       "prompt_cache_hit_tokens", "prompt_cache_miss_tokens"):
+                _v = round_usage.get(_k, 0)
+                if isinstance(_v, (int, float)):
+                    us[_k] = us.get(_k, 0) + int(_v)
+    return content, tool_calls, meta
+
+
+_seed_ar._stream_llm_round = _patched_stream_llm_round
+
 
 def create_app():
     import logging as logging_mod
@@ -327,18 +361,27 @@ def create_app():
                     _final_reply = ""
                     _final_meta: dict = {}
                     _acc_usage: dict = {}
+                    import uuid as _uuid
 
                     while _segment < _max_seg:
-                        _seg_reply, __, _seg_used, _seg_trace, _seg_meta = await run_llm_tool_loop(
-                            llm, exe,
-                            messages=api_msgs,
-                            registry=reg,
-                            max_tool_rounds=max_rounds,
-                            on_round_persist=_on_tool_round_persist,
-                            on_text_delta=_on_text_delta,
-                            on_reasoning_delta=_on_reasoning_delta,
-                            on_check_pending_messages=_drain_pending_injections,
-                        )
+                        _seg_token = str(_uuid.uuid4())
+                        _usage_registry[_seg_token] = {}
+                        _usage_ctx.set(_seg_token)
+                        try:
+                            _seg_reply, __, _seg_used, _seg_trace, _seg_meta = await run_llm_tool_loop(
+                                llm, exe,
+                                messages=api_msgs,
+                                registry=reg,
+                                max_tool_rounds=max_rounds,
+                                on_round_persist=_on_tool_round_persist,
+                                on_text_delta=_on_text_delta,
+                                on_reasoning_delta=_on_reasoning_delta,
+                                on_check_pending_messages=_drain_pending_injections,
+                            )
+                        finally:
+                            _usage_ctx.set(None)
+                            _seg_usage = dict(_usage_registry.pop(_seg_token, {}).get("usage_summary", {}) or {})
+
                         _all_trace.extend(_seg_trace or [])
                         for _t in (_seg_used or []):
                             if _t not in _all_used:
@@ -347,11 +390,10 @@ def create_app():
                             _final_reply = _seg_reply
                         _final_meta = _seg_meta or {}
                         # 累加每个 segment 的 usage
-                        _seg_u = (_seg_meta or {}).get("usage_summary", {}) or {}
-                        if _seg_u:
+                        if _seg_usage:
                             for _k in ("prompt_tokens", "completion_tokens", "total_tokens",
                                        "prompt_cache_hit_tokens", "prompt_cache_miss_tokens"):
-                                _v = _seg_u.get(_k, 0)
+                                _v = _seg_usage.get(_k, 0)
                                 if isinstance(_v, (int, float)):
                                     _acc_usage[_k] = _acc_usage.get(_k, 0) + int(_v)
 
@@ -377,16 +419,26 @@ def create_app():
                     if _acc_usage:
                         _loop_meta["usage_summary"] = _acc_usage
                 else:
-                    reply, _meta, tools_used, tool_trace, _loop_meta = await run_llm_tool_loop(
-                        llm, exe,
-                        messages=api_msgs,
-                        registry=reg,
-                        max_tool_rounds=max_rounds,
-                        on_round_persist=_on_tool_round_persist,
-                        on_text_delta=_on_text_delta,
-                        on_reasoning_delta=_on_reasoning_delta,
-                        on_check_pending_messages=_drain_pending_injections,
-                    )
+                    import uuid as _uuid
+                    _norm_token = str(_uuid.uuid4())
+                    _usage_registry[_norm_token] = {}
+                    _usage_ctx.set(_norm_token)
+                    try:
+                        reply, _meta, tools_used, tool_trace, _loop_meta = await run_llm_tool_loop(
+                            llm, exe,
+                            messages=api_msgs,
+                            registry=reg,
+                            max_tool_rounds=max_rounds,
+                            on_round_persist=_on_tool_round_persist,
+                            on_text_delta=_on_text_delta,
+                            on_reasoning_delta=_on_reasoning_delta,
+                            on_check_pending_messages=_drain_pending_injections,
+                        )
+                    finally:
+                        _usage_ctx.set(None)
+                        _norm_usage = dict(_usage_registry.pop(_norm_token, {}).get("usage_summary", {}) or {})
+                        if _norm_usage:
+                            _loop_meta["usage_summary"] = _norm_usage
 
                 # ── WS: 广播 text_done + reply（两分支共享） ──
                 trace_out_ws = [
