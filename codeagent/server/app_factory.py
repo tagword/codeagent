@@ -450,12 +450,30 @@ def create_app():
                     }
                     for t in tool_trace
                 ]
+                # ── Token 用量精确计算（DeepSeek tokenizer） ──
+                try:
+                    from codeagent.core.token_counter import count_messages as _count_tokens
+                    _usage = _count_tokens(chat_sess.messages)
+                    _ws_evt = {
+                        "type": "context_usage",
+                        "session_id": session_id,
+                        "agent_id": agent_id,
+                        "body_bytes": _usage.get("total_tokens", 0) * 4,  # 兼容旧字段
+                        "compact_min_bytes": _usage.get("total_tokens", 0) * 4,
+                        "token_usage": _usage,
+                    }
+                    asyncio.run_coroutine_threadsafe(
+                        _broadcast_session_event(agent_id, session_id, _ws_evt), main_loop
+                    )
+                except Exception:
+                    _usage = {}
                 return JSONResponse(
                     {
                         "reply": reply,
                         "session_id": session_id,
                         "tools_used": tools_used,
                         "tool_trace": trace_out,
+                        "token_usage": _usage,
                     }
                 )
             except LLMError as e:
