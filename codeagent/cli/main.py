@@ -473,7 +473,11 @@ def _cmd_chat_llm(args):
             max_user_rounds=max_hist,
             skills_suffix=None,
         )
-        maybe_compact_context_messages(api_msgs, llm)
+        compact_result = maybe_compact_context_messages(api_msgs, llm)
+        if compact_result:
+            b_idx = compact_result["boundary_idx"]
+            if 0 <= b_idx < len(chat_sess.messages):
+                chat_sess.messages[b_idx]["_compact_summary"] = compact_result["compact_summary"]
         apply_episodic_to_messages(api_msgs, project_root, name)
         set_active_llm_session(name)
         try:

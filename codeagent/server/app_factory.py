@@ -13,6 +13,40 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+# ── Monkey-patch seed's _stream_llm_round to accumulate usage across multi-round tool calls ──
+# 放在模块级别而非 .venv 内 seed 包，确保 seed 重装不会丢失此功能
+import contextvars as _contextvars
+import seed.core.agent_runtime as _seed_ar
+
+_usage_ctx = _contextvars.ContextVar[str]('_usage_ctx', default=None)
+"""Context variable keyed by a unique token, holding a dict: {usage_summary: {}}."""
+
+_usage_registry: dict[str, dict] = {}
+"""Registry of per-call usage accumulators, keyed by unique token."""
+
+_orig_stream_llm_round = _seed_ar._stream_llm_round
+
+
+def _patched_stream_llm_round(llm, messages, tool_schema, on_text_delta, on_reasoning_delta):
+    """Wrapper that accumulates usage metadata from each LLM round."""
+    content, tool_calls, meta = _orig_stream_llm_round(
+        llm, messages, tool_schema, on_text_delta, on_reasoning_delta
+    )
+    token = _usage_ctx.get()
+    if token and token in _usage_registry:
+        round_usage = meta.get("usage", {}) if isinstance(meta, dict) else {}
+        if round_usage:
+            us = _usage_registry[token].setdefault("usage_summary", {})
+            for _k in ("prompt_tokens", "completion_tokens", "total_tokens",
+                       "prompt_cache_hit_tokens", "prompt_cache_miss_tokens"):
+                _v = round_usage.get(_k, 0)
+                if isinstance(_v, (int, float)):
+                    us[_k] = us.get(_k, 0) + int(_v)
+    return content, tool_calls, meta
+
+
+_seed_ar._stream_llm_round = _patched_stream_llm_round
+
 
 def create_app():
     import logging as logging_mod
@@ -172,17 +206,49 @@ def create_app():
             reg, exe = tools_for_agent(agent_id)
             set_active_llm_session(session_id)
             from seed.core.agent_context import set_active_project_episodic
+            from seed.core.proj_reg import get_project
             if project_id:
                 set_active_project_episodic(True, project_id)
             else:
                 set_active_project_episodic(False)
 
+            # backward-compat: seed 1.0.0 没有 cursor 参数
+            import inspect as _inspect
+            _sig = _inspect.signature(build_api_projection_messages)
+            _cursor_supported = "cursor" in _sig.parameters
+            _kwargs = {}
+            if _cursor_supported:
+                _kwargs["cursor"] = (
+                    chat_sess.metadata.get("cursor")
+                    if isinstance(chat_sess.metadata, dict) else None
+                )
+            # ── 工作目录注入 ──
+            _work_dir_suffix = ""
+            if project_id:
+                _proj = get_project(agent_id, project_id)
+                if _proj:
+                    _raw = str(_proj.get("path") or "").strip()
+                    if _raw:
+                        _wd = str(Path(_raw).expanduser().resolve())
+                        _work_dir_suffix = (
+                            "\n\n"
+                            "## Workspace\n\n"
+                            f"当前工作目录：`{_wd}`\n\n"
+                            "执行 shell 命令时，工作目录默认为此路径。"
+                            "除非有充分理由，否则请在此目录下操作，不要 cd 到其他目录。\n"
+                        )
+
             api_msgs = build_api_projection_messages(
                 chat_sess.messages,
                 max_user_rounds=max_hist,
-                skills_suffix=None,
+                skills_suffix=_work_dir_suffix or None,
+                **_kwargs,
             )
-            await asyncio.to_thread(maybe_compact_context_messages, api_msgs, llm)
+            compact_result = await asyncio.to_thread(maybe_compact_context_messages, api_msgs, llm)
+            if compact_result:
+                b_idx = compact_result["boundary_idx"]
+                if 0 <= b_idx < len(chat_sess.messages):
+                    chat_sess.messages[b_idx]["_compact_summary"] = compact_result["compact_summary"]
             apply_episodic_to_messages(
                 api_msgs,
                 project_root,
@@ -311,18 +377,28 @@ def create_app():
                     _all_used: list[str] = []
                     _final_reply = ""
                     _final_meta: dict = {}
+                    _acc_usage: dict = {}
+                    import uuid as _uuid
 
                     while _segment < _max_seg:
-                        _seg_reply, __, _seg_used, _seg_trace, _seg_meta = await run_llm_tool_loop(
-                            llm, exe,
-                            messages=api_msgs,
-                            registry=reg,
-                            max_tool_rounds=max_rounds,
-                            on_round_persist=_on_tool_round_persist,
-                            on_text_delta=_on_text_delta,
-                            on_reasoning_delta=_on_reasoning_delta,
-                            on_check_pending_messages=_drain_pending_injections,
-                        )
+                        _seg_token = str(_uuid.uuid4())
+                        _usage_registry[_seg_token] = {}
+                        _usage_ctx.set(_seg_token)
+                        try:
+                            _seg_reply, __, _seg_used, _seg_trace, _seg_meta = await run_llm_tool_loop(
+                                llm, exe,
+                                messages=api_msgs,
+                                registry=reg,
+                                max_tool_rounds=max_rounds,
+                                on_round_persist=_on_tool_round_persist,
+                                on_text_delta=_on_text_delta,
+                                on_reasoning_delta=_on_reasoning_delta,
+                                on_check_pending_messages=_drain_pending_injections,
+                            )
+                        finally:
+                            _usage_ctx.set(None)
+                            _seg_usage = dict(_usage_registry.pop(_seg_token, {}).get("usage_summary", {}) or {})
+
                         _all_trace.extend(_seg_trace or [])
                         for _t in (_seg_used or []):
                             if _t not in _all_used:
@@ -330,6 +406,13 @@ def create_app():
                         if _seg_reply:
                             _final_reply = _seg_reply
                         _final_meta = _seg_meta or {}
+                        # 累加每个 segment 的 usage
+                        if _seg_usage:
+                            for _k in ("prompt_tokens", "completion_tokens", "total_tokens",
+                                       "prompt_cache_hit_tokens", "prompt_cache_miss_tokens"):
+                                _v = _seg_usage.get(_k, 0)
+                                if isinstance(_v, (int, float)):
+                                    _acc_usage[_k] = _acc_usage.get(_k, 0) + int(_v)
 
                         if _seg_meta.get("stopped_reason") != "max_tool_rounds":
                             break
@@ -350,17 +433,29 @@ def create_app():
                     tools_used = _all_used
                     tool_trace = _all_trace
                     _loop_meta = _final_meta
+                    if _acc_usage:
+                        _loop_meta["usage_summary"] = _acc_usage
                 else:
-                    reply, _meta, tools_used, tool_trace, _loop_meta = await run_llm_tool_loop(
-                        llm, exe,
-                        messages=api_msgs,
-                        registry=reg,
-                        max_tool_rounds=max_rounds,
-                        on_round_persist=_on_tool_round_persist,
-                        on_text_delta=_on_text_delta,
-                        on_reasoning_delta=_on_reasoning_delta,
-                        on_check_pending_messages=_drain_pending_injections,
-                    )
+                    import uuid as _uuid
+                    _norm_token = str(_uuid.uuid4())
+                    _usage_registry[_norm_token] = {}
+                    _usage_ctx.set(_norm_token)
+                    try:
+                        reply, _meta, tools_used, tool_trace, _loop_meta = await run_llm_tool_loop(
+                            llm, exe,
+                            messages=api_msgs,
+                            registry=reg,
+                            max_tool_rounds=max_rounds,
+                            on_round_persist=_on_tool_round_persist,
+                            on_text_delta=_on_text_delta,
+                            on_reasoning_delta=_on_reasoning_delta,
+                            on_check_pending_messages=_drain_pending_injections,
+                        )
+                    finally:
+                        _usage_ctx.set(None)
+                        _norm_usage = dict(_usage_registry.pop(_norm_token, {}).get("usage_summary", {}) or {})
+                        if _norm_usage:
+                            _loop_meta["usage_summary"] = _norm_usage
 
                 # ── WS: 广播 text_done + reply（两分支共享） ──
                 trace_out_ws = [
@@ -435,12 +530,86 @@ def create_app():
                     }
                     for t in tool_trace
                 ]
+                # ── Token 用量精确计算（基于 API 返回的 usage） ──
+                try:
+                    from codeagent.core.pricing import calculate_cost as _calc_cost, format_cost as _fmt_cost
+
+                    # 1. 从 _loop_meta 提取 API 返回的 usage_summary（已累加多轮/多段）
+                    _api_usage = dict(_loop_meta.get("usage_summary", {}) or {})
+
+                    # 2. 获取模型名
+                    _model_name = getattr(llm, 'model', '')
+
+                    # 3. 累加到 session 级别（per-model + 汇总）
+                    _prev = chat_sess.metadata.get("accumulated_usage", {}) or {}
+                    # 汇总字段累加
+                    _acc = {}
+                    for _k in ("prompt_tokens", "completion_tokens", "total_tokens",
+                               "prompt_cache_hit_tokens", "prompt_cache_miss_tokens"):
+                        _v = _api_usage.get(_k, 0)
+                        if not isinstance(_v, (int, float)):
+                            _v = 0
+                        _acc[_k] = int(_prev.get(_k, 0) or 0) + int(_v)
+                    # per-model 字段累加
+                    _prev_per_model = _prev.get("per_model", {}) or {}
+                    _pm = dict(_prev_per_model.get(_model_name, {}))
+                    for _k in ("prompt_tokens", "completion_tokens", "total_tokens",
+                               "prompt_cache_hit_tokens", "prompt_cache_miss_tokens"):
+                        _v = _api_usage.get(_k, 0)
+                        if not isinstance(_v, (int, float)):
+                            _v = 0
+                        _pm[_k] = int(_pm.get(_k, 0) or 0) + int(_v)
+                    _prev_per_model[_model_name] = _pm
+                    _acc["per_model"] = _prev_per_model
+                    # 本轮增量 + 费用信息
+                    _cost_info = _calc_cost(_model_name, _api_usage)
+                    _acc["last_request"] = {
+                        "model": _model_name,
+                        "usage": _api_usage,
+                        "cost": _cost_info,
+                    }
+                    chat_sess.metadata["accumulated_usage"] = _acc
+
+                    # 4. 计算累计费用（每个模型分别算再汇总）
+                    _total_cost_val = 0.0
+                    for _mname, _mdata in _prev_per_model.items():
+                        _mcost = _calc_cost(_mname, _mdata)
+                        _total_cost_val += _mcost.get("total_cost", 0)
+                    _total_cost_info = {
+                        "total_cost": round(_total_cost_val, 6),
+                        "currency": "CNY",
+                    }
+
+                    # 5. 构造 WS 事件
+                    _ws_evt = {
+                        "type": "context_usage",
+                        "session_id": session_id,
+                        "agent_id": agent_id,
+                        "body_bytes": (_api_usage.get("total_tokens", 0) or 0) * 4,
+                        "compact_min_bytes": (_api_usage.get("total_tokens", 0) or 0) * 4,
+                        "token_usage": _api_usage,
+                        "accumulated_usage": _acc,
+                        "cost": _cost_info,
+                        "accumulated_cost": _total_cost_info,
+                        "model": _model_name,
+                    }
+                    asyncio.run_coroutine_threadsafe(
+                        _broadcast_session_event(agent_id, session_id, _ws_evt), main_loop
+                    )
+                except Exception:
+                    _api_usage = {}
+                    _cost_info = {}
                 return JSONResponse(
                     {
                         "reply": reply,
                         "session_id": session_id,
                         "tools_used": tools_used,
                         "tool_trace": trace_out,
+                        "token_usage": _api_usage,
+                        "cost": _cost_info,
+                        "accumulated_cost": _total_cost_info,
+                        "accumulated_usage": _acc,
+                        "model": _model_name,
                     }
                 )
             except LLMError as e:
@@ -476,6 +645,72 @@ def create_app():
             cancel_event.set()
             return JSONResponse({"cancelled": True})
         return JSONResponse({"cancelled": False, "reason": "not_running"})
+
+    async def api_chat_rollback(request: Request) -> JSONResponse:
+        """Roll back session to a given message index — subsequent turns will project from there.
+
+        POST body::
+
+            {"session_id": "...", "agent_id": "...", "message_idx": 42}
+
+        Response::
+
+            {"ok": true, "message_idx": 42, "messages_since": [<messages from idx onwards>]}
+        """
+        from seed.core.llm_sess import load_or_create_chat_session, persist_chat_session
+        from . import _running_sessions, _memkey
+
+        try:
+            body = await request.json()
+        except Exception:
+            return JSONResponse({"detail": "invalid json"}, status_code=400)
+
+        session_id = str(body.get("session_id") or "web-chat").strip() or "web-chat"
+        agent_id = str(body.get("agent_id") or os.environ.get("CODEAGENT_AGENT_ID", "default")).strip() or "default"
+        # 0 = system message, so minimal sensible value is 1
+        message_idx = int(body.get("message_idx", 1))
+
+        _run_mkey = _memkey(agent_id, session_id)
+        if _run_mkey in _running_sessions:
+            return JSONResponse({"detail": "session is currently running, stop it first"}, status_code=409)
+
+        chat_sess = load_or_create_chat_session(session_id, agent_id)
+
+        if not isinstance(chat_sess.metadata, dict):
+            chat_sess.metadata = {}
+
+        # Clamp to valid range
+        max_idx = len(chat_sess.messages) - 1
+        if message_idx < 0:
+            message_idx = 0
+        if message_idx > max_idx:
+            return JSONResponse(
+                {"detail": f"message_idx {message_idx} out of range (max {max_idx})"},
+                status_code=422,
+            )
+
+        chat_sess.metadata["cursor"] = {
+            "mode": "head",
+            "from_idx": message_idx,
+        }
+        persist_chat_session(chat_sess, agent_id)
+
+        # Broadcast rollback event via websocket
+        try:
+            await _broadcast_session_event(agent_id, session_id, {
+                "type": "rollback",
+                "message_idx": message_idx,
+            })
+        except Exception:
+            pass
+
+        # Return messages from rollback point for UI refresh
+        messages_since = chat_sess.messages[message_idx:]
+        return JSONResponse({
+            "ok": True,
+            "message_idx": message_idx,
+            "messages_since": messages_since,
+        })
 
     def _resolve_site_icon_path() -> Path | None:
         """``icon.png`` may live next to the ``codeagent`` package, inside ``server/``, or at the repo root."""
@@ -556,6 +791,7 @@ def create_app():
         Mount("/api/ui", app=build_webui_api_app(project_root)),
         Route("/api/chat", api_chat, methods=["POST"]),
         Route("/api/chat/stop", api_chat_stop, methods=["POST"]),
+        Route("/api/chat/rollback", api_chat_rollback, methods=["POST"]),
         WebSocketRoute("/ws", websocket_chat),
         WebSocketRoute("/ws/{path:path}", websocket_chat),
     ]

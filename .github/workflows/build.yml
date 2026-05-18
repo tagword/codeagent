@@ -24,7 +24,7 @@ jobs:
           pip install pyinstaller pillow
 
       - name: Generate icon (.icns + tray)
-        run: python build/make_icon.py
+        run: python make_icon.py
 
       - name: Build .app
         run: pyinstaller CodeAgent.spec -y
@@ -34,7 +34,7 @@ jobs:
           APP="dist/CodeAgent.app"
           STAGING="build/dmg-staging"
           mkdir -p "${STAGING}"
-          cp -Rp "${APP}" "${STAGING}/CodeAgent.app"
+          ditto "${APP}" "${STAGING}/CodeAgent.app"
           ln -s /Applications "${STAGING}/Applications"
           hdiutil create \
             -fs HFS+ -volname "CodeAgent" \

@@ -115,8 +115,27 @@ sendBtn.onclick = async () => {
         markSessionReadByCount(sessionId, row2 ? (row2.message_count || 0) : 0);
       }
     }
+    // 保存 token_usage 供 finally 使用（const j 在 try 块内，finally 不可访问）
+    window._lastTokenUsage = j.token_usage || null;
+    window._lastAccumulatedUsage = j.accumulated_usage || null;
   } catch (e) { if (sessionId === requestSid) systemMsg('err', String(e)); }
-  finally { bumpChatInflight(requestSid, -1); }
+  finally {
+    bumpChatInflight(requestSid, -1);
+    // 消息交换完成后更新 token 用量指示器（优先用 API 精确计数）
+    var tu = window._lastTokenUsage;
+    if (tu && typeof updateTokenUsage === 'function') {
+      updateTokenUsage(tu);
+      window._lastTokenUsage = null;
+    } else if (typeof recalcTokenUsageFromDom === 'function') {
+      setTimeout(recalcTokenUsageFromDom, 50);
+    }
+    // 更新侧边栏费用汇总
+    var au = window._lastAccumulatedUsage;
+    if (au && typeof updateSidebarCost === 'function') {
+      updateSidebarCost(au);
+      window._lastAccumulatedUsage = null;
+    }
+  }
 };
 
 stopBtn.onclick = async () => {
