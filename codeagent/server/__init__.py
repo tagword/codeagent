@@ -303,10 +303,20 @@ def _print_serve_access_hints(host: str, port: int) -> None:
 def main(host: str = "0.0.0.0", port: int = 8765) -> None:
     import uvicorn
 
-
     # Cron 调度在 Starlette on_startup 里启动（AsyncIOScheduler 需要已有运行中的事件循环）。
     _print_serve_access_hints(host, port)
-    uvicorn.run(create_app(), host=host, port=port, log_level="info")
+    config = uvicorn.Config(
+        create_app(),
+        host=host,
+        port=port,
+        log_level="info",
+        timeout_graceful_shutdown=5,
+    )
+    server = uvicorn.Server(config)
+    try:
+        server.run()
+    except KeyboardInterrupt:
+        print("\n正在退出（若仍有任务在跑，最多等待数秒；可先点 Web UI「停止」再 Ctrl+C）…")
 
 
 def _webui_root() -> Path:

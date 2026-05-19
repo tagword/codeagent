@@ -5,7 +5,13 @@ from __future__ import annotations
 import contextlib
 from pathlib import Path
 
+from codeagent.core.env import product_home
 from seed.core.config_plane import project_root as _kernel_project_root
+
+
+def codeagent_home() -> Path:
+    """Product data root (``~/.codeagent``). Same as ``project_root()`` after bootstrap."""
+    return product_home()
 from seed.core.paths import (
     agent_archive_dir,
     agent_daily_dir,
@@ -106,6 +112,7 @@ def ensure_agent_scaffold(agent_id: str, base: Path | None = None) -> Path:
 
 
 __all__ = [
+    "codeagent_home",
     "agent_archive_dir",
     "agent_daily_dir",
     "agent_home",

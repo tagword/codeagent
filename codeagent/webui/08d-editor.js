@@ -52,6 +52,13 @@
   }
   window.webuiRefreshFileTreeIfVisible = refreshFileTreeIfVisible;
 
+  function _onProjectChanged() {
+    // 仅当用户已在「文件」侧栏时刷新树；不因切换项目自动离开会话视图
+    refreshFileTreeIfVisible();
+  }
+
+  window.addEventListener('project-changed', _onProjectChanged);
+
   function _init() {
     // 监听模式切换 - 当切换到 files 模式时渲染文件树（由 switchActivityMode 触发）
     // 文件树由 switchActivityMode('files') 内部自动触发刷新

@@ -12,6 +12,7 @@ when rendering tools to the LLM, but we also allow hard removal per-agent here.
 from __future__ import annotations
 
 import json
+import logging
 import os
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -19,6 +20,8 @@ from dataclasses import dataclass
 from seed_tools import ToolExecutor, ToolRegistry, setup_builtin_tools
 
 from codeagent.core.paths import agent_home
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -80,7 +83,7 @@ def _match_prefix(name: str, prefixes: Iterable[str]) -> bool:
 
 # Default innate policy: keep things that are mostly read-only / low risk.
 # Users can override via agents/<id>/tools.json if desired.
-_INNATE_DENY_PREFIXES: tuple[str, ...] = ()
+_INNATE_DENY_PREFIXES: tuple[str, ...] = ("mcp__",)
 _INNATE_DENY_NAMES: set[str] = {
     # write/exec/high-risk by default
     "file_write",
@@ -90,6 +93,10 @@ _INNATE_DENY_NAMES: set[str] = {
     "notebook_edit_tool",
     "seed_cron_apply",
     "codeagent_cron_apply",  # legacy alias
+    "test_run",
+    "mcp_call",
+    "apply_patch",
+    "symbol_index_refresh",
 }
 
 
@@ -128,15 +135,24 @@ def get_tools_for_agent(agent_id: str) -> tuple[ToolRegistry, ToolExecutor]:
       CODEAGENT_AGENT_TOOLS_NO_CACHE=1  -> disable cache (debug)
       CODEAGENT_AGENT_TOOLS_MODE=all    -> do not filter (everything allowed)
     """
+    from codeagent.core import env as ca_env
+
     aid = (agent_id or "").strip() or "default"
-    if os.environ.get("CODEAGENT_AGENT_TOOLS_NO_CACHE", "").lower() not in ("1", "true", "yes"):
+    if not ca_env.env_truthy(ca_env.AGENT_TOOLS_NO_CACHE, default="0"):
         hit = _CACHE.get(aid)
         if hit is not None:
             return hit
 
     reg, ex = setup_builtin_tools()
+    try:
+        from seed.integrations.mcp_registry import register_mcp_tools_into_registry
+
+        register_mcp_tools_into_registry(reg)
+    except Exception:
+        logger.exception("dynamic MCP tool registration failed")
+
     all_names = {t.name for t in reg.list_all()}
-    mode = os.environ.get("CODEAGENT_AGENT_TOOLS_MODE", "").strip().lower()
+    mode = ca_env.pick_default("", ca_env.AGENT_TOOLS_MODE).strip().lower()
     if mode == "all":
         out = (reg, ex)
         _CACHE[aid] = out

@@ -37,7 +37,7 @@
                   if (x.id === pid) x.path = p.trim();
                 });
               }
-              document.dispatchEvent(new CustomEvent('project-changed', {detail: {projectId: pid}}));
+              window.dispatchEvent(new CustomEvent('project-changed', {detail: {projectId: pid}}));
               _refreshAll();
             }).catch(function() { alert('设置失败'); });
           });

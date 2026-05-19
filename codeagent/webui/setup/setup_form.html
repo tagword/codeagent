@@ -112,6 +112,11 @@
       <p class="subtitle">
         首次使用需要配置一个 LLM 模型预设。所有数据保存在本地，不会上传到第三方。
       </p>
+      <p class="hint" style="margin-top:0.75rem;padding:0.65rem 0.75rem;border-radius:8px;background:rgba(234,179,8,0.12);border:1px solid rgba(234,179,8,0.35);">
+        <strong>执行环境：</strong>默认 <code>SEED_EXEC_BACKEND=auto</code>（有 Docker 则在容器内跑 shell；
+        否则在<strong>本机</strong>执行）。生产环境建议安装 Docker 并设置
+        <code>SEED_EXEC_BACKEND=docker</code>，详见项目根目录 <code>ROADMAP.md</code> Phase 2。
+      </p>
     </div>
   </div>
 
