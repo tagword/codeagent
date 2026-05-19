@@ -15,9 +15,15 @@ function updateTokenUsage(curOrUsage, compactMinBytes) {
   var curTokens = 0;
   var maxTokens = _tokenContextMax;
   if (typeof curOrUsage === 'object' && curOrUsage !== null) {
-    curTokens = curOrUsage.total_tokens || 0;
+    if (curOrUsage.prompt_tokens != null && Number(curOrUsage.prompt_tokens) > 0) {
+      curTokens = Number(curOrUsage.prompt_tokens);
+    } else if (curOrUsage.body_bytes != null && curOrUsage.body_bytes !== '') {
+      curTokens = Math.round(Number(curOrUsage.body_bytes) / 4);
+    } else {
+      curTokens = curOrUsage.total_tokens || 0;
+    }
     if (curOrUsage.context_limit) maxTokens = curOrUsage.context_limit;
-    if (curOrUsage.compact_min_bytes) maxTokens = Math.round(curOrUsage.compact_min_bytes / 4);
+    else if (curOrUsage.compact_min_bytes) maxTokens = Math.round(curOrUsage.compact_min_bytes / 4);
   } else {
     curTokens = Math.round((curOrUsage || 0) / 4);
     if (compactMinBytes > 0) maxTokens = Math.round(compactMinBytes / 4);
@@ -39,18 +45,16 @@ function updateTokenUsage(curOrUsage, compactMinBytes) {
 function updateSidebarCost(accUsage) {
   var el = document.getElementById('sidebarCost');
   if (!el) return;
+  var body = el.querySelector('.sidebar-cost__body');
   if (!accUsage || !accUsage.per_model) { el.style.display = 'none'; return; }
   el.style.display = '';
-  // 计算总费用（遍历 per_model）
-  var totalCost = 0;
+  var totalCost = typeof accUsage.total_cost === 'number' ? accUsage.total_cost : 0;
   var lines = [];
   for (var model in accUsage.per_model) {
     var md = accUsage.per_model[model];
     var tok = md.total_tokens || 0;
-    var cost = 0;
-    // 从 per_model 的 cached / accumulated_cost 计算
-    if (md.accumulated_cost) cost = md.accumulated_cost;
-    totalCost += cost;
+    var cost = typeof md.cost === 'number' ? md.cost : 0;
+    if (typeof accUsage.total_cost !== 'number') totalCost += cost;
     var modelLabel = model.replace(/^deepseek-/, 'DS ');
     var tokStr = tok >= 1000 ? (tok / 1000).toFixed(1) + 'k' : String(tok);
     var costStr = cost < 0.01 ? '\u00A5' + cost.toFixed(4) : (cost < 1 ? '\u00A5' + cost.toFixed(3) : '\u00A5' + cost.toFixed(2));
@@ -68,7 +72,8 @@ function updateSidebarCost(accUsage) {
     html += '<div class="cost__row cost__row--total"><span class="cost__model">\u5408\u8BA1</span><span class="cost__tokens"></span><span class="cost__amount">' + totalStr + '</span></div>';
   }
   html += '</div>';
-  el.innerHTML = html;
+  if (body) body.innerHTML = html;
+  else el.innerHTML = '<div class="sidebar-cost__title">\u8FD0\u884C\u8D39\u7528</div>' + html;
 }
 
 /** 从 DOM 中所有气泡内容重新估算 token 用量（WS/API 不可用时的 fallback）
@@ -131,22 +136,30 @@ function connectWs() {
       if (j.type === 'context_compact') {
         if (j.session_id === sessionId) {
           systemMsg('info', '上下文已压缩（compact）：丢弃 ' + (j.dropped_messages || 0) + ' 条历史消息，保留最近 ' + (j.kept_user_rounds || 0) + ' 轮。');
-          // compact 后用量会骤降，重新从 DOM 估算
-          recalcTokenUsageFromDom();
+          if (typeof j.body_bytes_after === 'number') {
+            updateTokenUsage({
+              body_bytes: j.body_bytes_after,
+              compact_min_bytes: j.compact_min_bytes,
+            });
+          }
         }
         return;
       }
       if (j.type === 'context_usage') {
-        if (j.session_id === sessionId) {
-          // 更新输入区的 token 用量指示器
-          if (j.token_usage) {
+        if (!j.session_id || j.session_id === sessionId) {
+          // 更新输入区的上下文占用（body_bytes 随工具轮次累加）
+          if (j.body_bytes != null) {
+            updateTokenUsage({
+              body_bytes: j.body_bytes,
+              compact_min_bytes: j.compact_min_bytes,
+            });
+          } else if (j.token_usage) {
             updateTokenUsage(j.token_usage, j.compact_min_bytes);
           } else {
             const cur = Number(j.body_bytes || 0);
             const minb = Number(j.compact_min_bytes || 0);
             updateTokenUsage(cur, minb);
           }
-          // 更新侧边栏费用汇总
           if (j.accumulated_usage && typeof updateSidebarCost === 'function') {
             updateSidebarCost(j.accumulated_usage);
           }
@@ -186,7 +199,6 @@ function connectWs() {
         markWsTextDone(sessionId);
         markLiveProgressSeen(sessionId);
         if (webuiSessionsEnabled) refreshSessionList().catch(function() {});
-        if (typeof recalcTokenUsageFromDom === 'function') recalcTokenUsageFromDom();
         return;
       }
       if (j.type !== 'reply') return;

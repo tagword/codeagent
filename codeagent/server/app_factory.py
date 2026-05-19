@@ -13,47 +13,14 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-# ── Monkey-patch seed's _stream_llm_round to accumulate usage across multi-round tool calls ──
-# 放在模块级别而非 .venv 内 seed 包，确保 seed 重装不会丢失此功能
-import contextvars as _contextvars
-import seed.core.agent_runtime as _seed_ar
-
-_usage_ctx = _contextvars.ContextVar[str]('_usage_ctx', default=None)
-"""Context variable keyed by a unique token, holding a dict: {usage_summary: {}}."""
-
-_usage_registry: dict[str, dict] = {}
-"""Registry of per-call usage accumulators, keyed by unique token."""
-
-_orig_stream_llm_round = _seed_ar._stream_llm_round
-
-
-def _patched_stream_llm_round(llm, messages, tool_schema, on_text_delta, on_reasoning_delta):
-    """Wrapper that accumulates usage metadata from each LLM round."""
-    content, tool_calls, meta = _orig_stream_llm_round(
-        llm, messages, tool_schema, on_text_delta, on_reasoning_delta
-    )
-    token = _usage_ctx.get()
-    if token and token in _usage_registry:
-        round_usage = meta.get("usage", {}) if isinstance(meta, dict) else {}
-        if round_usage:
-            us = _usage_registry[token].setdefault("usage_summary", {})
-            for _k in ("prompt_tokens", "completion_tokens", "total_tokens",
-                       "prompt_cache_hit_tokens", "prompt_cache_miss_tokens"):
-                _v = round_usage.get(_k, 0)
-                if isinstance(_v, (int, float)):
-                    us[_k] = us.get(_k, 0) + int(_v)
-    return content, tool_calls, meta
-
-
-_seed_ar._stream_llm_round = _patched_stream_llm_round
-
-
 def create_app():
     import logging as logging_mod
 
+    from codeagent.core import env as ca_env
+
     if not logging_mod.getLogger().handlers:
         logging_mod.basicConfig(
-            level=os.environ.get("CODEAGENT_LOG_LEVEL", "INFO").upper(),
+            level=ca_env.pick_default("INFO", ca_env.LOG_LEVEL).upper(),
             format="%(asctime)s %(levelname)s %(name)s: %(message)s",
         )
 
@@ -67,9 +34,9 @@ def create_app():
     from starlette.websockets import WebSocket
 
     from codeagent.server.webui_api_app import build_webui_api_app
-    from seed.integrations.env_config import apply_codeagent_env_from_config
+    from codeagent.core.bootstrap import bootstrap_codeagent_runtime
 
-    apply_codeagent_env_from_config()
+    bootstrap_codeagent_runtime()
 
     try:
         from seed.core.config_plane import ensure_default_config_files
@@ -120,10 +87,16 @@ def create_app():
         from seed.core.agent_context import set_active_llm_session
         from seed.core.agent_runtime import (
             build_api_projection_messages,
-            default_system_prompt,
+            build_context_usage_snapshot,
+            estimate_context_usage,
             maybe_compact_context_messages,
             merge_llm_tail_into_full,
             run_llm_tool_loop,
+        )
+        from codeagent.runtime.prompt_enrichment import (
+            build_skills_suffix,
+            fresh_system_prompt,
+            record_chat_turn_diary,
         )
         from seed.core.llm_exec import LLMError
         from seed.core.llm_presets import llm_executor_from_resolved, resolve_preset
@@ -141,7 +114,17 @@ def create_app():
             return JSONResponse({"detail": "invalid json"}, status_code=400)
 
         session_id = str(body.get("session_id") or "web-chat").strip() or "web-chat"
-        agent_id = str(body.get("agent_id") or os.environ.get("CODEAGENT_AGENT_ID", "default")).strip() or "default"
+        from codeagent.core import env as ca_env
+        from seed.core.env_access import (
+            CHAT_AUTO_CONTINUE_MAX_SEGMENTS,
+            CHAT_AUTO_CONTINUE_ON_LIMIT,
+            CHAT_USER_ROUNDS,
+            MAX_TOOL_ROUNDS,
+            env_truthy,
+            pick_int,
+        )
+
+        agent_id = str(body.get("agent_id") or ca_env.default_agent_id()).strip() or "default"
         _run_mkey = _memkey(agent_id, session_id)
         try:
             project_id = str(body.get("project_id") or "").strip()
@@ -185,11 +168,14 @@ def create_app():
                 chat_sess = load_or_create_chat_session(session_id, agent_id, project_id or None)
                 SESSIONS[mkey] = chat_sess
 
-            fresh_sys = default_system_prompt()
+            fresh_sys = fresh_system_prompt(agent_id=agent_id)
             if not chat_sess.messages:
                 chat_sess.messages = [{"role": "system", "content": fresh_sys}]
             else:
                 chat_sess.messages[:] = merge_fresh_system(chat_sess.messages, fresh_sys)
+
+            if isinstance(chat_sess.metadata, dict) and chat_sess.metadata.get("cursor"):
+                chat_sess.metadata.pop("cursor", None)
 
             chat_sess.messages.append({"role": "user", "content": message})
             try:
@@ -199,18 +185,23 @@ def create_app():
             except Exception:
                 pass
 
-            max_hist = int(os.environ.get("CODEAGENT_CHAT_USER_ROUNDS", "12"))
-            max_rounds = int(os.environ.get("CODEAGENT_MAX_TOOL_ROUNDS", "24"))
+            max_hist = pick_int(12, *CHAT_USER_ROUNDS)
+            max_rounds = pick_int(24, *MAX_TOOL_ROUNDS)
 
             llm = llm_executor_from_resolved(resolve_preset(None))
             reg, exe = tools_for_agent(agent_id)
             set_active_llm_session(session_id)
-            from seed.core.agent_context import set_active_project_episodic
-            from seed.core.proj_reg import get_project
+            from seed.core.agent_context import (
+                clear_active_project_workspace,
+                set_active_project_episodic,
+                set_active_project_workspace,
+            )
+            from seed.core.proj_reg import get_project, resolve_project_path
             if project_id:
                 set_active_project_episodic(True, project_id)
             else:
                 set_active_project_episodic(False)
+                set_active_project_workspace(None)
 
             # backward-compat: seed 1.0.0 没有 cursor 参数
             import inspect as _inspect
@@ -225,23 +216,30 @@ def create_app():
             # ── 工作目录注入 ──
             _work_dir_suffix = ""
             if project_id:
+                _wd = resolve_project_path(agent_id, project_id)
+                if _wd:
+                    set_active_project_workspace(_wd)
+                else:
+                    set_active_project_workspace(None)
                 _proj = get_project(agent_id, project_id)
-                if _proj:
-                    _raw = str(_proj.get("path") or "").strip()
-                    if _raw:
-                        _wd = str(Path(_raw).expanduser().resolve())
-                        _work_dir_suffix = (
-                            "\n\n"
-                            "## Workspace\n\n"
-                            f"当前工作目录：`{_wd}`\n\n"
-                            "执行 shell 命令时，工作目录默认为此路径。"
-                            "除非有充分理由，否则请在此目录下操作，不要 cd 到其他目录。\n"
-                        )
+                if _proj and _wd:
+                    _work_dir_suffix = (
+                        "\n\n"
+                        "## Workspace\n\n"
+                        f"当前工作目录：`{_wd}`\n\n"
+                        "执行 shell 命令时，工作目录默认为此路径。"
+                        "除非有充分理由，否则请在此目录下操作，不要 cd 到其他目录。\n"
+                    )
 
+            _skills_suffix = build_skills_suffix(
+                agent_id,
+                user_text=message,
+                workspace_suffix=_work_dir_suffix,
+            )
             api_msgs = build_api_projection_messages(
                 chat_sess.messages,
                 max_user_rounds=max_hist,
-                skills_suffix=_work_dir_suffix or None,
+                skills_suffix=_skills_suffix,
                 **_kwargs,
             )
             compact_result = await asyncio.to_thread(maybe_compact_context_messages, api_msgs, llm)
@@ -363,10 +361,8 @@ def create_app():
 
             try:
                 # ── auto_continue 配置 ──
-                _ac_on = os.environ.get("CODEAGENT_CHAT_AUTO_CONTINUE_ON_LIMIT", "0").strip() in (
-                    "1", "true", "yes",
-                )
-                _max_seg = int(os.environ.get("CODEAGENT_CHAT_AUTO_CONTINUE_MAX_SEGMENTS", "4"))
+                _ac_on = env_truthy(*CHAT_AUTO_CONTINUE_ON_LIMIT, default="0")
+                _max_seg = pick_int(4, *CHAT_AUTO_CONTINUE_MAX_SEGMENTS)
                 _max_seg = max(1, min(_max_seg, 50))
 
                 if _ac_on:
@@ -378,12 +374,14 @@ def create_app():
                     _final_reply = ""
                     _final_meta: dict = {}
                     _acc_usage: dict = {}
-                    import uuid as _uuid
+                    from seed.core.usage_accumulator import (
+                        begin_usage_accumulation,
+                        end_usage_accumulation,
+                        reset_usage_accumulation,
+                    )
 
                     while _segment < _max_seg:
-                        _seg_token = str(_uuid.uuid4())
-                        _usage_registry[_seg_token] = {}
-                        _usage_ctx.set(_seg_token)
+                        _seg_token = begin_usage_accumulation()
                         try:
                             _seg_reply, __, _seg_used, _seg_trace, _seg_meta = await run_llm_tool_loop(
                                 llm, exe,
@@ -395,9 +393,11 @@ def create_app():
                                 on_reasoning_delta=_on_reasoning_delta,
                                 on_check_pending_messages=_drain_pending_injections,
                             )
-                        finally:
-                            _usage_ctx.set(None)
-                            _seg_usage = dict(_usage_registry.pop(_seg_token, {}).get("usage_summary", {}) or {})
+                        except Exception:
+                            reset_usage_accumulation(_seg_token)
+                            raise
+                        else:
+                            _seg_usage = end_usage_accumulation(_seg_token)
 
                         _all_trace.extend(_seg_trace or [])
                         for _t in (_seg_used or []):
@@ -436,10 +436,13 @@ def create_app():
                     if _acc_usage:
                         _loop_meta["usage_summary"] = _acc_usage
                 else:
-                    import uuid as _uuid
-                    _norm_token = str(_uuid.uuid4())
-                    _usage_registry[_norm_token] = {}
-                    _usage_ctx.set(_norm_token)
+                    from seed.core.usage_accumulator import (
+                        begin_usage_accumulation,
+                        end_usage_accumulation,
+                        reset_usage_accumulation,
+                    )
+
+                    _norm_token = begin_usage_accumulation()
                     try:
                         reply, _meta, tools_used, tool_trace, _loop_meta = await run_llm_tool_loop(
                             llm, exe,
@@ -451,9 +454,11 @@ def create_app():
                             on_reasoning_delta=_on_reasoning_delta,
                             on_check_pending_messages=_drain_pending_injections,
                         )
-                    finally:
-                        _usage_ctx.set(None)
-                        _norm_usage = dict(_usage_registry.pop(_norm_token, {}).get("usage_summary", {}) or {})
+                    except Exception:
+                        reset_usage_accumulation(_norm_token)
+                        raise
+                    else:
+                        _norm_usage = end_usage_accumulation(_norm_token)
                         if _norm_usage:
                             _loop_meta["usage_summary"] = _norm_usage
 
@@ -499,6 +504,16 @@ def create_app():
                 except Exception:
                     logger.exception("persist_chat_session failed")
                 try:
+                    record_chat_turn_diary(
+                        agent_id,
+                        user_text=message,
+                        reply=reply or "",
+                        tools_used=tools_used,
+                        project_id=project_id or None,
+                    )
+                except Exception:
+                    pass
+                try:
                     # auto-continue 注入的 nudge 消息不应参与标题生成
                     # （否则标题会变成"继续完成未完成事项"而非用户原始意图）
                     # 默认 nudge 以 "请继续完成未完成事项" 开头，
@@ -531,62 +546,42 @@ def create_app():
                     for t in tool_trace
                 ]
                 # ── Token 用量精确计算（基于 API 返回的 usage） ──
+                _acc = {}
+                _cost_info = {}
+                _total_cost_info = {}
+                _api_usage = {}
+                _ctx: dict[str, Any] = {}
+                _model_name = getattr(llm, "model", "")
                 try:
-                    from codeagent.core.pricing import calculate_cost as _calc_cost, format_cost as _fmt_cost
+                    from codeagent.core.usage_billing import merge_accumulated_usage
 
-                    # 1. 从 _loop_meta 提取 API 返回的 usage_summary（已累加多轮/多段）
                     _api_usage = dict(_loop_meta.get("usage_summary", {}) or {})
-
-                    # 2. 获取模型名
-                    _model_name = getattr(llm, 'model', '')
-
-                    # 3. 累加到 session 级别（per-model + 汇总）
+                    _model_name = getattr(llm, "model", "") or _model_name
                     _prev = chat_sess.metadata.get("accumulated_usage", {}) or {}
-                    # 汇总字段累加
-                    _acc = {}
-                    for _k in ("prompt_tokens", "completion_tokens", "total_tokens",
-                               "prompt_cache_hit_tokens", "prompt_cache_miss_tokens"):
-                        _v = _api_usage.get(_k, 0)
-                        if not isinstance(_v, (int, float)):
-                            _v = 0
-                        _acc[_k] = int(_prev.get(_k, 0) or 0) + int(_v)
-                    # per-model 字段累加
-                    _prev_per_model = _prev.get("per_model", {}) or {}
-                    _pm = dict(_prev_per_model.get(_model_name, {}))
-                    for _k in ("prompt_tokens", "completion_tokens", "total_tokens",
-                               "prompt_cache_hit_tokens", "prompt_cache_miss_tokens"):
-                        _v = _api_usage.get(_k, 0)
-                        if not isinstance(_v, (int, float)):
-                            _v = 0
-                        _pm[_k] = int(_pm.get(_k, 0) or 0) + int(_v)
-                    _prev_per_model[_model_name] = _pm
-                    _acc["per_model"] = _prev_per_model
-                    # 本轮增量 + 费用信息
-                    _cost_info = _calc_cost(_model_name, _api_usage)
-                    _acc["last_request"] = {
-                        "model": _model_name,
-                        "usage": _api_usage,
-                        "cost": _cost_info,
-                    }
+                    _acc, _cost_info, _total_cost_info = merge_accumulated_usage(
+                        _prev, _model_name, _api_usage
+                    )
                     chat_sess.metadata["accumulated_usage"] = _acc
 
-                    # 4. 计算累计费用（每个模型分别算再汇总）
-                    _total_cost_val = 0.0
-                    for _mname, _mdata in _prev_per_model.items():
-                        _mcost = _calc_cost(_mname, _mdata)
-                        _total_cost_val += _mcost.get("total_cost", 0)
-                    _total_cost_info = {
-                        "total_cost": round(_total_cost_val, 6),
-                        "currency": "CNY",
-                    }
+                    _proj_ctx = build_api_projection_messages(
+                        chat_sess.messages,
+                        max_user_rounds=max_hist,
+                        skills_suffix=_skills_suffix,
+                        **_kwargs,
+                    )
+                    _ctx = build_context_usage_snapshot(
+                        _proj_ctx,
+                        _loop_meta if isinstance(_loop_meta, dict) else None,
+                    )
 
-                    # 5. 构造 WS 事件
+                    # 5. 构造 WS 事件（body_bytes = 下次请求上下文体积，非计费 token）
                     _ws_evt = {
                         "type": "context_usage",
                         "session_id": session_id,
                         "agent_id": agent_id,
-                        "body_bytes": (_api_usage.get("total_tokens", 0) or 0) * 4,
-                        "compact_min_bytes": (_api_usage.get("total_tokens", 0) or 0) * 4,
+                        "body_bytes": _ctx.get("body_bytes", 0),
+                        "compact_min_bytes": _ctx.get("compact_min_bytes", 0),
+                        "message_count": _ctx.get("message_count", 0),
                         "token_usage": _api_usage,
                         "accumulated_usage": _acc,
                         "cost": _cost_info,
@@ -599,6 +594,16 @@ def create_app():
                 except Exception:
                     _api_usage = {}
                     _cost_info = {}
+                if not _ctx:
+                    with contextlib.suppress(Exception):
+                        _ctx = estimate_context_usage(
+                            build_api_projection_messages(
+                                chat_sess.messages,
+                                max_user_rounds=max_hist,
+                                skills_suffix=_skills_suffix,
+                                **_kwargs,
+                            )
+                        )
                 return JSONResponse(
                     {
                         "reply": reply,
@@ -606,6 +611,7 @@ def create_app():
                         "tools_used": tools_used,
                         "tool_trace": trace_out,
                         "token_usage": _api_usage,
+                        "context": _ctx,
                         "cost": _cost_info,
                         "accumulated_cost": _total_cost_info,
                         "accumulated_usage": _acc,
@@ -619,13 +625,22 @@ def create_app():
             finally:
                 set_active_llm_session(None)
                 set_active_project_episodic(False)
+                clear_active_project_workspace()
                 if emitter_token:
                     with contextlib.suppress(Exception):
                         reset_chat_event_emitter(emitter_token)
 
+        except asyncio.CancelledError:
+            _ev = ACTIVE_CHAT_CANCELS.get(_run_mkey)
+            if _ev is not None:
+                _ev.set()
+            raise
         finally:
             _running_sessions.discard(_run_mkey)
             PENDING_INJECTIONS.pop(_run_mkey, None)
+            _ev = ACTIVE_CHAT_CANCELS.get(_run_mkey)
+            if _ev is not None:
+                _ev.set()
             ACTIVE_CHAT_CANCELS.pop(_run_mkey, None)
             if _cancel_token is not None:
                 with contextlib.suppress(Exception):
@@ -666,7 +681,17 @@ def create_app():
             return JSONResponse({"detail": "invalid json"}, status_code=400)
 
         session_id = str(body.get("session_id") or "web-chat").strip() or "web-chat"
-        agent_id = str(body.get("agent_id") or os.environ.get("CODEAGENT_AGENT_ID", "default")).strip() or "default"
+        from codeagent.core import env as ca_env
+        from seed.core.env_access import (
+            CHAT_AUTO_CONTINUE_MAX_SEGMENTS,
+            CHAT_AUTO_CONTINUE_ON_LIMIT,
+            CHAT_USER_ROUNDS,
+            MAX_TOOL_ROUNDS,
+            env_truthy,
+            pick_int,
+        )
+
+        agent_id = str(body.get("agent_id") or ca_env.default_agent_id()).strip() or "default"
         # 0 = system message, so minimal sensible value is 1
         message_idx = int(body.get("message_idx", 1))
 
@@ -775,6 +800,14 @@ def create_app():
         except Exception as exc:
             logger.warning("cron scheduler startup failed: %s", exc)
         yield
+        try:
+            from seed.core._session_cache import cancel_all_active_chats
+
+            n = cancel_all_active_chats()
+            if n:
+                logger.info("shutdown: signalled %s active chat(s) to stop", n)
+        except Exception:
+            pass
         try:
             from seed.integrations.cron_sched import shutdown_cron_scheduler
 

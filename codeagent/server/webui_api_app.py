@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import os
@@ -22,6 +23,12 @@ from starlette.responses import JSONResponse
 from starlette.routing import Route
 
 logger = logging.getLogger(__name__)
+
+
+def _default_agent_id() -> str:
+    from codeagent.core import env as ca_env
+
+    return ca_env.default_agent_id()
 
 
 def _json_default_transcript(o: Any) -> Any:
@@ -45,16 +52,19 @@ def _transcript_payload_json_safe(payload: dict[str, Any]) -> dict[str, Any]:
 # 左侧栏「未分类」虚拟项目 ID
 _UNASSIGNED_PROJECT_ID = "__unassigned__"
 
-_ENV_CHAT_KEYS = (
-    "CODEAGENT_CHAT_AUTO_CONTINUE_ON_LIMIT",
-    "CODEAGENT_CHAT_AUTO_CONTINUE_MAX_SEGMENTS",
-    "CODEAGENT_CHAT_MAX_TOOL_ROUNDS_DEFAULT",
-    "CODEAGENT_CONTEXT_COMPACT",
-    "CODEAGENT_CONTEXT_COMPACT_MIN_BYTES",
-    "CODEAGENT_CONTEXT_COMPACT_MIN_ROUNDS",
-    "CODEAGENT_CONTEXT_COMPACT_SUMMARIZER_BASEURL",
-    "CODEAGENT_CONTEXT_COMPACT_SUMMARIZER_MODEL",
-)
+def _env_chat_specs() -> list[tuple[tuple[str, ...], str]]:
+    from codeagent.core import env as ca_env
+
+    return [
+        ((ca_env.CHAT_AUTO_CONTINUE_ON_LIMIT,), "0"),
+        ((ca_env.CHAT_AUTO_CONTINUE_MAX_SEGMENTS,), "4"),
+        ((ca_env.CHAT_MAX_TOOL_ROUNDS_DEFAULT,), "16"),
+        ((ca_env.CONTEXT_COMPACT,), ""),
+        ((ca_env.CONTEXT_COMPACT_MIN_BYTES,), "90000"),
+        ((ca_env.CONTEXT_COMPACT_MIN_ROUNDS,), "0"),
+        ((ca_env.CONTEXT_COMPACT_SUMMARIZER_BASEURL,), ""),
+        ((ca_env.CONTEXT_COMPACT_SUMMARIZER_MODEL,), ""),
+    ]
 
 
 def _allowlist_path(root: Path) -> Path:
@@ -99,6 +109,16 @@ def _write_env_file_merge(path: Path, updates: dict[str, str]) -> None:
     path.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
 
 
+def _resolve_env_value(keys: tuple[str, ...], file_vals: dict[str, str], default: str) -> str:
+    for k in keys:
+        if k in os.environ:
+            return os.environ[k]
+    for k in keys:
+        if k in file_vals:
+            return file_vals[k]
+    return default
+
+
 def _env_chat_view(root: Path) -> dict[str, str]:
     from seed.integrations.env_config import ENV_FILENAME, LEGACY_ENV_FILENAME
 
@@ -107,23 +127,10 @@ def _env_chat_view(root: Path) -> dict[str, str]:
     file_vals = dict(_parse_env_file(p_leg))
     file_vals.update(_parse_env_file(p_seed))
     out: dict[str, str] = {}
-    for k in _ENV_CHAT_KEYS:
-        if k in os.environ:
-            out[k] = os.environ[k]
-        elif k in file_vals:
-            out[k] = file_vals[k]
-    defaults = {
-        "CODEAGENT_CHAT_AUTO_CONTINUE_ON_LIMIT": "0",
-        "CODEAGENT_CHAT_AUTO_CONTINUE_MAX_SEGMENTS": "4",
-        "CODEAGENT_CHAT_MAX_TOOL_ROUNDS_DEFAULT": "16",
-        "CODEAGENT_CONTEXT_COMPACT": "",
-        "CODEAGENT_CONTEXT_COMPACT_MIN_BYTES": "90000",
-        "CODEAGENT_CONTEXT_COMPACT_MIN_ROUNDS": "0",
-        "CODEAGENT_CONTEXT_COMPACT_SUMMARIZER_BASEURL": "",
-        "CODEAGENT_CONTEXT_COMPACT_SUMMARIZER_MODEL": "",
-    }
-    for k, dv in defaults.items():
-        out.setdefault(k, dv)
+    for keys, default in _env_chat_specs():
+        val = _resolve_env_value(keys, file_vals, default)
+        for k in keys:
+            out[k] = val
     return out
 
 
@@ -147,15 +154,15 @@ def _resolve_project_id(pid: str) -> str:
 
 
 def _project_fs_dir(agent_id: str, project_id: str) -> Path | None:
-    from seed.core.proj_reg import get_project
+    from seed.core.proj_reg import resolve_project_path
 
-    pr = get_project(agent_id, project_id)
-    if not pr:
+    pid = _resolve_project_id(project_id)
+    if not pid:
         return None
-    raw = str(pr.get("path") or "").strip()
+    raw = resolve_project_path(agent_id, pid)
     if not raw:
         return None
-    p = Path(os.path.expanduser(raw))
+    p = Path(raw)
     return p if p.is_dir() else None
 
 
@@ -272,11 +279,15 @@ def _transcript_json_for_session(
     )
 
     try:
-        max_chars = int(os.environ.get("CODEAGENT_WEBUI_TRANSCRIPT_MAX_CHARS", "12000"))
+        from codeagent.core import env as ca_env
+
+        max_chars = ca_env.pick_int(12000, ca_env.WEBUI_TRANSCRIPT_MAX_CHARS)
     except ValueError:
         max_chars = 12000
     try:
-        max_blocks = int(os.environ.get("CODEAGENT_WEBUI_TRANSCRIPT_USER_BLOCKS", "10"))
+        from codeagent.core import env as ca_env
+
+        max_blocks = ca_env.pick_int(10, ca_env.WEBUI_TRANSCRIPT_USER_BLOCKS)
     except ValueError:
         max_blocks = 10
     max_blocks = max(1, min(max_blocks, 200))
@@ -312,7 +323,9 @@ def _transcript_json_for_session(
         messages.extend(b)
 
     try:
-        max_msg = int(os.environ.get("CODEAGENT_WEBUI_TRANSCRIPT_MAX_MESSAGES", "300"))
+        from codeagent.core import env as ca_env
+
+        max_msg = ca_env.pick_int(300, ca_env.WEBUI_TRANSCRIPT_MAX_MESSAGES)
     except ValueError:
         max_msg = 300
     max_msg = max(10, min(max_msg, 5000))
@@ -357,6 +370,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
     from seed.core.proj_reg import (
         create_project,
         delete_project,
+        get_project,
         list_project_plan_files,
         list_projects,
         rename_project,
@@ -447,13 +461,81 @@ def build_webui_api_app(project_root: Path) -> Starlette:
             return JSONResponse({"detail": str(e)}, status_code=400)
         return JSONResponse({"ok": True})
 
+    async def api_mcp_get(_: Request) -> JSONResponse:
+        from seed.integrations.mcp_client import get_mcp_manager, mcp_globally_enabled
+        from seed.integrations.mcp_config import load_mcp_config, mcp_config_path
+
+        try:
+            status = get_mcp_manager().list_servers_status()
+        except Exception as e:
+            logger.exception("api_mcp_get status")
+            status = []
+            err = str(e)
+        else:
+            err = None
+        return JSONResponse(
+            {
+                "enabled": mcp_globally_enabled(),
+                "path": str(mcp_config_path(project_root)),
+                "config": load_mcp_config(project_root),
+                "servers_status": status,
+                "error": err,
+            }
+        )
+
+    async def api_hooks_get(_: Request) -> JSONResponse:
+        from seed.integrations.hooks import hooks_globally_enabled
+        from seed.integrations.hooks_config import hooks_config_path, load_hooks_config
+
+        return JSONResponse(
+            {
+                "enabled": hooks_globally_enabled(),
+                "path": str(hooks_config_path(project_root)),
+                "config": load_hooks_config(project_root),
+            }
+        )
+
+    async def api_hooks_post(request: Request) -> JSONResponse:
+        from seed.integrations.hooks_config import save_hooks_config
+
+        try:
+            body = await request.json()
+        except Exception:
+            return JSONResponse({"detail": "invalid json"}, status_code=400)
+        try:
+            path = save_hooks_config(body, base=project_root)
+        except ValueError as e:
+            return JSONResponse({"detail": str(e)}, status_code=400)
+        return JSONResponse({"ok": True, "path": str(path)})
+
+    async def api_mcp_post(request: Request) -> JSONResponse:
+        from seed.integrations.mcp_client import reset_mcp_manager
+        from seed.integrations.mcp_config import save_mcp_config
+
+        try:
+            body = await request.json()
+        except Exception:
+            return JSONResponse({"detail": "invalid json"}, status_code=400)
+        servers = body.get("servers")
+        if servers is None and isinstance(body.get("config"), dict):
+            servers = body["config"].get("servers")
+        if not isinstance(servers, dict):
+            return JSONResponse({"detail": "servers object required"}, status_code=400)
+        try:
+            path = save_mcp_config({"servers": servers}, base=project_root)
+            reset_mcp_manager()
+            from codeagent.tools.agent_tools import reset_agent_tools_cache
+
+            reset_agent_tools_cache()
+        except ValueError as e:
+            return JSONResponse({"detail": str(e)}, status_code=400)
+        return JSONResponse({"ok": True, "path": str(path)})
+
     async def api_md_get(request: Request) -> JSONResponse:
         name = (request.path_params.get("name") or "").strip()
         if name not in CONFIG_FILENAMES:
             return JSONResponse({"detail": "unknown file"}, status_code=404)
-        aid = (request.query_params.get("agent_id") or "").strip() or os.environ.get(
-            "CODEAGENT_AGENT_ID", "default"
-        ).strip() or "default"
+        aid = (request.query_params.get("agent_id") or "").strip() or _default_agent_id()
         ensure_default_config_files(project_root_fn())
         try:
             from codeagent.core.paths import agent_persona_dir, ensure_agent_scaffold
@@ -474,9 +556,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         name = (request.path_params.get("name") or "").strip()
         if name not in CONFIG_FILENAMES:
             return JSONResponse({"detail": "unknown file"}, status_code=404)
-        aid = (request.query_params.get("agent_id") or "").strip() or os.environ.get(
-            "CODEAGENT_AGENT_ID", "default"
-        ).strip() or "default"
+        aid = (request.query_params.get("agent_id") or "").strip() or _default_agent_id()
         mime = (request.headers.get("content-type") or "").split(";")[0].strip().lower()
         if mime == "application/json":
             try:
@@ -544,9 +624,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         tmp.replace(state_path)
 
     async def api_skills_get(request: Request) -> JSONResponse:
-        aid = (request.query_params.get("agent_id") or "").strip() or os.environ.get(
-            "CODEAGENT_AGENT_ID", "default"
-        ).strip() or "default"
+        aid = (request.query_params.get("agent_id") or "").strip() or _default_agent_id()
         try:
             from codeagent.core.paths import agent_skills_dir, ensure_agent_scaffold
 
@@ -598,9 +676,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
             body = await request.json()
         except Exception:
             return JSONResponse({"detail": "invalid json"}, status_code=400)
-        aid = (request.query_params.get("agent_id") or "").strip() or os.environ.get(
-            "CODEAGENT_AGENT_ID", "default"
-        ).strip() or "default"
+        aid = (request.query_params.get("agent_id") or "").strip() or _default_agent_id()
         action = body.get("action", "save")
         name = (body.get("name") or "").strip()
         if not name or "/" in name or "\\" in name:
@@ -641,7 +717,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         try:
             from codeagent.core.paths import agent_persona_dir, agent_skills_dir
 
-            aid = os.environ.get("CODEAGENT_AGENT_ID", "default")
+            aid = _default_agent_id()
             skills_path = str(agent_skills_dir(aid, base=project_root).resolve())
             persona_path = str(agent_persona_dir(aid, base=project_root).resolve())
         except Exception:
@@ -656,9 +732,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         )
 
     async def api_projects_list(request: Request) -> JSONResponse:
-        aid = (request.query_params.get("agent_id") or "").strip() or os.environ.get(
-            "CODEAGENT_AGENT_ID", "default"
-        ).strip() or "default"
+        aid = (request.query_params.get("agent_id") or "").strip() or _default_agent_id()
         try:
             from codeagent.core.paths import ensure_agent_scaffold
 
@@ -687,9 +761,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
             body = await request.json()
         except Exception:
             return JSONResponse({"detail": "invalid json"}, status_code=400)
-        aid = str(body.get("agent_id") or "").strip() or os.environ.get(
-            "CODEAGENT_AGENT_ID", "default"
-        ).strip() or "default"
+        aid = str(body.get("agent_id") or "").strip() or _default_agent_id()
         name = str(body.get("name") or "").strip()
         if not name:
             return JSONResponse({"detail": "name required"}, status_code=400)
@@ -739,6 +811,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
             if proj_path:
                 Path(proj_path).mkdir(parents=True, exist_ok=True)
             row = create_project(aid, name, path=proj_path)
+            proj_path = str(row.get("path") or proj_path or "").strip()
             project_dir = Path(proj_path) if proj_path else None
 
             if source == "template" and template and project_dir and project_dir.is_dir():
@@ -751,63 +824,67 @@ def build_webui_api_app(project_root: Path) -> Starlette:
                 except Exception as e:
                     messages.append(f"⚠️ 模板创建失败: {e}")
 
-            git_dir = project_dir or Path.cwd()
-            git_init = await asyncio.to_thread(
-                subprocess.run,
-                ["git", "init"],
-                capture_output=True,
-                text=True,
-                timeout=10,
-                cwd=str(git_dir),
-            )
-            if git_init.returncode == 0:
-                messages.append("📦 项目目录已初始化")
-                name_check = await asyncio.to_thread(
+            if project_dir:
+                git_dir = project_dir
+                git_init = await asyncio.to_thread(
                     subprocess.run,
-                    ["git", "config", "user.name"],
-                    capture_output=True,
-                    text=True,
-                    timeout=5,
-                    cwd=str(git_dir),
-                )
-                if name_check.returncode != 0 or not name_check.stdout.strip():
-                    await asyncio.to_thread(
-                        subprocess.run,
-                        ["git", "config", "user.name", "CodeAgent User"],
-                        capture_output=True,
-                        timeout=5,
-                        cwd=str(git_dir),
-                    )
-                    await asyncio.to_thread(
-                        subprocess.run,
-                        ["git", "config", "user.email", "agent@codeagent.dev"],
-                        capture_output=True,
-                        timeout=5,
-                        cwd=str(git_dir),
-                    )
-                add_out = await asyncio.to_thread(
-                    subprocess.run,
-                    ["git", "add", "-A"],
+                    ["git", "init"],
                     capture_output=True,
                     text=True,
                     timeout=10,
                     cwd=str(git_dir),
                 )
-                if add_out.returncode == 0:
-                    commit_out = await asyncio.to_thread(
+                if git_init.returncode == 0:
+                    messages.append("📦 项目目录已初始化")
+                    name_check = await asyncio.to_thread(
                         subprocess.run,
-                        ["git", "commit", "-m", "feat: initial commit"],
+                        ["git", "config", "user.name"],
+                        capture_output=True,
+                        text=True,
+                        timeout=5,
+                        cwd=str(git_dir),
+                    )
+                    if name_check.returncode != 0 or not name_check.stdout.strip():
+                        await asyncio.to_thread(
+                            subprocess.run,
+                            ["git", "config", "user.name", "CodeAgent User"],
+                            capture_output=True,
+                            timeout=5,
+                            cwd=str(git_dir),
+                        )
+                        await asyncio.to_thread(
+                            subprocess.run,
+                            ["git", "config", "user.email", "agent@codeagent.dev"],
+                            capture_output=True,
+                            timeout=5,
+                            cwd=str(git_dir),
+                        )
+                    add_out = await asyncio.to_thread(
+                        subprocess.run,
+                        ["git", "add", "-A"],
                         capture_output=True,
                         text=True,
                         timeout=10,
                         cwd=str(git_dir),
                     )
-                    if commit_out.returncode == 0 and "nothing to commit" not in (
-                        commit_out.stdout or ""
-                    ).lower():
-                        messages.append("✅ 初始化完成")
+                    if add_out.returncode == 0:
+                        commit_out = await asyncio.to_thread(
+                            subprocess.run,
+                            ["git", "commit", "-m", "feat: initial commit"],
+                            capture_output=True,
+                            text=True,
+                            timeout=10,
+                            cwd=str(git_dir),
+                        )
+                        if commit_out.returncode == 0 and "nothing to commit" not in (
+                            commit_out.stdout or ""
+                        ).lower():
+                            messages.append("✅ 初始化完成")
+            elif source in ("scratch", "template"):
+                messages.append("ℹ️ 未设置工作目录；可在项目菜单中绑定后再使用 Git / 文件树")
 
-            if remote and isinstance(remote, dict):
+            if project_dir and remote and isinstance(remote, dict):
+                git_dir = project_dir
                 provider = remote.get("provider", "github")
                 owner = remote.get("owner", "")
                 repo = remote.get("repo", "")
@@ -915,15 +992,23 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         if pid == _UNASSIGNED_PROJECT_ID:
             return JSONResponse({"detail": "virtual project has no path"}, status_code=400)
         path = str(body.get("path") or "").strip()
-        if not update_project_path(aid, pid, path):
+        if not path:
+            return JSONResponse({"detail": "path required"}, status_code=400)
+        resolved = str(Path(os.path.expanduser(path)).resolve())
+        p = Path(resolved)
+        if not p.is_dir():
+            with contextlib.suppress(OSError):
+                p.mkdir(parents=True, exist_ok=True)
+        if not p.is_dir():
+            return JSONResponse({"detail": "path is not a directory"}, status_code=400)
+        if not update_project_path(aid, pid, resolved):
             return JSONResponse({"detail": "update failed"}, status_code=400)
-        return JSONResponse({"ok": True})
+        row = get_project(aid, pid)
+        return JSONResponse({"ok": True, "project": row})
 
     async def api_projects_plans(request: Request) -> JSONResponse:
         pid = (request.query_params.get("project_id") or "").strip()
-        aid = (request.query_params.get("agent_id") or "").strip() or os.environ.get(
-            "CODEAGENT_AGENT_ID", "default"
-        ).strip() or "default"
+        aid = (request.query_params.get("agent_id") or "").strip() or _default_agent_id()
         if not pid or pid == _UNASSIGNED_PROJECT_ID:
             return JSONResponse({"plans": []})
         try:
@@ -956,9 +1041,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
 
     async def api_projects_todos_list(request: Request) -> JSONResponse:
         pid = (request.query_params.get("project_id") or "").strip()
-        aid = (request.query_params.get("agent_id") or "").strip() or os.environ.get(
-            "CODEAGENT_AGENT_ID", "default"
-        ).strip() or "default"
+        aid = (request.query_params.get("agent_id") or "").strip() or _default_agent_id()
         sid = (request.query_params.get("session_id") or "").strip()
         if not pid or pid == _UNASSIGNED_PROJECT_ID:
             return JSONResponse({"todos": []})
@@ -982,17 +1065,13 @@ def build_webui_api_app(project_root: Path) -> Starlette:
     async def api_projects_todos_delete(request: Request) -> JSONResponse:
         todo_id = (request.path_params.get("todo_id") or "").strip()
         pid = (request.query_params.get("project_id") or "").strip()
-        aid = (request.query_params.get("agent_id") or "").strip() or os.environ.get(
-            "CODEAGENT_AGENT_ID", "default"
-        ).strip() or "default"
+        aid = (request.query_params.get("agent_id") or "").strip() or _default_agent_id()
         if not delete_todo(aid, pid, todo_id):
             return JSONResponse({"detail": "not found"}, status_code=404)
         return JSONResponse({"ok": True})
 
     async def api_sessions(request: Request) -> JSONResponse:
-        aid = (request.query_params.get("agent_id") or "").strip() or os.environ.get(
-            "CODEAGENT_AGENT_ID", "default"
-        ).strip() or "default"
+        aid = (request.query_params.get("agent_id") or "").strip() or _default_agent_id()
         try:
             lim = int(request.query_params.get("limit") or "80")
         except ValueError:
@@ -1016,9 +1095,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
 
     async def api_sessions_running(request: Request) -> JSONResponse:
         """返回当前正在执行中的会话 ID 列表（用于页面刷新后恢复心跳指示）。"""
-        aid = (request.query_params.get("agent_id") or "").strip() or os.environ.get(
-            "CODEAGENT_AGENT_ID", "default"
-        ).strip() or "default"
+        aid = (request.query_params.get("agent_id") or "").strip() or _default_agent_id()
         # _running_sessions 中存的是 mkey（agent_id::session_id）, 按 agent_id 过滤
         prefix = f"{aid}::"
         running = [
@@ -1031,9 +1108,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
     async def api_session_transcript(request: Request) -> JSONResponse:
         try:
             sid = (request.query_params.get("session_id") or "").strip()
-            aid = (request.query_params.get("agent_id") or "").strip() or os.environ.get(
-                "CODEAGENT_AGENT_ID", "default"
-            ).strip() or "default"
+            aid = (request.query_params.get("agent_id") or "").strip() or _default_agent_id()
             pid = _resolve_project_id((request.query_params.get("project_id") or "").strip())
             bb = request.query_params.get("before_block_index")
             before_i: int | None = None
@@ -1111,12 +1186,23 @@ def build_webui_api_app(project_root: Path) -> Starlette:
             body = await request.json()
         except Exception:
             return JSONResponse({"detail": "invalid json"}, status_code=400)
-        updates = {k: str(body.get(k)) for k in _ENV_CHAT_KEYS if k in body}
+        updates: dict[str, str] = {}
+        for keys, _default in _env_chat_specs():
+            canonical = keys[0]
+            for k in keys:
+                if k in body:
+                    updates[canonical] = str(body[k])
+                    break
         if not updates:
             return JSONResponse({"detail": "no known keys"}, status_code=400)
         p = project_root / "config" / ENV_FILENAME
         _write_env_file_merge(p, updates)
-        return JSONResponse({"ok": True, "hint": "已写入 config/seed.env；重启进程后完全生效。"})
+        for k, v in updates.items():
+            os.environ[k] = v
+        from codeagent.core.seed_bridge import bridge_codeagent_env_to_seed
+
+        bridge_codeagent_env_to_seed()
+        return JSONResponse({"ok": True, "hint": "已写入 config/seed.env；内核项已同步 SEED_*。"})
 
     async def api_llm_presets_get(_: Request) -> JSONResponse:
         return JSONResponse({"presets": load_presets(), "default_id": get_default_preset_id()})
@@ -1330,7 +1416,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
             return JSONResponse({"detail": "invalid json"}, status_code=400)
         cmd = str(body.get("command") or "").strip()
         args = body.get("args", "")
-        aid = os.environ.get("CODEAGENT_AGENT_ID", "default").strip() or "default"
+        aid = _default_agent_id()
         cwd = _git_cwd(body, aid, project_root)
 
         if cmd == "remote":
@@ -1452,7 +1538,9 @@ def build_webui_api_app(project_root: Path) -> Starlette:
 
     async def api_pick_directory(_: Request) -> JSONResponse:
         path = ""
-        skip = str(os.environ.get("CODEAGENT_SKIP_FOLDER_PICKER", "") or "").strip().lower()
+        from codeagent.core import env as ca_env
+
+        skip = ca_env.pick_default("", ca_env.SKIP_FOLDER_PICKER).strip().lower()
         if skip in ("1", "true", "yes", "on"):
             return JSONResponse({"path": "", "skipped": True})
         try:
@@ -1531,7 +1619,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
     async def api_files_list(request: Request) -> JSONResponse:
         pid = (request.query_params.get("project_id") or "").strip()
         dir_q = (request.query_params.get("dir") or "").strip()
-        aid = os.environ.get("CODEAGENT_AGENT_ID", "default").strip() or "default"
+        aid = _default_agent_id()
         base = _project_fs_dir(aid, pid) if pid else None
         if base is None:
             return JSONResponse({"files": [], "detail": "no project path"})
@@ -1572,7 +1660,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
     async def api_files_read(request: Request) -> JSONResponse:
         pid = (request.query_params.get("project_id") or "").strip()
         rel = (request.query_params.get("path") or "").strip()
-        aid = os.environ.get("CODEAGENT_AGENT_ID", "default").strip() or "default"
+        aid = _default_agent_id()
         base = _project_fs_dir(aid, pid) if pid else None
         if base is None:
             return JSONResponse({"detail": "no project path"}, status_code=400)
@@ -1643,6 +1731,10 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         Route("/auth/logout", api_auth_logout, methods=["POST"]),
         Route("/plugins", api_plugins_get, methods=["GET"]),
         Route("/plugins", api_plugins_post, methods=["POST"]),
+        Route("/mcp", api_mcp_get, methods=["GET"]),
+        Route("/mcp", api_mcp_post, methods=["POST"]),
+        Route("/hooks", api_hooks_get, methods=["GET"]),
+        Route("/hooks", api_hooks_post, methods=["POST"]),
         Route("/md/{name}", api_md_get, methods=["GET"]),
         Route("/md/{name}", api_md_post, methods=["POST"]),
         Route("/skills", api_skills_get, methods=["GET"]),

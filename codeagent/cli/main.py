@@ -233,9 +233,9 @@ def _win_no_window_kwargs() -> dict[str, Any]:
 def main():
     """Main CLI entry point."""
 
-    from seed.integrations.env_config import apply_codeagent_env_from_config
+    from codeagent.core.bootstrap import bootstrap_codeagent_runtime
 
-    apply_codeagent_env_from_config()
+    bootstrap_codeagent_runtime()
 
     parser = argparse.ArgumentParser(
         prog='codeagent',
@@ -421,10 +421,14 @@ def _cmd_chat_llm(args):
     from seed.core.agent_context import set_active_llm_session
     from seed.core.agent_runtime import (
         build_api_projection_messages,
-        default_system_prompt,
         maybe_compact_context_messages,
         merge_llm_tail_into_full,
         run_llm_tool_loop,
+    )
+    from codeagent.runtime.prompt_enrichment import (
+        build_skills_suffix,
+        fresh_system_prompt,
+        record_chat_turn_diary,
     )
     from seed.core.llm_exec import LLMError
     from seed.core.llm_presets import llm_executor_from_resolved, resolve_preset
@@ -444,8 +448,11 @@ def _cmd_chat_llm(args):
     from seed.core.config_plane import project_root as _project_root
 
     project_root = _project_root()
+    from codeagent.core import env as ca_env
+
+    agent_id = ca_env.default_agent_id()
     chat_sess = load_or_create_chat_session(name)
-    fresh_sys = default_system_prompt()
+    fresh_sys = fresh_system_prompt(agent_id=agent_id)
     chat_sess.messages[:] = merge_fresh_system(chat_sess.messages, fresh_sys)
 
     print(f"CodeAgent LLM chat — session «{name}» — {len(registry.list_all())} tools — exit / quit 结束。")
@@ -467,11 +474,12 @@ def _cmd_chat_llm(args):
             append_transcript_entries(name, [chat_sess.messages[-1]], agent_id=None)
         except Exception:
             pass
-        max_hist = int(os.environ.get("CODEAGENT_CHAT_USER_ROUNDS", "12"))
+        max_hist = ca_env.pick_int(12, ca_env.CHAT_USER_ROUNDS)
+        _skills_suffix = build_skills_suffix(agent_id, user_text=line)
         api_msgs = build_api_projection_messages(
             chat_sess.messages,
             max_user_rounds=max_hist,
-            skills_suffix=None,
+            skills_suffix=_skills_suffix,
         )
         compact_result = maybe_compact_context_messages(api_msgs, llm)
         if compact_result:
@@ -506,6 +514,13 @@ def _cmd_chat_llm(args):
                 persist_chat_session(chat_sess)
             with contextlib.suppress(Exception):
                 maybe_llm_refresh_session_title(llm, chat_sess)
+            with contextlib.suppress(Exception):
+                record_chat_turn_diary(
+                    agent_id,
+                    user_text=line,
+                    reply=reply or "",
+                    tools_used=tools_used,
+                )
             if os.environ.get("CODEAGENT_MEMORY_LOG", "1").lower() not in ("0", "false", "no"):
                 try:
                     from seed.core.mem_sys import MemorySystem
@@ -532,9 +547,9 @@ def cmd_webui_token(args):
     from codeagent.web.auth_impl import TOKEN_FILENAME
 
     # cmd_webui_token can be invoked directly; ensure env file is loaded.
-    from seed.integrations.env_config import apply_codeagent_env_from_config
+    from codeagent.core.bootstrap import bootstrap_codeagent_runtime
 
-    apply_codeagent_env_from_config()
+    bootstrap_codeagent_runtime()
     from seed.core.config_plane import project_root as _project_root
 
     root = _project_root()

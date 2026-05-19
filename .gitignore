@@ -18,6 +18,8 @@ build/
 .pytest_cache/
 .tmp/
 team-knowledge-base/
+super-mines-game/
+llm_sessions/
 
 # Backup files (keep locally)
 *.bak
@@ -28,6 +30,8 @@ team-knowledge-base/
 # Internal development plans — keep locally; not published with the OSS repo
 *-plan.md
 plans/
+docs/**/*plan*.md
+docs/**/plans/
 
 # Credentials & secrets (beyond env files above)
 *.pem

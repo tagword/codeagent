@@ -1,5 +1,12 @@
 let _summarizerDefaultId = '';
 
+/** Read env value: prefer CODEAGENT_* (product), fall back to SEED_* if present. */
+function _envVal(j, codeagentKey, seedKey, fallback) {
+  if (j[codeagentKey] !== undefined && j[codeagentKey] !== null && String(j[codeagentKey]) !== '') return j[codeagentKey];
+  if (seedKey && j[seedKey] !== undefined && j[seedKey] !== null && String(j[seedKey]) !== '') return j[seedKey];
+  return fallback;
+}
+
 /** Populate the summarizer model <select> with LLM presets */
 async function populateSummarizerSelect() {
   const sel = document.getElementById('selCompactSummarizer');
@@ -40,31 +47,31 @@ async function loadChatEnvConfig() {
   if (!status) return;
   status.textContent = '加载中…';
   try {
-    // First populate the summarizer dropdown
     await populateSummarizerSelect();
-    // Then fetch chat env values
     const r = await fetch('/api/ui/env/chat');
     if (!r.ok) throw new Error(r.statusText);
     const j = await r.json();
-    // Auto continue
     const chkAuto = document.getElementById('chkAutoContinue');
-    if (chkAuto) chkAuto.checked = j.CODEAGENT_CHAT_AUTO_CONTINUE_ON_LIMIT === '1';
+    if (chkAuto) chkAuto.checked = _envVal(j, 'CODEAGENT_CHAT_AUTO_CONTINUE_ON_LIMIT', 'SEED_CHAT_AUTO_CONTINUE_ON_LIMIT', '0') === '1';
     const inpSegments = document.getElementById('inpAutoContinueMax');
-    if (inpSegments) { inpSegments.value = j.CODEAGENT_CHAT_AUTO_CONTINUE_MAX_SEGMENTS || '4'; rowAutoContinueToggle(); }
-    // Tool rounds
+    if (inpSegments) {
+      inpSegments.value = _envVal(j, 'CODEAGENT_CHAT_AUTO_CONTINUE_MAX_SEGMENTS', 'SEED_CHAT_AUTO_CONTINUE_MAX_SEGMENTS', '4');
+      rowAutoContinueToggle();
+    }
     const inpRounds = document.getElementById('inpMaxToolRounds');
-    if (inpRounds) inpRounds.value = j.CODEAGENT_CHAT_MAX_TOOL_ROUNDS_DEFAULT || '16';
-    // Context compact
+    if (inpRounds) inpRounds.value = _envVal(j, 'CODEAGENT_CHAT_MAX_TOOL_ROUNDS_DEFAULT', 'SEED_CHAT_MAX_TOOL_ROUNDS_DEFAULT', '16');
     const chkCompact = document.getElementById('chkContextCompact');
-    if (chkCompact) chkCompact.checked = j.CODEAGENT_CONTEXT_COMPACT === '1';
+    if (chkCompact) chkCompact.checked = _envVal(j, 'CODEAGENT_CONTEXT_COMPACT', 'SEED_CONTEXT_COMPACT', '') === '1';
     const inpMinBytes = document.getElementById('inpCompactMinBytes');
-    if (inpMinBytes) inpMinBytes.value = j.CODEAGENT_CONTEXT_COMPACT_MIN_BYTES || '90000';
+    if (inpMinBytes) inpMinBytes.value = _envVal(j, 'CODEAGENT_CONTEXT_COMPACT_MIN_BYTES', 'SEED_CONTEXT_COMPACT_MIN_BYTES', '90000');
     const inpMinRounds = document.getElementById('inpCompactMinRounds');
-    if (inpMinRounds) inpMinRounds.value = j.CODEAGENT_CONTEXT_COMPACT_MIN_ROUNDS || '0';
-    // Summarizer model select — try to match current env values; if unset, use default preset
+    if (inpMinRounds) inpMinRounds.value = _envVal(j, 'CODEAGENT_CONTEXT_COMPACT_MIN_ROUNDS', 'SEED_CONTEXT_COMPACT_MIN_ROUNDS', '0');
     const sel = document.getElementById('selCompactSummarizer');
     if (sel) {
-      const matched = _matchSummarizerPreset(j.CODEAGENT_CONTEXT_COMPACT_SUMMARIZER_BASEURL, j.CODEAGENT_CONTEXT_COMPACT_SUMMARIZER_MODEL);
+      const matched = _matchSummarizerPreset(
+        _envVal(j, 'CODEAGENT_CONTEXT_COMPACT_SUMMARIZER_BASEURL', 'SEED_CONTEXT_COMPACT_SUMMARIZER_BASEURL', ''),
+        _envVal(j, 'CODEAGENT_CONTEXT_COMPACT_SUMMARIZER_MODEL', 'SEED_CONTEXT_COMPACT_SUMMARIZER_MODEL', '')
+      );
       sel.value = matched || _summarizerDefaultId || '';
     }
     toggleCompactSubRows();

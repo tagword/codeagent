@@ -116,16 +116,16 @@ sendBtn.onclick = async () => {
       }
     }
     // 保存 token_usage 供 finally 使用（const j 在 try 块内，finally 不可访问）
-    window._lastTokenUsage = j.token_usage || null;
+    window._lastContextUsage = j.context || null;
     window._lastAccumulatedUsage = j.accumulated_usage || null;
   } catch (e) { if (sessionId === requestSid) systemMsg('err', String(e)); }
   finally {
     bumpChatInflight(requestSid, -1);
-    // 消息交换完成后更新 token 用量指示器（优先用 API 精确计数）
-    var tu = window._lastTokenUsage;
-    if (tu && typeof updateTokenUsage === 'function') {
-      updateTokenUsage(tu);
-      window._lastTokenUsage = null;
+    // 消息交换完成后更新上下文占用（context.body_bytes，非计费 total_tokens）
+    var ctx = window._lastContextUsage;
+    if (ctx && typeof updateTokenUsage === 'function') {
+      updateTokenUsage(ctx);
+      window._lastContextUsage = null;
     } else if (typeof recalcTokenUsageFromDom === 'function') {
       setTimeout(recalcTokenUsageFromDom, 50);
     }

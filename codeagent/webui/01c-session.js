@@ -586,17 +586,20 @@ function showProjectDirectoryDialog(pid) {
       credentials: 'same-origin',
       body: JSON.stringify({ agent_id: agentId, project_id: k, path: p })
     }).then(function(r) {
-      if (!r.ok) {
-        alert('保存失败');
+      return r.json().then(function(j) { return { ok: r.ok, body: j }; });
+    }).then(function(res) {
+      if (!res.ok) {
+        alert((res.body && res.body.detail) || '保存失败');
         return;
       }
+      var savedPath = (res.body && res.body.project && res.body.project.path) || p;
       if (treeProjectsCache && treeProjectsCache.aid === agentId) {
         treeProjectsCache.projects.forEach(function(proj) {
-          if (treePid(proj.id) === k) proj.path = p;
+          if (treePid(proj.id) === k) proj.path = savedPath;
         });
       }
       doClose();
-      try { document.dispatchEvent(new CustomEvent('project-changed', { detail: { projectId: k } })); } catch (_) {}
+      try { window.dispatchEvent(new CustomEvent('project-changed', { detail: { projectId: k } })); } catch (_) {}
     }).catch(function() { alert('保存失败'); })
       .finally(function() { btnSave.disabled = false; });
   });
