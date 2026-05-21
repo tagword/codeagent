@@ -170,7 +170,20 @@
             <textarea id="msg" rows="1" placeholder="请输入消息…  Enter 发送，Shift+Enter 换行" autocomplete="off" spellcheck="true"></textarea>
             <div class="compose__actions">
               <span class="compose__hint"><select id="modelSelect" class="compose__model-select" title="选择 LLM 模型预设"><option value="__default__">默认模型</option></select></span>
-              <span id="tokenUsage" class="token-usage" title="上下文 token 用量估算" style="display:none">📊 --/--</span>
+              <span id="tokenUsage" class="token-usage token-usage--seg" role="meter" aria-label="上下文占用" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" title="上下文占用" style="display:none">
+                <svg class="token-usage__icon" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M8 2L2 5.5v5L8 14l6-3.5v-5L8 2z"/>
+                  <path d="M8 8L2 5.5M8 8l6-3.5M8 8v6"/>
+                </svg>
+                <span class="token-usage__segs" aria-hidden="true">
+                  <span class="token-usage__seg"></span>
+                  <span class="token-usage__seg"></span>
+                  <span class="token-usage__seg"></span>
+                  <span class="token-usage__seg"></span>
+                  <span class="token-usage__seg"></span>
+                </span>
+                <span class="token-usage__pct">0%</span>
+              </span>
               <button type="button" class="btn btn--subtle btn--sm think-toggle" id="thinkToggle" aria-pressed="true" title="思考开关：开启时模型会先思考再回答（慢但更准）；关闭后直接回答（快）">
                 <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 1.8a4.5 4.5 0 0 0-3 7.9V11h6V9.7a4.5 4.5 0 0 0-3-7.9z"/><path d="M6.5 13.5h3M7 15h2"/></svg>
                 <span class="think-toggle__label">思考</span>
