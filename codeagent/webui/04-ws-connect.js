@@ -12,6 +12,8 @@ function setTokenContextMax(maxTokens) {
 function updateTokenUsage(curOrUsage, compactMinBytes) {
   var el = document.getElementById('tokenUsage');
   if (!el) return;
+  var segEls = el.querySelectorAll('.token-usage__seg');
+  var pctEl = el.querySelector('.token-usage__pct');
   var curTokens = 0;
   var maxTokens = _tokenContextMax;
   if (typeof curOrUsage === 'object' && curOrUsage !== null) {
@@ -28,13 +30,23 @@ function updateTokenUsage(curOrUsage, compactMinBytes) {
     curTokens = Math.round((curOrUsage || 0) / 4);
     if (compactMinBytes > 0) maxTokens = Math.round(compactMinBytes / 4);
   }
-  if (curTokens <= 0) { el.style.display = 'none'; return; }
+  if (curTokens <= 0) {
+    el.style.display = 'none';
+    return;
+  }
   el.style.display = 'inline-flex';
-  var pct = Math.round(Math.min((curTokens / maxTokens) * 100, 100));
-  var label = (curTokens >= 1000 ? (curTokens / 1000).toFixed(1) + 'k' : String(curTokens))
-    + '/' + (maxTokens >= 1000 ? (maxTokens / 1000).toFixed(0) + 'k' : String(maxTokens));
-  el.textContent = '\uD83D\uDCCA ' + label;
-  el.title = '\u4E0A\u4E0B\u6587 ' + curTokens.toLocaleString() + ' tokens / ' + maxTokens.toLocaleString() + ' tokens (' + pct + '%)';
+  var pct = maxTokens > 0 ? Math.round(Math.min((curTokens / maxTokens) * 100, 100)) : 0;
+  var filled = pct > 0 ? Math.min(5, Math.ceil((pct / 100) * 5)) : 0;
+  for (var si = 0; si < segEls.length; si++) {
+    segEls[si].classList.toggle('is-on', si < filled);
+  }
+  if (pctEl) pctEl.textContent = pct + '%';
+  el.setAttribute('aria-valuenow', String(pct));
+  el.setAttribute('aria-valuemax', '100');
+  el.setAttribute('aria-valuetext', filled + ' / 5 档，' + pct + '%');
+  var curLabel = curTokens >= 1000 ? (curTokens / 1000).toFixed(1) + 'k' : String(curTokens);
+  var maxLabel = maxTokens >= 1000 ? (maxTokens / 1000).toFixed(0) + 'k' : String(maxTokens);
+  el.title = '上下文 ' + curLabel + ' / ' + maxLabel + ' tokens（' + pct + '%）';
   el.classList.toggle('is-warm', pct >= 60 && pct < 85);
   el.classList.toggle('is-hot', pct >= 85);
 }
