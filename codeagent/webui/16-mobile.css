@@ -1,0 +1,424 @@
+/* ================================================================
+ * 16-mobile.css — Mobile / touch layout (≤768px)
+ * ================================================================ */
+
+.topbar__sidebar-btn,
+.sidebar-backdrop {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  :root {
+    --mobile-nav-h: calc(52px + env(safe-area-inset-bottom, 0px));
+    --topbar-h: 48px;
+  }
+
+  /* ---- Viewport height ---- */
+  .app,
+  .activity-bar {
+    height: 100dvh;
+  }
+
+  /* ---- App shell: single column + fixed nav ---- */
+  .app {
+    display: block;
+    position: relative;
+    grid-template-columns: unset;
+    grid-template-rows: unset;
+  }
+
+  .workspace {
+    height: 100dvh;
+    padding-bottom: var(--mobile-nav-h);
+    box-sizing: border-box;
+  }
+
+  /* ---- Bottom tab bar (activity bar) ---- */
+  .activity-bar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    top: auto;
+    width: 100%;
+    min-width: 0;
+    height: var(--mobile-nav-h);
+    flex-direction: row;
+    align-items: stretch;
+    border-right: none;
+    border-top: 1px solid var(--border);
+    z-index: 120;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    background: var(--bg-panel);
+  }
+
+  .activity-bar__top {
+    flex: 1;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-around;
+    gap: 0;
+    padding: var(--sp-1) var(--sp-1) 0;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .activity-bar__bottom {
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    padding: var(--sp-1) var(--sp-2) 0;
+    border-top: none;
+    border-left: 1px solid var(--divider);
+    flex-shrink: 0;
+  }
+
+  .activity-btn {
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+    font-size: 18px;
+  }
+
+  .activity-btn.active::before {
+    left: 50%;
+    top: 2px;
+    transform: translateX(-50%);
+    width: 18px;
+    height: 3px;
+    border-radius: 3px;
+  }
+
+  /* ---- Sidebar drawer ---- */
+  .sidebar-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    bottom: var(--mobile-nav-h);
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 190;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body.sidebar-open .sidebar-backdrop {
+    display: block;
+  }
+
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: var(--mobile-nav-h);
+    width: min(88vw, 320px);
+    max-height: none;
+    z-index: 200;
+    transform: translateX(-105%);
+    transition: transform 0.24s cubic-bezier(0.2, 0, 0, 1);
+    box-shadow: var(--shadow-lg);
+    border-right: 1px solid var(--border);
+    border-bottom: none;
+  }
+
+  body.sidebar-open .sidebar {
+    transform: translateX(0);
+  }
+
+  /* Stats mode: sidebar becomes main content */
+  body[data-activity-mode="stats"] .sidebar {
+    position: relative;
+    width: 100%;
+    transform: none;
+    box-shadow: none;
+    bottom: auto;
+    height: calc(100dvh - var(--mobile-nav-h));
+  }
+
+  body[data-activity-mode="stats"] .workspace {
+    display: none;
+  }
+
+  body[data-activity-mode="stats"] .topbar__sidebar-btn {
+    display: none;
+  }
+
+  /* Files mode: compact file tree on top */
+  body[data-activity-mode="files"] .sidebar {
+    position: relative;
+    width: 100%;
+    transform: none;
+    box-shadow: none;
+    max-height: 38vh;
+    bottom: auto;
+    flex-shrink: 0;
+  }
+
+  body[data-activity-mode="files"] .app {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+  }
+
+  body[data-activity-mode="files"] .workspace {
+    flex: 1;
+    min-height: 0;
+    height: auto;
+    padding-bottom: var(--mobile-nav-h);
+  }
+
+  /* Config / tasks / agent: hide sidebar from layout */
+  body[data-activity-mode="config"] .sidebar,
+  body[data-activity-mode="tasks"] .sidebar,
+  body[data-activity-mode="agent"] .sidebar {
+    display: none;
+  }
+
+  body[data-activity-mode="config"] .sidebar-backdrop,
+  body[data-activity-mode="tasks"] .sidebar-backdrop,
+  body[data-activity-mode="agent"] .sidebar-backdrop {
+    display: none !important;
+  }
+
+  /* ---- Topbar ---- */
+  .topbar {
+    padding: 0 var(--sp-3);
+    gap: var(--sp-2);
+  }
+
+  .topbar__sidebar-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border: none;
+    border-radius: var(--r-md);
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    flex-shrink: 0;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .topbar__sidebar-btn:hover,
+  .topbar__sidebar-btn.is-active {
+    background: var(--bg-hover);
+    color: var(--accent);
+  }
+
+  .topbar__sidebar-btn svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  body:not([data-activity-mode="chat"]) .topbar__sidebar-btn {
+    display: none;
+  }
+
+  .topbar__title {
+    max-width: 36vw;
+    font-size: 13px;
+  }
+
+  .topbar__project-path {
+    display: none !important;
+  }
+
+  .channel-pill {
+    font-size: 9.5px;
+    padding: 1px 6px;
+  }
+
+  .topbar__meta {
+    gap: var(--sp-1);
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+
+  .topbar__todo-btn {
+    width: 36px;
+    height: 36px;
+  }
+
+  .topbar__todo-btn svg {
+    width: 17px;
+    height: 17px;
+  }
+
+  /* ---- Chat page ---- */
+  #page-chat.active {
+    flex-direction: column;
+  }
+
+  .chat-log {
+    padding: var(--sp-4) var(--sp-3);
+    gap: var(--sp-4);
+  }
+
+  .msg-row.msg-agent {
+    padding-right: 0;
+  }
+
+  .msg-row.msg-user {
+    padding-left: 0;
+  }
+
+  .msg-col {
+    max-width: 96%;
+  }
+
+  .bubble {
+    font-size: 14px;
+    padding: 10px 13px;
+  }
+
+  .compose {
+    padding: var(--sp-2) var(--sp-3) calc(var(--sp-3) + env(safe-area-inset-bottom, 0px));
+  }
+
+  .compose__box {
+    border-radius: var(--r-lg);
+  }
+
+  .compose__actions {
+    flex-wrap: wrap;
+    gap: var(--sp-2);
+    padding: 4px 8px 8px;
+  }
+
+  .compose__hint {
+    flex: 1 1 100%;
+    margin-right: 0;
+    padding-left: 4px;
+    white-space: normal;
+  }
+
+  .compose__model-select {
+    max-width: 100%;
+  }
+
+  #msg {
+    font-size: 16px; /* prevent iOS zoom on focus */
+    min-height: 48px;
+  }
+
+  /* ---- Slide panels → full-screen overlay ---- */
+  .todo-panel {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: var(--mobile-nav-h);
+    left: 0;
+    width: 100% !important;
+    max-width: none;
+    z-index: 150;
+    border-left: none;
+  }
+
+  .git-slide-panel,
+  .plan-panel {
+    top: 0;
+    bottom: var(--mobile-nav-h);
+    width: 100% !important;
+    max-width: none;
+    z-index: 150;
+  }
+
+  /* ---- Forms & config pages ---- */
+  .page--scroll {
+    padding: var(--sp-4) var(--sp-3) var(--sp-8);
+  }
+
+  .section {
+    padding: var(--sp-4);
+    border-radius: var(--r-lg);
+  }
+
+  .form-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--sp-2);
+  }
+
+  .form-row label {
+    min-width: 0;
+  }
+
+  .form-row input,
+  .form-row select,
+  .form-row textarea {
+    width: 100% !important;
+    max-width: none !important;
+  }
+
+  .section__header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--sp-2);
+  }
+
+  .config-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .field-row {
+    flex-direction: column;
+  }
+
+  .field-row > input {
+    min-width: 0;
+  }
+
+  .preset-card {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--sp-2);
+  }
+
+  .preset-card__actions {
+    margin-left: 0;
+    justify-content: flex-end;
+  }
+
+  /* ---- Cron / tasks ---- */
+  .cron-day-pill {
+    width: 38px;
+    height: 36px;
+  }
+
+  /* ---- Stats ---- */
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--sp-2);
+  }
+
+  /* ---- Modals ---- */
+  .modal__box {
+    max-width: calc(100vw - var(--sp-6));
+    margin: var(--sp-4);
+  }
+
+  /* ---- Search / session tree touch targets ---- */
+  .tree-session__row,
+  .tree-project__row,
+  .sess-row .sess-item-main {
+    min-height: 44px;
+  }
+
+  .tree-footer-btn,
+  .search-bar__input {
+    min-height: 40px;
+  }
+
+  .project-tree__footer {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}
+
+/* Tablet: soften layout between 769px and 900px */
+@media (min-width: 769px) and (max-width: 900px) {
+  .topbar__sidebar-btn,
+  .sidebar-backdrop {
+    display: none !important;
+  }
+}

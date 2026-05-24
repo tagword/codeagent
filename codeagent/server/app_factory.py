@@ -91,7 +91,9 @@ def create_app():
             estimate_context_usage,
             maybe_compact_context_messages,
             merge_llm_tail_into_full,
+            persist_compact_summary,
             run_llm_tool_loop,
+            strip_ephemeral_message_fields,
         )
         from codeagent.runtime.prompt_enrichment import (
             build_skills_suffix,
@@ -243,10 +245,8 @@ def create_app():
                 **_kwargs,
             )
             compact_result = await asyncio.to_thread(maybe_compact_context_messages, api_msgs, llm)
-            if compact_result:
-                b_idx = compact_result["boundary_idx"]
-                if 0 <= b_idx < len(chat_sess.messages):
-                    chat_sess.messages[b_idx]["_compact_summary"] = compact_result["compact_summary"]
+            persist_compact_summary(chat_sess.messages, compact_result)
+            strip_ephemeral_message_fields(api_msgs)
             apply_episodic_to_messages(
                 api_msgs,
                 project_root,
@@ -283,7 +283,24 @@ def create_app():
 
             def _on_tool_round_persist(tt: list, tu: list) -> None:
                 try:
-                    new_tail = api_msgs[n_before_ref[0]:]
+                    new_tail = [
+                        message
+                        for message in api_msgs[n_before_ref[0]:]
+                        if not (
+                            isinstance(message, dict)
+                            and (
+                                message.get("_auto_continue_nudge")
+                                or (
+                                    message.get("role") == "user"
+                                    and isinstance(message.get("content"), str)
+                                    and (
+                                        message["content"].startswith(_DEFAULT_AUTO_CONTINUE_NUDGE[:20])
+                                        or message["content"].startswith("上一段连续在")
+                                    )
+                                )
+                            )
+                        )
+                    ]
                     if new_tail:
                         if (_stream_placeholder_created[0]
                                 and chat_sess.messages
@@ -296,7 +313,15 @@ def create_app():
                         else:
                             rest = new_tail
                         if rest:
-                            chat_sess.messages.extend(rest)
+                            persisted_rest = []
+                            for message in rest:
+                                if not isinstance(message, dict):
+                                    persisted_rest.append(message)
+                                    continue
+                                copied = dict(message)
+                                strip_ephemeral_message_fields([copied])
+                                persisted_rest.append(copied)
+                            chat_sess.messages.extend(persisted_rest)
                         n_before_ref[0] = len(api_msgs)
                     _stream_placeholder_created[0] = False
                     if tt:
@@ -427,7 +452,13 @@ def create_app():
                         # n_before_ref deliberately NOT reset — nudge must be
                         # picked up by _on_tool_round_persist in the next segment
                         _nudge = _auto_continue_nudge(_seg_meta)
-                        api_msgs.append({"role": "user", "content": _nudge})
+                        api_msgs.append(
+                            {
+                                "role": "user",
+                                "content": _nudge,
+                                "_auto_continue_nudge": True,
+                            }
+                        )
 
                     reply = _final_reply
                     tools_used = _all_used

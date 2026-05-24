@@ -1,5 +1,6 @@
 venv/
 .venv/
+.build-venv/
 config/codeagent.env
 config/seed.env
 config/codeagent.webui.token

@@ -15,10 +15,13 @@ from pathlib import Path
 
 import rumps
 
+from bundled_tools import is_frozen, setup_bundled_tools_env
+
 # PyInstaller 打包后, `sys._MEIPASS` 指向 .app/Contents/Resources
-_BUNDLED = getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS")
+_BUNDLED = is_frozen()
 if _BUNDLED:
     sys.path.insert(0, sys._MEIPASS)
+    setup_bundled_tools_env()
 
 SERVER_HOST = "127.0.0.1"
 SERVER_PORT = 8899
@@ -72,7 +75,15 @@ class CodeAgentTray(rumps.App):
         os._exit(0)
 
 
-def main():
+def main() -> None:
+    if len(sys.argv) >= 3 and sys.argv[1] == "-m":
+        import runpy
+
+        module = sys.argv[2]
+        sys.argv = [module, *sys.argv[3:]]
+        runpy.run_module(module, run_name="__main__", alter_sys=True)
+        return
+
     # 后台启动服务器
     from codeagent.server import main as server_main
 
