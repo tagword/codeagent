@@ -423,7 +423,9 @@ def _cmd_chat_llm(args):
         build_api_projection_messages,
         maybe_compact_context_messages,
         merge_llm_tail_into_full,
+        persist_compact_summary,
         run_llm_tool_loop,
+        strip_ephemeral_message_fields,
     )
     from codeagent.runtime.prompt_enrichment import (
         build_skills_suffix,
@@ -482,10 +484,8 @@ def _cmd_chat_llm(args):
             skills_suffix=_skills_suffix,
         )
         compact_result = maybe_compact_context_messages(api_msgs, llm)
-        if compact_result:
-            b_idx = compact_result["boundary_idx"]
-            if 0 <= b_idx < len(chat_sess.messages):
-                chat_sess.messages[b_idx]["_compact_summary"] = compact_result["compact_summary"]
+        persist_compact_summary(chat_sess.messages, compact_result)
+        strip_ephemeral_message_fields(api_msgs)
         apply_episodic_to_messages(api_msgs, project_root, name)
         set_active_llm_session(name)
         try:

@@ -178,24 +178,4 @@ body.chat-running .oa-global-progress { opacity: 1; }
 .todo-item:hover .todo-item__delete { opacity: 1; }
 .todo-item__delete:hover { background: var(--bg-hover); color: var(--danger); }
 
-/* ============ Responsive ============ */
-
-@media (max-width: 900px) {
-  :root { --sidebar-w: 100%; --topbar-h: 52px; }
-  .app {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto 1fr;
-  }
-  .sidebar {
-    max-height: 46vh;
-    border-right: none;
-    border-bottom: 1px solid var(--border);
-  }
-  .nav-rail { padding: var(--sp-2) var(--sp-1) 0; }
-  .topbar { padding: 0 var(--sp-4); }
-  .chat-log, .compose { padding-left: var(--sp-4); padding-right: var(--sp-4); }
-  .page--scroll { padding: var(--sp-5) var(--sp-4) var(--sp-8); }
-  .topbar__title { max-width: 40vw; }
-  .session-id-chip { display: none; }
-  .todo-panel { width: 220px; }
-}
+/* ============ Responsive (see 16-mobile.css for ≤768px) ============ */

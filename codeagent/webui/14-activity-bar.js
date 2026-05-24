@@ -65,6 +65,7 @@ function switchActivityMode(mode) {
     if (typeof refreshProjects === 'function') setTimeout(function() { refreshProjects(false); }, 100);
   }
   try { localStorage.setItem('oa_activity_mode', mode); } catch (_) {}
+  if (typeof window.webuiMobileSyncMode === 'function') window.webuiMobileSyncMode(mode);
   syncTopbarChatShortcutUi();
   _syncFileBtnState();
 }
