@@ -173,10 +173,42 @@
           <span class="new-msg-btn__text">新消息 ↓</span>
         </button>
         <div class="compose">
+          <div id="composeAttachments" class="compose__attachments" style="display:none"></div>
+          <div id="visionContextBar" class="compose__vision-bar" style="display:none">
+            <span class="compose__vision-label">视觉上下文</span>
+            <button type="button" class="btn btn--ghost btn--xs" id="visionContextClear">清除</button>
+          </div>
           <div class="compose__box">
             <textarea id="msg" rows="1" placeholder="请输入消息…  Enter 发送，Shift+Enter 换行" autocomplete="off" spellcheck="true"></textarea>
+            <input type="file" id="attachFileInput" accept="image/*,video/*,audio/*,.pdf,.txt,.md" multiple hidden />
+            <input type="file" id="attachFolderInput" webkitdirectory multiple hidden />
+            <input type="file" id="nativeCameraInput" accept="image/*" capture="environment" hidden />
+            <div id="cameraModal" class="modal-overlay camera-modal" style="display:none" role="dialog" aria-label="摄像头">
+              <div class="modal-dialog camera-modal__dialog">
+                <div class="modal-dialog__header">
+                  <span class="modal-dialog__title">摄像头</span>
+                  <button type="button" class="modal-dialog__close" id="cameraModalClose" aria-label="关闭">&times;</button>
+                </div>
+                <div class="modal-dialog__body camera-modal__body">
+                  <video id="cameraPreview" class="camera-modal__video" autoplay playsinline muted></video>
+                  <canvas id="cameraCanvas" style="display:none" aria-hidden="true"></canvas>
+                  <p id="cameraStatus" class="camera-modal__status"></p>
+                </div>
+                <div class="modal-dialog__footer camera-modal__footer">
+                  <button type="button" class="btn btn--ghost btn--sm" id="cameraToggleInterval">定时截帧</button>
+                  <button type="button" class="btn btn--primary btn--sm" id="cameraCaptureBtn">拍照</button>
+                  <button type="button" class="btn btn--subtle btn--sm" id="cameraModalDone">完成</button>
+                </div>
+              </div>
+            </div>
             <div class="compose__actions">
+              <button type="button" class="btn btn--subtle btn--sm" id="attachBtn" disabled title="附加图片">📎</button>
+              <button type="button" class="btn btn--subtle btn--sm" id="attachFolderBtn" disabled title="选择文件夹">📁</button>
+              <button type="button" class="btn btn--subtle btn--sm" id="cameraBtn" disabled title="摄像头">📷</button>
               <span class="compose__hint"><select id="modelSelect" class="compose__model-select" title="选择 LLM 模型预设"><option value="__default__">默认模型</option></select></span>
+              <span class="compose__hint"><select id="visionModelSelect" class="compose__model-select" title="多模态模型（vision_analyze 工具）" disabled><option value="">未配置多模态模型</option></select></span>
+              <span class="compose__hint"><select id="imageGenModelSelect" class="compose__model-select" title="图片生成模型（image_generate 工具）" disabled><option value="">未配置生图模型</option></select></span>
+              <span class="compose__hint"><select id="audioModelSelect" class="compose__model-select" title="音频转写（audio_transcribe / video_analyze）" disabled><option value="">未配置音频模型</option></select></span>
               <span id="tokenUsage" class="token-usage token-usage--seg" role="meter" aria-label="上下文占用" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" title="上下文占用" style="display:none">
                 <svg class="token-usage__icon" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path d="M8 2L2 5.5v5L8 14l6-3.5v-5L8 2z"/>

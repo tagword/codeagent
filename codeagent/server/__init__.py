@@ -166,6 +166,8 @@ def _reply_append_tool_summary(reply: str, seg_summary: str) -> str:
 
 def _webui_transcript_rows_from_session(sess: Session, max_chars: int) -> list[dict[str, Any]]:
     """Flatten session to user/assistant rows for Web UI replay (same shape as before)."""
+    from seed.core.llm_exec import msg_text_to_str
+
     try:
         rc_max = int(os.environ.get("CODEAGENT_WEBUI_TRANSCRIPT_REASONING_MAX_CHARS", "50000"))
     except ValueError:
@@ -180,10 +182,13 @@ def _webui_transcript_rows_from_session(sess: Session, max_chars: int) -> list[d
             continue
         if m.get("_streaming"):
             continue
-        c = str(m.get("content") or "")
+        c = msg_text_to_str(m.get("content"))
         if len(c) > max_chars:
             c = c[: max_chars - 24] + "\n…[内容已截断]"
-        row: dict[str, Any] = {"role": str(role), "content": c, "idx": i}
+        row: dict[str, Any] = {"role": str(role), "content": c, "text": c, "idx": i}
+        atts = m.get("attachments")
+        if isinstance(atts, list) and atts:
+            row["attachments"] = atts
         tt = m.get("tool_trace")
         if isinstance(tt, list) and tt:
             row["tool_trace"] = tt

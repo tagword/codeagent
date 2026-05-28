@@ -64,7 +64,7 @@ async function loadOlderTranscriptChunk() {
       const ts = m.ts;
       const idx = m.idx;
       const o = { at: ts, prepend: true, idx: idx };
-      if (m.role === 'user') bubble('user', m.content || '', o);
+      if (m.role === 'user') bubble('user', m.content || m.text || '', Object.assign(o, { attachments: m.attachments || [] }));
       else {
         // 拆分渲染：工具链各自独立展示，保持与实时执行一致的样式
         var fn = (typeof bubbleAgentWithSplitToolTrace === 'function')
@@ -104,7 +104,7 @@ async function loadTranscriptIntoLog(skipTreeRefresh) {
       const ts = m.ts;
       const idx = m.idx;
       const skip = { skipScroll: true, at: ts, idx: idx };
-      if (m.role === 'user') bubble('user', m.content || '', skip);
+      if (m.role === 'user') bubble('user', m.content || m.text || '', Object.assign(skip, { attachments: m.attachments || [] }));
       else {
         // 拆分渲染：工具链各自独立展示
         var fn2 = (typeof bubbleAgentWithSplitToolTrace === 'function')

@@ -126,29 +126,57 @@ def create_app():
             pick_int,
         )
 
-        agent_id = str(body.get("agent_id") or ca_env.default_agent_id()).strip() or "default"
-        _run_mkey = _memkey(agent_id, session_id)
         try:
+            agent_id = str(body.get("agent_id") or ca_env.default_agent_id()).strip() or "default"
+            body["agent_id"] = agent_id
+            body["session_id"] = session_id
+            _run_mkey = _memkey(agent_id, session_id)
+            _cancel_token = None
+
+            llm_id = str(body.get("llm_id") or "").strip()
+            vision_llm_id = str(body.get("vision_llm_id") or "").strip()
+            image_gen_llm_id = str(body.get("image_gen_llm_id") or "").strip()
+            audio_llm_id = str(body.get("audio_llm_id") or "").strip()
+
+            from codeagent.server.attachment_api import parse_chat_multimodal_body
+            from codeagent.core.attachments import content_text_for_skills
+            from codeagent.core.audio_models import preset_supports_audio_id
+            from codeagent.core.vision_models import preset_supports_vision_id, resolve_main_llm
+
+            try:
+                user_msg, _att_ids, has_image, _extra = parse_chat_multimodal_body(body)
+            except ValueError as e:
+                return JSONResponse({"detail": str(e)}, status_code=400)
+
+            has_video = bool(_extra.get("has_video"))
+            has_audio = bool(_extra.get("has_audio"))
+
+            message = str(user_msg.get("content") or "").strip()
+            if has_image or has_video:
+                if not vision_llm_id or not preset_supports_vision_id(vision_llm_id):
+                    return JSONResponse(
+                        {"detail": "需要选择支持多模态的模型 (vision_llm_id)"},
+                        status_code=400,
+                    )
+            if has_audio:
+                if not audio_llm_id or not preset_supports_audio_id(audio_llm_id):
+                    return JSONResponse(
+                        {"detail": "需要选择支持音频转写的模型 (audio_llm_id)"},
+                        status_code=400,
+                    )
+
             project_id = str(body.get("project_id") or "").strip()
             if project_id == "__unassigned__":
                 project_id = ""
-            message = str(body.get("message") or "").strip()
-            if not message:
-                return JSONResponse({"detail": "message required"}, status_code=400)
-
-            # ── 确保 _cancel_token 在 finnally 之前已初始化 ──
-            _cancel_token = None
 
             # ── 同 session 并发注入 ──
             # 如果 session 已在处理中，将消息入队（下一轮工具循环会自动捡起）
             existing_queue = PENDING_INJECTIONS.get(_run_mkey)
             if existing_queue is not None:
                 from datetime import datetime, timezone
-                existing_queue.append({
-                    "role": "user",
-                    "content": message,
-                    "ts": datetime.now(timezone.utc).isoformat(),
-                })
+                queued = dict(user_msg)
+                queued.setdefault("ts", datetime.now(timezone.utc).isoformat())
+                existing_queue.append(queued)
                 return JSONResponse(
                     {"queued": True, "session_id": session_id, "agent_id": agent_id},
                     status_code=202,
@@ -179,7 +207,10 @@ def create_app():
             if isinstance(chat_sess.metadata, dict) and chat_sess.metadata.get("cursor"):
                 chat_sess.metadata.pop("cursor", None)
 
-            chat_sess.messages.append({"role": "user", "content": message})
+            if body.get("clear_vision_context") and isinstance(chat_sess.metadata, dict):
+                chat_sess.metadata.pop("vision_context", None)
+
+            chat_sess.messages.append(user_msg)
             try:
                 from seed.integrations.transcript_store import append_transcript_entries
 
@@ -190,14 +221,23 @@ def create_app():
             max_hist = pick_int(12, *CHAT_USER_ROUNDS)
             max_rounds = pick_int(24, *MAX_TOOL_ROUNDS)
 
-            llm = llm_executor_from_resolved(resolve_preset(None))
+            llm = resolve_main_llm(llm_id or None)
             reg, exe = tools_for_agent(agent_id)
-            set_active_llm_session(session_id)
             from seed.core.agent_context import (
                 clear_active_project_workspace,
+                set_active_agent_id,
                 set_active_project_episodic,
                 set_active_project_workspace,
+                set_active_vision_preset,
+                set_active_image_gen_preset,
+                set_active_audio_preset,
             )
+
+            set_active_llm_session(f"{agent_id}::{session_id}")
+            set_active_agent_id(agent_id)
+            set_active_vision_preset(vision_llm_id or None)
+            set_active_image_gen_preset(image_gen_llm_id or None)
+            set_active_audio_preset(audio_llm_id or None)
             from seed.core.proj_reg import get_project, resolve_project_path
             if project_id:
                 set_active_project_episodic(True, project_id)
@@ -235,7 +275,7 @@ def create_app():
 
             _skills_suffix = build_skills_suffix(
                 agent_id,
-                user_text=message,
+                user_text=content_text_for_skills(message),
                 workspace_suffix=_work_dir_suffix,
             )
             api_msgs = build_api_projection_messages(
@@ -604,6 +644,11 @@ def create_app():
                         _proj_ctx,
                         _loop_meta if isinstance(_loop_meta, dict) else None,
                     )
+                    with contextlib.suppress(Exception):
+                        from codeagent.core.token_counter import estimate_context_tokens
+
+                        _tok = estimate_context_tokens(_proj_ctx)
+                        _ctx["estimated_tokens"] = int(_tok.get("total_tokens") or 0)
 
                     # 5. 构造 WS 事件（body_bytes = 下次请求上下文体积，非计费 token）
                     _ws_evt = {
@@ -749,6 +794,7 @@ def create_app():
             "mode": "head",
             "from_idx": message_idx,
         }
+        chat_sess.metadata.pop("vision_context", None)
         persist_chat_session(chat_sess, agent_id)
 
         # Broadcast rollback event via websocket
@@ -846,6 +892,12 @@ def create_app():
         except Exception:
             pass
 
+    from codeagent.server.attachment_api import (
+        api_attachment_batch,
+        api_attachment_get,
+        api_attachment_upload,
+    )
+
     routes = [
         Route("/", homepage),
         Route("/setup", setup_page),
@@ -853,6 +905,9 @@ def create_app():
         Route("/icon.png", icon_png),
         Route("/favicon.ico", favicon_ico),
         Mount("/api/ui", app=build_webui_api_app(project_root)),
+        Route("/api/attachments", api_attachment_upload, methods=["POST"]),
+        Route("/api/attachments/batch", api_attachment_batch, methods=["POST"]),
+        Route("/api/attachments/{attachment_id}", api_attachment_get, methods=["GET"]),
         Route("/api/chat", api_chat, methods=["POST"]),
         Route("/api/chat/stop", api_chat_stop, methods=["POST"]),
         Route("/api/chat/rollback", api_chat_rollback, methods=["POST"]),

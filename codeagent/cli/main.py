@@ -296,6 +296,41 @@ def main():
         help='Use SEED_LLM_BASEURL / SEED_LLM_MODEL (aliases CODEAGENT_*) and builtin tools; optional config/seed.env',
     )
     chat_parser.add_argument('--max-tool-rounds', type=int, default=16, help='Max LLM/tool cycles per user line')
+    chat_parser.add_argument(
+        '--image',
+        action='append',
+        metavar='PATH',
+        help='Attach image/document file (repeatable); included with next user line',
+    )
+    chat_parser.add_argument(
+        '--image-dir',
+        metavar='PATH',
+        help='Stage all images under directory (or reference with --image-dir-ref)',
+    )
+    chat_parser.add_argument(
+        '--image-pattern',
+        help='Glob patterns with --image-dir, e.g. "*.png,*.jpg"',
+    )
+    chat_parser.add_argument(
+        '--image-dir-ref',
+        action='store_true',
+        help='Write [image_dir:path] reference instead of copying files',
+    )
+    chat_parser.add_argument(
+        '--vision-llm',
+        metavar='PRESET_ID',
+        help='Vision preset for vision_analyze when sending images (or CODEAGENT_VISION_PRESET_ID)',
+    )
+    chat_parser.add_argument(
+        '--image-gen-llm',
+        metavar='PRESET_ID',
+        help='Image generation preset for image_generate (or CODEAGENT_IMAGE_GEN_PRESET_ID)',
+    )
+    chat_parser.add_argument(
+        '--audio-llm',
+        metavar='PRESET_ID',
+        help='Audio transcription preset for audio_transcribe (or CODEAGENT_AUDIO_PRESET_ID)',
+    )
 
     serve_parser = subparsers.add_parser(
         'serve',
@@ -414,11 +449,145 @@ def cmd_chat(args):
             print(f"  - {c.name}: {desc}")
 
 
+def _cli_audio_preset_id(args) -> str:
+    from codeagent.core import env as ca_env
+
+    pid = (getattr(args, 'audio_llm', None) or '').strip()
+    if pid:
+        return pid
+    return ca_env.pick_default('', 'CODEAGENT_AUDIO_PRESET_ID').strip()
+
+
+def _cli_image_gen_preset_id(args) -> str:
+    from codeagent.core import env as ca_env
+
+    pid = (getattr(args, 'image_gen_llm', None) or '').strip()
+    if pid:
+        return pid
+    return ca_env.pick_default('', 'CODEAGENT_IMAGE_GEN_PRESET_ID').strip()
+
+
+def _cli_vision_preset_id(args) -> str:
+    from codeagent.core import env as ca_env
+
+    vid = (getattr(args, 'vision_llm', None) or '').strip()
+    if vid:
+        return vid
+    return ca_env.pick_default('', 'CODEAGENT_VISION_PRESET_ID').strip()
+
+
+def _cli_stage_path_attachment(path: str, *, agent_id: str, session_id: str):
+    from pathlib import Path
+
+    import mimetypes
+
+    from codeagent.core.attachments import save_attachment
+
+    p = Path(path).expanduser()
+    if not p.is_file():
+        print(f'  [warn] not a file: {path}')
+        return None
+    try:
+        raw = p.read_bytes()
+        mime = mimetypes.guess_type(str(p))[0] or ''
+        return save_attachment(
+            agent_id=agent_id,
+            session_id=session_id,
+            raw_bytes=raw,
+            filename=p.name,
+            mime=mime,
+        )
+    except Exception as e:
+        print(f'  [warn] attach failed {path}: {e}')
+        return None
+
+
+def _cli_startup_attachments(args, *, agent_id: str, session_id: str, project_root):
+    from pathlib import Path
+
+    from codeagent.core import env as ca_env
+    from codeagent.core.attachments import scan_image_directory
+
+    metas = []
+    image_dir_tag = ''
+    for path in getattr(args, 'image', None) or []:
+        meta = _cli_stage_path_attachment(path, agent_id=agent_id, session_id=session_id)
+        if meta:
+            metas.append(meta)
+            print(f'  [attach] {meta.filename} → {meta.id}')
+
+    image_dir = (getattr(args, 'image_dir', None) or '').strip()
+    if image_dir:
+        if getattr(args, 'image_dir_ref', False):
+            rel = image_dir.replace('\\', '/').lstrip('/')
+            mx = ca_env.pick_int(32, 'CODEAGENT_ATTACHMENTS_DIR_MAX_FILES')
+            image_dir_tag = f'[image_dir:{rel} max={mx}]'
+            print(f'  [image-dir-ref] {image_dir_tag}')
+        else:
+            pattern = (getattr(args, 'image_pattern', None) or '').strip() or None
+            try:
+                paths, truncated = scan_image_directory(
+                    Path(project_root),
+                    image_dir,
+                    pattern=pattern,
+                )
+            except ValueError as e:
+                print(f'  [warn] image-dir: {e}')
+                paths, truncated = [], False
+            for p in paths:
+                meta = _cli_stage_path_attachment(str(p), agent_id=agent_id, session_id=session_id)
+                if meta:
+                    metas.append(meta)
+            if metas:
+                print(f'  [image-dir] staged {len(metas)} file(s)' + (' (truncated)' if truncated else ''))
+            elif not truncated:
+                print(f'  [warn] no images found in {image_dir}')
+    return metas, image_dir_tag
+
+
+def _cli_handle_slash_attach(line: str, *, agent_id: str, session_id: str, project_root):
+    """Return (handled, attachments, image_dir_tag, message_text)."""
+    from pathlib import Path
+
+    from codeagent.core import env as ca_env
+    from codeagent.core.attachments import scan_image_directory
+
+    low = line.strip().lower()
+    if low in ('/clear-vision', '/clear_vision'):
+        return 'clear_vision', [], '', ''
+    if line.startswith('/attach-dir '):
+        path = line[len('/attach-dir '):].strip()
+        if not path:
+            print('  usage: /attach-dir <path>')
+            return True, [], '', ''
+        mx = ca_env.pick_int(32, 'CODEAGENT_ATTACHMENTS_DIR_MAX_FILES')
+        tag = f'[image_dir:{path.replace(chr(92), "/").lstrip("/")} max={mx}]'
+        print(f'  [image-dir-ref] {tag}')
+        return True, [], tag, ''
+    if line.startswith('/attach '):
+        path = line[len('/attach '):].strip()
+        if not path:
+            print('  usage: /attach <path>')
+            return True, [], '', ''
+        meta = _cli_stage_path_attachment(path, agent_id=agent_id, session_id=session_id)
+        if meta:
+            print(f'  [attach] {meta.filename} → {meta.id}')
+            return True, [meta], '', ''
+        return True, [], '', ''
+    return False, [], '', line
+
+
 def _cmd_chat_llm(args):
 
     from seed_tools import setup_builtin_tools
 
-    from seed.core.agent_context import set_active_llm_session
+    from seed.core.agent_context import (
+        set_active_agent_id,
+        set_active_audio_preset,
+        set_active_image_gen_preset,
+        set_active_llm_session,
+        set_active_vision_preset,
+    )
     from seed.core.agent_runtime import (
         build_api_projection_messages,
         maybe_compact_context_messages,
@@ -453,31 +622,103 @@ def _cmd_chat_llm(args):
     from codeagent.core import env as ca_env
 
     agent_id = ca_env.default_agent_id()
-    chat_sess = load_or_create_chat_session(name)
+    vision_preset_id = _cli_vision_preset_id(args)
+    image_gen_preset_id = _cli_image_gen_preset_id(args)
+    audio_preset_id = _cli_audio_preset_id(args)
+    chat_sess = load_or_create_chat_session(name, agent_id)
     fresh_sys = fresh_system_prompt(agent_id=agent_id)
     chat_sess.messages[:] = merge_fresh_system(chat_sess.messages, fresh_sys)
 
+    pending_attachments, pending_dir_tag = _cli_startup_attachments(
+        args,
+        agent_id=agent_id,
+        session_id=name,
+        project_root=project_root,
+    )
+
     print(f"CodeAgent LLM chat — session «{name}» — {len(registry.list_all())} tools — exit / quit 结束。")
     print(f"  API: {llm.baseURL}  model: {llm.model}")
+    if vision_preset_id:
+        print(f"  Vision preset: {vision_preset_id}")
+    if image_gen_preset_id:
+        print(f"  Image gen preset: {image_gen_preset_id}")
+    if audio_preset_id:
+        print(f"  Audio preset: {audio_preset_id}")
+    print("  命令: /attach <path>  /attach-dir <path>  /clear-vision")
     while True:
         try:
             line = input("> ").strip()
         except (EOFError, KeyboardInterrupt):
             print()
             break
-        if not line:
+        if not line and not pending_attachments and not pending_dir_tag:
             continue
         if line.lower() in ('exit', 'quit', 'q'):
             break
-        chat_sess.messages.append({"role": "user", "content": line})
+
+        slash_atts: list = []
+        slash_dir_tag = ''
+        message_text = line
+        if line.startswith('/'):
+            handled, slash_atts, slash_dir_tag, message_text = _cli_handle_slash_attach(
+                line,
+                agent_id=agent_id,
+                session_id=name,
+                project_root=project_root,
+            )
+            if handled == 'clear_vision':
+                if isinstance(chat_sess.metadata, dict):
+                    chat_sess.metadata.pop('vision_context', None)
+                print('  视觉上下文已清除')
+                continue
+            if handled is True and not slash_atts and not slash_dir_tag:
+                continue
+        else:
+            handled = False
+
+        if slash_atts:
+            pending_attachments.extend(slash_atts)
+        if slash_dir_tag:
+            pending_dir_tag = slash_dir_tag
+
+        from codeagent.core.attachments import (
+            build_user_message,
+            message_has_audio_attachments,
+            message_has_image_attachments,
+            message_has_video_attachments,
+        )
+        from codeagent.core.audio_models import preset_supports_audio_id
+        from codeagent.core.vision_models import preset_supports_vision_id
+
+        user_msg = build_user_message(
+            message_text,
+            pending_attachments,
+            image_dir_tag=pending_dir_tag,
+        )
+        if message_has_image_attachments(user_msg) or message_has_video_attachments(user_msg) or pending_dir_tag:
+            if not vision_preset_id or not preset_supports_vision_id(vision_preset_id):
+                print('[error] 发送图片/视频需要有效的 --vision-llm 或 CODEAGENT_VISION_PRESET_ID')
+                continue
+        if message_has_audio_attachments(user_msg):
+            if not audio_preset_id or not preset_supports_audio_id(audio_preset_id):
+                print('[error] 发送音频需要有效的 --audio-llm 或 CODEAGENT_AUDIO_PRESET_ID')
+                continue
+
+        pending_attachments = []
+        pending_dir_tag = ''
+
+        chat_sess.messages.append(user_msg)
+        user_text = str(user_msg.get('content') or '')
         try:
             from seed.integrations.transcript_store import append_transcript_entries
 
-            append_transcript_entries(name, [chat_sess.messages[-1]], agent_id=None)
+            append_transcript_entries(name, [chat_sess.messages[-1]], agent_id=agent_id)
         except Exception:
             pass
         max_hist = ca_env.pick_int(12, ca_env.CHAT_USER_ROUNDS)
-        _skills_suffix = build_skills_suffix(agent_id, user_text=line)
+        from codeagent.core.attachments import content_text_for_skills
+
+        _skills_suffix = build_skills_suffix(agent_id, user_text=content_text_for_skills(user_text))
         api_msgs = build_api_projection_messages(
             chat_sess.messages,
             max_user_rounds=max_hist,
@@ -487,7 +728,11 @@ def _cmd_chat_llm(args):
         persist_compact_summary(chat_sess.messages, compact_result)
         strip_ephemeral_message_fields(api_msgs)
         apply_episodic_to_messages(api_msgs, project_root, name)
-        set_active_llm_session(name)
+        set_active_llm_session(f'{agent_id}::{name}')
+        set_active_agent_id(agent_id)
+        set_active_vision_preset(vision_preset_id or None)
+        set_active_image_gen_preset(image_gen_preset_id or None)
+        set_active_audio_preset(audio_preset_id or None)
         try:
             n_before = len(api_msgs)
             reply, _, tools_used, _tool_trace, _loop_meta = asyncio.run(
@@ -517,7 +762,7 @@ def _cmd_chat_llm(args):
             with contextlib.suppress(Exception):
                 record_chat_turn_diary(
                     agent_id,
-                    user_text=line,
+                    user_text=user_text,
                     reply=reply or "",
                     tools_used=tools_used,
                 )
@@ -539,6 +784,10 @@ def _cmd_chat_llm(args):
             chat_sess.messages.pop()
         finally:
             set_active_llm_session(None)
+            set_active_vision_preset(None)
+            set_active_image_gen_preset(None)
+            set_active_audio_preset(None)
+            set_active_agent_id(None)
 
 
 def cmd_webui_token(args):

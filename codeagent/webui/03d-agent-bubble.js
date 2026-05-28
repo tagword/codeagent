@@ -80,7 +80,19 @@ function bubble(role, text, opts) {
   const b = document.createElement('div');
   b.className = 'bubble bubble-' + role;
   if (role === 'agent') b.innerHTML = buildAgentBubbleInnerHtml(text, [], null);
-  else b.innerHTML = renderMarkdown(normReply(text));
+  else {
+    b.innerHTML = renderMarkdown(normReply(text));
+    if (role === 'user') {
+      const atts = opts.attachments;
+      if (Array.isArray(atts) && atts.length && typeof renderUserAttachmentsInBubble === 'function') {
+        renderUserAttachmentsInBubble(b, atts);
+      } else if (Array.isArray(opts.attachmentIds) && opts.attachmentIds.length) {
+        renderUserAttachmentsInBubble(b, opts.attachmentIds.map(function(id) {
+          return { id: id, kind: 'image', filename: id };
+        }));
+      }
+    }
+  }
   ensureLinksOpenNewTab(b);
   col.appendChild(meta);
   col.appendChild(b);

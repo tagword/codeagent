@@ -54,23 +54,24 @@ def count_tokens(text: str) -> int:
 
 
 def count_messages(messages: list[dict[str, Any]]) -> dict[str, int]:
-    """计算一组消息的总 token 用量
+    """计算一组消息的总 token 用量（工具优先多模态：仅文本与 tool 结果，不含 image block）。"""
+    from codeagent.core.attachments import ATTACHMENT_TAG_RE, IMAGE_DIR_TAG_RE
 
-    DeepSeek 计算方式：
-    - 所有消息 content 的 token 之和
-    - 每条消息额外开销（role 标记等）：约 4 tokens
-    """
     content_tokens = 0
     for msg in messages:
-        content = msg.get("content") or ""
-        if isinstance(content, list):
-            # 多模态消息
+        role = str(msg.get("role") or "")
+        content = msg.get("content")
+        if role == "tool":
+            content_tokens += count_tokens(str(content or ""))
+        elif isinstance(content, list):
             for part in content:
                 if isinstance(part, dict) and part.get("type") == "text":
                     content_tokens += count_tokens(part.get("text", ""))
         else:
-            content_tokens += count_tokens(str(content))
-        # role 标记开销
+            text = str(content or "")
+            text = ATTACHMENT_TAG_RE.sub("", text)
+            text = IMAGE_DIR_TAG_RE.sub("", text)
+            content_tokens += count_tokens(text)
         content_tokens += 4
 
     return {
@@ -78,3 +79,8 @@ def count_messages(messages: list[dict[str, Any]]) -> dict[str, int]:
         "content_tokens": content_tokens,
         "message_count": len(messages),
     }
+
+
+def estimate_context_tokens(messages: list[dict[str, Any]]) -> dict[str, int]:
+    """Token estimate for context bar (text-only projection)."""
+    return count_messages(messages)
