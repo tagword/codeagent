@@ -142,6 +142,9 @@ function buildPresetCard(p) {
     '  <option' + (p.auth_scheme === 'Bearer' || !p.auth_scheme ? ' selected' : '') + '>Bearer</option>' +
     '  <option' + (p.auth_scheme === 'None' ? ' selected' : '') + '>None</option>' +
     '</select>' +
+    '<label class="form-label"><input type="checkbox" class="preset-fld-vision"' + (p.supports_vision ? ' checked' : '') + '> 支持多模态 (vision_analyze)</label>' +
+    '<label class="form-label"><input type="checkbox" class="preset-fld-imagegen"' + (p.supports_image_gen ? ' checked' : '') + '> 支持图片生成 (image_generate)</label>' +
+    '<label class="form-label"><input type="checkbox" class="preset-fld-audio"' + (p.supports_audio ? ' checked' : '') + '> 支持音频转写 (audio_transcribe)</label>' +
     '<div class="row-actions" style="margin-top: var(--sp-3);">' +
     '  <button type="button" class="btn btn--primary btn--sm preset-save-btn">保存</button>' +
     '  <button type="button" class="btn btn--ghost btn--sm preset-test-btn">测试连接</button>' +
@@ -170,6 +173,9 @@ function buildPresetCard(p) {
     const model = editWrap.querySelector('.preset-fld-model').value.trim();
     const key = editWrap.querySelector('.preset-fld-key').value.trim();
     const scheme = editWrap.querySelector('.preset-fld-scheme').value;
+    const supportsVision = !!editWrap.querySelector('.preset-fld-vision')?.checked;
+    const supportsImageGen = !!editWrap.querySelector('.preset-fld-imagegen')?.checked;
+    const supportsAudio = !!editWrap.querySelector('.preset-fld-audio')?.checked;
     if (!name) { editStatus.textContent = '名称不能为空'; editStatus.classList.add('is-err'); return; }
     if (!base) { editStatus.textContent = 'Base URL 不能为空'; editStatus.classList.add('is-err'); return; }
     if (!model) { editStatus.textContent = '模型名称不能为空'; editStatus.classList.add('is-err'); return; }
@@ -183,6 +189,9 @@ function buildPresetCard(p) {
         model: model,
         api_key: key,
         auth_scheme: scheme === 'None' ? '' : scheme,
+        supports_vision: supportsVision,
+        supports_image_gen: supportsImageGen,
+        supports_audio: supportsAudio,
       };
       const r = await fetch('/api/ui/llm/presets', {
         method: 'POST',
@@ -260,6 +269,9 @@ function showNewPresetForm() {
     '<select class="preset-fld-scheme md-select" style="max-width:100%;">' +
     '  <option selected>Bearer</option><option>None</option>' +
     '</select>' +
+    '<label class="form-label"><input type="checkbox" class="preset-fld-vision"> 支持多模态 (vision_analyze)</label>' +
+    '<label class="form-label"><input type="checkbox" class="preset-fld-imagegen"> 支持图片生成 (image_generate)</label>' +
+    '<label class="form-label"><input type="checkbox" class="preset-fld-audio"> 支持音频转写 (audio_transcribe)</label>' +
     '<div class="row-actions" style="margin-top: var(--sp-3);">' +
     '  <button type="button" class="btn btn--primary btn--sm preset-save-btn">保存</button>' +
     '  <button type="button" class="btn btn--ghost btn--sm preset-test-btn">测试连接</button>' +
@@ -274,6 +286,9 @@ function showNewPresetForm() {
     const model = editWrap.querySelector('.preset-fld-model').value.trim();
     const key = editWrap.querySelector('.preset-fld-key').value.trim();
     const scheme = editWrap.querySelector('.preset-fld-scheme').value;
+    const supportsVision = !!editWrap.querySelector('.preset-fld-vision')?.checked;
+    const supportsImageGen = !!editWrap.querySelector('.preset-fld-imagegen')?.checked;
+    const supportsAudio = !!editWrap.querySelector('.preset-fld-audio')?.checked;
     if (!name) { editStatus.textContent = '名称不能为空'; editStatus.classList.add('is-err'); return; }
     if (!base) { editStatus.textContent = 'Base URL 不能为空'; editStatus.classList.add('is-err'); return; }
     if (!model) { editStatus.textContent = '模型名称不能为空'; editStatus.classList.add('is-err'); return; }
@@ -281,7 +296,7 @@ function showNewPresetForm() {
     editStatus.classList.remove('is-err');
     try {
       const id = name.replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase();
-      const kv = { id: id, name: name, base_url: base, model: model, api_key: key, auth_scheme: scheme === 'None' ? '' : scheme };
+      const kv = { id: id, name: name, base_url: base, model: model, api_key: key, auth_scheme: scheme === 'None' ? '' : scheme, supports_vision: supportsVision, supports_image_gen: supportsImageGen, supports_audio: supportsAudio };
       const r = await fetch('/api/ui/llm/presets', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

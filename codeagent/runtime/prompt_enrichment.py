@@ -47,6 +47,7 @@ def fresh_system_prompt(*, agent_id: str | None = None) -> str:
                 )
     except Exception:
         pass
+    base = base.rstrip() + vision_multimodal_appendix()
     return base
 
 
@@ -64,8 +65,12 @@ def build_skills_suffix(
     if ca_env.env_truthy(ca_env.SKILLS_AUTO, default="1"):
         try:
             from codeagent.skills.select import build_selected_skills_appendix
+            from codeagent.core.attachments import content_text_for_skills
 
-            appendix = build_selected_skills_appendix(agent_id, user_text=user_text)
+            appendix = build_selected_skills_appendix(
+                agent_id,
+                user_text=content_text_for_skills(user_text),
+            )
             if appendix:
                 parts.append(appendix)
         except Exception:
@@ -74,6 +79,21 @@ def build_skills_suffix(
     if not parts:
         return None
     return "\n".join(parts)
+
+
+def vision_multimodal_appendix() -> str:
+    return (
+        "\n\n## Multimodal (images)\n\n"
+        "When the user message contains `[attachment:...]` or `[image_dir:...]`, "
+        "you MUST call `vision_analyze` or `vision_analyze_directory` before answering "
+        "about image content. Do not claim to see images without tool results.\n\n"
+        "When the user asks to **create, draw, or generate** an image, call `image_generate` "
+        "with a detailed prompt. Share the returned `attachment_id` / URL in your reply so "
+        "the user can view the result.\n\n"
+        "For **audio** attachments, call `audio_transcribe` before answering about spoken content.\n"
+        "For **video** attachments, call `video_analyze` (requires server ffmpeg for frame sampling).\n"
+        "Camera captures appear as `[attachment:...]` — use `vision_analyze` on them like uploaded photos.\n"
+    )
 
 
 def record_chat_turn_diary(
@@ -89,8 +109,11 @@ def record_chat_turn_diary(
         return
     try:
         from codeagent.memory.diary import append_diary_entry, archive_old_diaries
+        from codeagent.core.attachments import content_text_for_skills
 
-        u = (user_text or "").strip()
+        u = content_text_for_skills(user_text or "")
+        if not u and (user_text or "").strip():
+            u = "[用户附加了图片或文档]"
         r = (reply or "").strip()
         block = f"**用户**: {u[:500]}\n\n**助手**: {r[:800]}"
         if tools_used:

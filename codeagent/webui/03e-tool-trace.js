@@ -6,6 +6,37 @@
  * @param {{prepend?:boolean,skipScroll?:boolean,running?:boolean,hideIndex?:boolean}} opts
  * @returns {HTMLDetailsElement}
  */
+/**
+ * Render thumbnail previews for image_generate tool results inside a tool trace row.
+ */
+function appendGeneratedImagesToToolRow(detailsEl, row) {
+  if (!detailsEl || !row) return;
+  const name = (row.tool || row.name || '').toLowerCase();
+  if (name !== 'image_generate') return;
+  let payload = null;
+  try {
+    payload = JSON.parse(String(row.result || ''));
+  } catch (_) {
+    return;
+  }
+  const images = payload && payload.images;
+  if (!Array.isArray(images) || !images.length) return;
+  detailsEl.querySelectorAll('.oa-tool-gen-images').forEach(function(n) { n.remove(); });
+  const wrap = document.createElement('div');
+  wrap.className = 'oa-tool-gen-images';
+  images.forEach(function(img) {
+    if (!img || !img.attachment_id) return;
+    const el = document.createElement('img');
+    el.className = 'bubble-user__img';
+    el.alt = img.filename || 'generated';
+    el.src = '/api/attachments/' + encodeURIComponent(img.attachment_id)
+      + '?session_id=' + encodeURIComponent(typeof sessionId !== 'undefined' ? sessionId : 'web-chat')
+      + '&agent_id=' + encodeURIComponent(typeof agentId !== 'undefined' ? agentId : 'default');
+    wrap.appendChild(el);
+  });
+  if (wrap.childNodes.length) detailsEl.appendChild(wrap);
+}
+
 function appendAgentToolTraceRowToLog(row, index, total, opts) {
   opts = opts || {};
   const name = (row && (row.tool || row.name)) || 'tool';
@@ -41,6 +72,8 @@ function appendAgentToolTraceRowToLog(row, index, total, opts) {
   }
   wrap.appendChild(summary);
   wrap.appendChild(pre);
+
+  appendGeneratedImagesToToolRow(wrap, row);
 
   if (opts.prepend && log.firstChild) {
     log.insertBefore(wrap, log.firstChild);
@@ -97,6 +130,7 @@ function updateTimelineToolRowElement(detailsEl, row, index, total) {
   }
   const pre = detailsEl.querySelector('.oa-tool-trace-pre');
   if (pre) pre.textContent = '参数：\n' + args + '\n\n输出：\n' + res;
+  appendGeneratedImagesToToolRow(detailsEl, row);
   const spin = detailsEl.querySelector('.oa-live-tool-spinner');
   if (spin && spin.parentNode) spin.parentNode.removeChild(spin);
 }

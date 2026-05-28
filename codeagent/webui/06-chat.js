@@ -44,11 +44,39 @@
 
 sendBtn.onclick = async () => {
   const text = msg.value.trim();
-  if (!text) return;
+  const hasPending = typeof pendingAttachments !== 'undefined' && pendingAttachments.length > 0;
+  if (!text && !hasPending) return;
+  if (hasPending) {
+    let needVision = false;
+    let needAudio = false;
+    pendingAttachments.forEach(function(p) {
+      const m = p.mime || '';
+      if (m.startsWith('image/') || m.startsWith('video/')) needVision = true;
+      if (m.startsWith('audio/')) needAudio = true;
+    });
+    if (needVision && typeof visionModelReadyForAttachments === 'function' && !visionModelReadyForAttachments()) {
+      systemMsg('err', '请先选择多模态模型（图片/视频）');
+      return;
+    }
+    if (needAudio && typeof audioModelReadyForAttachments === 'function' && !audioModelReadyForAttachments()) {
+      systemMsg('err', '请先选择音频转写模型');
+      return;
+    }
+  }
   msg.value = '';
   const requestSid = sessionId;
   scrollLogForce();
-  bubble('user', text, { at: Date.now() });
+  let attachmentIds = [];
+  try {
+    if (hasPending && typeof uploadPendingAttachments === 'function') {
+      attachmentIds = await uploadPendingAttachments();
+    }
+  } catch (e) {
+    systemMsg('err', String(e));
+    return;
+  }
+  const displayText = text || (attachmentIds.length ? '[附件]' : '');
+  bubble('user', displayText, { at: Date.now(), attachmentIds: attachmentIds });
   if (typeof resetAgentReplyDedupe === 'function') resetAgentReplyDedupe();
   bumpChatInflight(requestSid, 1);
   try {
@@ -57,10 +85,17 @@ sendBtn.onclick = async () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         session_id: requestSid, agent_id: agentId, project_id: projectId,
-        message: text, enable_thinking: getThinkState(),
-        llm_id: (modelSelect ? modelSelect.value : '') || undefined
+        message: text,
+        attachment_ids: attachmentIds.length ? attachmentIds : undefined,
+        clear_vision_context: typeof pendingClearVision !== 'undefined' && pendingClearVision ? true : undefined,
+        enable_thinking: getThinkState(),
+        llm_id: (modelSelect && modelSelect.value !== '__default__') ? modelSelect.value : undefined,
+        vision_llm_id: (typeof getSelectedVisionModel === 'function' ? getSelectedVisionModel() : '') || undefined,
+        image_gen_llm_id: (typeof getSelectedImageGenModel === 'function' ? getSelectedImageGenModel() : '') || undefined,
+        audio_llm_id: (typeof getSelectedAudioModel === 'function' ? getSelectedAudioModel() : '') || undefined
       })
     });
+    if (typeof pendingClearVision !== 'undefined') pendingClearVision = false;
     const j = await r.json().catch(async () => {
       const text = await r.text().catch(() => '');
       return { detail: text || r.statusText };
