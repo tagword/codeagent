@@ -104,10 +104,8 @@ python -m pip install --upgrade pip -q
 
 # ── 2. Install packages (monorepo siblings or PyPI) ─────────────────────
 echo "==> Install seed / seed-tools / codeagent"
-if [ -d "$MONO/seed/pyproject.toml" ] && [ -d "$MONO/seed-tools/pyproject.toml" ]; then
-  pip install -e "$MONO/seed"
-  pip install -e "$MONO/seed-tools[code]"
-  pip install -e "$ROOT"
+if [ -f "$MONO/seed/pyproject.toml" ] && [ -f "$MONO/seed-tools/pyproject.toml" ]; then
+  pip install -e "$MONO/seed" -e "$MONO/seed-tools[code]" -e "$ROOT"
 else
   pip install -e "$ROOT[dev,bundle]"
 fi
