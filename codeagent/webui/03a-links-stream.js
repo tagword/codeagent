@@ -8,8 +8,18 @@
 function ensureLinksOpenNewTab(el) {
   try {
     if (!el) return;
+    if (typeof hydrateAttachmentImagesInBubble === 'function') {
+      hydrateAttachmentImagesInBubble(el);
+    } else if (typeof enhanceChatImagesInBubble === 'function') {
+      enhanceChatImagesInBubble(el);
+    }
     const links = el.querySelectorAll ? el.querySelectorAll('a[href]') : [];
     links.forEach((a) => {
+      const href = String(a.getAttribute('href') || '');
+      if (href.indexOf('/api/attachments/') === 0) {
+        try { a.removeAttribute('target'); a.removeAttribute('rel'); } catch (_) {}
+        return;
+      }
       try { a.setAttribute('target', '_blank'); a.setAttribute('rel', 'noopener noreferrer'); } catch (_) {}
     });
   } catch (_) {}

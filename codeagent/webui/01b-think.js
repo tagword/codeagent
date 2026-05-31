@@ -13,13 +13,21 @@ async function refreshModelSelect() {
     const r = await fetch('/api/ui/llm/presets');
     if (!r.ok) return;
     const j = await r.json();
-    const presets = j.presets || [];
+    const presets = (j.presets || []).filter(function(p) {
+      return inferPresetUseType(p) === 'chat';
+    });
     const defaultId = j.default_id || '';
     modelSelect.innerHTML = '<option value="__default__">默认模型</option>';
     presets.forEach(function(p) {
       const o = document.createElement('option');
       o.value = p.id || '';
       let label = p.name || p.model || p.id;
+      const prov = (p.provider_label || '').trim();
+      const ut = (p.use_type_label || '').trim();
+      const mdl = (p.model_label || p.model || '').trim();
+      if (prov) label += ' · ' + prov;
+      if (ut) label += ' · ' + ut;
+      if (mdl && mdl !== label) label += ' · ' + mdl;
       if (p.id === defaultId) label += ' （默认）';
       o.textContent = label;
       modelSelect.appendChild(o);
@@ -33,6 +41,7 @@ async function refreshModelSelect() {
       modelSelect.value = '__default__';
       setSelectedModel('');
     }
+    if (typeof updateComposeModelPill === 'function') updateComposeModelPill();
   } catch (_) {}
 }
 const refreshChatModelSelect = refreshModelSelect;

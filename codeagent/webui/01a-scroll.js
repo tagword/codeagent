@@ -14,6 +14,7 @@ const msg = document.getElementById('msg');
 const sendBtn = document.getElementById('send');
 const stopBtn = document.getElementById('stop');
 const thinkToggle = document.getElementById('thinkToggle');
+const reasoningEffortSelect = document.getElementById('reasoningEffortSelect');
 const modelSelect = document.getElementById('modelSelect');
 
 // ── Smart auto-scroll (don't pull user away from history) ──────────────

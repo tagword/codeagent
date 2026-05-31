@@ -103,7 +103,7 @@ def create_app():
         from seed.core.llm_exec import LLMError
         from seed.core.llm_presets import llm_executor_from_resolved, resolve_preset
         from seed.core.llm_sess import load_or_create_chat_session, merge_fresh_system, persist_chat_session
-        from seed.core.mem_bridge import apply_episodic_to_messages
+        from seed.core.mem_bridge import finalize_episodic_for_llm
         from seed.core.chat_events import set_chat_cancel_checker, reset_chat_cancel_checker
         from seed.integrations.session_title import maybe_llm_refresh_session_title
         import threading
@@ -137,11 +137,12 @@ def create_app():
             vision_llm_id = str(body.get("vision_llm_id") or "").strip()
             image_gen_llm_id = str(body.get("image_gen_llm_id") or "").strip()
             audio_llm_id = str(body.get("audio_llm_id") or "").strip()
+            music_llm_id = str(body.get("music_llm_id") or "").strip()
 
             from codeagent.server.attachment_api import parse_chat_multimodal_body
             from codeagent.core.attachments import content_text_for_skills
             from codeagent.core.audio_models import preset_supports_audio_id
-            from codeagent.core.vision_models import preset_supports_vision_id, resolve_main_llm
+            from codeagent.core.vision_models import resolve_main_llm
 
             try:
                 user_msg, _att_ids, has_image, _extra = parse_chat_multimodal_body(body)
@@ -152,12 +153,27 @@ def create_app():
             has_audio = bool(_extra.get("has_audio"))
 
             message = str(user_msg.get("content") or "").strip()
-            if has_image or has_video:
-                if not vision_llm_id or not preset_supports_vision_id(vision_llm_id):
-                    return JSONResponse(
-                        {"detail": "需要选择支持多模态的模型 (vision_llm_id)"},
-                        status_code=400,
-                    )
+            from codeagent.core.image_understanding import (
+                MCP_VISION_SENTINEL,
+                image_attachment_allowed,
+                video_attachment_allowed,
+            )
+
+            if has_image and not image_attachment_allowed(vision_llm_id):
+                return JSONResponse(
+                    {
+                        "detail": (
+                            "发送图片需要 supports_vision 的多模态预设，"
+                            "或已配置 MiniMax MCP（understand_image）"
+                        )
+                    },
+                    status_code=400,
+                )
+            if has_video and not video_attachment_allowed(vision_llm_id):
+                return JSONResponse(
+                    {"detail": "发送视频需要选择支持多模态的模型 (vision_llm_id)"},
+                    status_code=400,
+                )
             if has_audio:
                 if not audio_llm_id or not preset_supports_audio_id(audio_llm_id):
                     return JSONResponse(
@@ -211,17 +227,18 @@ def create_app():
                 chat_sess.metadata.pop("vision_context", None)
 
             chat_sess.messages.append(user_msg)
-            try:
-                from seed.integrations.transcript_store import append_transcript_entries
-
-                append_transcript_entries(session_id, [chat_sess.messages[-1]], agent_id=agent_id)
-            except Exception:
-                pass
 
             max_hist = pick_int(12, *CHAT_USER_ROUNDS)
             max_rounds = pick_int(24, *MAX_TOOL_ROUNDS)
 
             llm = resolve_main_llm(llm_id or None)
+            _raw_thinking = body.get("enable_thinking")
+            if _raw_thinking is None:
+                chat_enable_thinking = None
+            else:
+                chat_enable_thinking = bool(_raw_thinking)
+            _raw_effort = str(body.get("reasoning_effort") or "").strip().lower()
+            chat_reasoning_effort = _raw_effort if _raw_effort else None
             reg, exe = tools_for_agent(agent_id)
             from seed.core.agent_context import (
                 clear_active_project_workspace,
@@ -231,13 +248,18 @@ def create_app():
                 set_active_vision_preset,
                 set_active_image_gen_preset,
                 set_active_audio_preset,
+                set_active_music_preset,
             )
 
             set_active_llm_session(f"{agent_id}::{session_id}")
             set_active_agent_id(agent_id)
-            set_active_vision_preset(vision_llm_id or None)
+            _vision_preset = vision_llm_id or None
+            if _vision_preset == MCP_VISION_SENTINEL:
+                _vision_preset = None
+            set_active_vision_preset(_vision_preset)
             set_active_image_gen_preset(image_gen_llm_id or None)
             set_active_audio_preset(audio_llm_id or None)
+            set_active_music_preset(music_llm_id or None)
             from seed.core.proj_reg import get_project, resolve_project_path
             if project_id:
                 set_active_project_episodic(True, project_id)
@@ -287,12 +309,16 @@ def create_app():
             compact_result = await asyncio.to_thread(maybe_compact_context_messages, api_msgs, llm)
             persist_compact_summary(chat_sess.messages, compact_result)
             strip_ephemeral_message_fields(api_msgs)
-            apply_episodic_to_messages(
+            if not isinstance(chat_sess.metadata, dict):
+                chat_sess.metadata = {}
+            await asyncio.to_thread(
+                finalize_episodic_for_llm,
                 api_msgs,
-                project_root,
-                session_id,
+                chat_sess.metadata,
+                agent_id=agent_id,
+                session_id=session_id,
                 project_id=project_id or None,
-                project_scope=False,
+                compact_happened=compact_result is not None,
             )
 
             # ── WS 广播回调 ──
@@ -457,6 +483,8 @@ def create_app():
                                 on_text_delta=_on_text_delta,
                                 on_reasoning_delta=_on_reasoning_delta,
                                 on_check_pending_messages=_drain_pending_injections,
+                                enable_thinking=chat_enable_thinking,
+                                reasoning_effort=chat_reasoning_effort,
                             )
                         except Exception:
                             reset_usage_accumulation(_seg_token)
@@ -524,6 +552,8 @@ def create_app():
                             on_text_delta=_on_text_delta,
                             on_reasoning_delta=_on_reasoning_delta,
                             on_check_pending_messages=_drain_pending_injections,
+                            enable_thinking=chat_enable_thinking,
+                            reasoning_effort=chat_reasoning_effort,
                         )
                     except Exception:
                         reset_usage_accumulation(_norm_token)
@@ -562,13 +592,6 @@ def create_app():
                     )
 
                 tail = merge_llm_tail_into_full(chat_sess.messages, api_msgs, n_before_ref[0])
-                try:
-                    from seed.integrations.transcript_store import append_transcript_entries
-
-                    if tail:
-                        append_transcript_entries(session_id, tail, agent_id=agent_id)
-                except Exception:
-                    pass
                 try:
                     loop = asyncio.get_running_loop()
                     loop.run_in_executor(None, persist_chat_session, chat_sess, agent_id)
@@ -897,6 +920,7 @@ def create_app():
         api_attachment_get,
         api_attachment_upload,
     )
+    from codeagent.server.tts_api import api_tts
 
     routes = [
         Route("/", homepage),
@@ -911,6 +935,7 @@ def create_app():
         Route("/api/chat", api_chat, methods=["POST"]),
         Route("/api/chat/stop", api_chat_stop, methods=["POST"]),
         Route("/api/chat/rollback", api_chat_rollback, methods=["POST"]),
+        Route("/api/tts", api_tts, methods=["POST"]),
         WebSocketRoute("/ws", websocket_chat),
         WebSocketRoute("/ws/{path:path}", websocket_chat),
     ]

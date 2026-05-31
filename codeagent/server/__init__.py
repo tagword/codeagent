@@ -164,12 +164,12 @@ def _reply_append_tool_summary(reply: str, seg_summary: str) -> str:
     return (r + "\n\n" + s) if r else s
 
 
-def _webui_transcript_rows_from_session(sess: Session, max_chars: int) -> list[dict[str, Any]]:
-    """Flatten session to user/assistant rows for Web UI replay (same shape as before)."""
+def _webui_history_rows_from_session(sess: Session, max_chars: int) -> list[dict[str, Any]]:
+    """Flatten session to user/assistant rows for Web UI history replay."""
     from seed.core.llm_exec import msg_text_to_str
 
     try:
-        rc_max = int(os.environ.get("CODEAGENT_WEBUI_TRANSCRIPT_REASONING_MAX_CHARS", "50000"))
+        rc_max = int(os.environ.get("CODEAGENT_WEBUI_SESSION_HISTORY_REASONING_MAX_CHARS", "50000"))
     except ValueError:
         rc_max = 50000
     rc_max = max(0, min(rc_max, 500_000))
@@ -199,7 +199,7 @@ def _webui_transcript_rows_from_session(sess: Session, max_chars: int) -> list[d
     return raw
 
 
-def _webui_transcript_partition_user_blocks(rows: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
+def _webui_history_partition_user_blocks(rows: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
     """Each block starts at a user message; following assistant rows attach until the next user."""
     blocks: list[list[dict[str, Any]]] = []
     cur: list[dict[str, Any]] = []
@@ -335,9 +335,9 @@ def _persist_long_user_input(*, agent_id: str, session_id: str, text: str) -> st
     Best-effort; failures do not block chat.
     """
     try:
-        from seed.core.llm_sess import llm_sessions_dir
+        from seed.core.llm_sess import agent_sessions_dir
 
-        base = Path(llm_sessions_dir(agent_id)) / "_user_inputs"
+        base = Path(agent_sessions_dir(agent_id)) / "_user_inputs"
         base.mkdir(parents=True, exist_ok=True)
         ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         p = base / f"{session_id}_{ts}.txt"

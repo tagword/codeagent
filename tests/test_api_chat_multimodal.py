@@ -106,7 +106,7 @@ def test_api_attachment_upload(agent_home) -> None:
         assert get_r.content.startswith(b"\x89PNG")
 
 
-def test_api_chat_rejects_image_without_vision(agent_home) -> None:
+def test_api_chat_rejects_image_without_vision_or_mcp(agent_home) -> None:
     from codeagent.server.app_factory import create_app
 
     raw = b"\x89PNG\r\n\x1a\n" + b"\x00" * 8

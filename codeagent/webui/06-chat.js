@@ -47,15 +47,21 @@ sendBtn.onclick = async () => {
   const hasPending = typeof pendingAttachments !== 'undefined' && pendingAttachments.length > 0;
   if (!text && !hasPending) return;
   if (hasPending) {
-    let needVision = false;
+    let needImage = false;
+    let needVideo = false;
     let needAudio = false;
     pendingAttachments.forEach(function(p) {
       const m = p.mime || '';
-      if (m.startsWith('image/') || m.startsWith('video/')) needVision = true;
+      if (m.startsWith('image/')) needImage = true;
+      if (m.startsWith('video/')) needVideo = true;
       if (m.startsWith('audio/')) needAudio = true;
     });
-    if (needVision && typeof visionModelReadyForAttachments === 'function' && !visionModelReadyForAttachments()) {
-      systemMsg('err', '请先选择多模态模型（图片/视频）');
+    if (needImage && typeof attachmentImageReady === 'function' && !attachmentImageReady()) {
+      systemMsg('err', '请先配置识图：多模态 LLM 或 MiniMax MCP');
+      return;
+    }
+    if (needVideo && typeof attachmentVideoReady === 'function' && !attachmentVideoReady()) {
+      systemMsg('err', '请先选择多模态模型（视频分析）');
       return;
     }
     if (needAudio && typeof audioModelReadyForAttachments === 'function' && !audioModelReadyForAttachments()) {
@@ -87,15 +93,15 @@ sendBtn.onclick = async () => {
         session_id: requestSid, agent_id: agentId, project_id: projectId,
         message: text,
         attachment_ids: attachmentIds.length ? attachmentIds : undefined,
-        clear_vision_context: typeof pendingClearVision !== 'undefined' && pendingClearVision ? true : undefined,
         enable_thinking: getThinkState(),
+        reasoning_effort: getThinkState() ? getReasoningEffort() : undefined,
         llm_id: (modelSelect && modelSelect.value !== '__default__') ? modelSelect.value : undefined,
         vision_llm_id: (typeof getSelectedVisionModel === 'function' ? getSelectedVisionModel() : '') || undefined,
         image_gen_llm_id: (typeof getSelectedImageGenModel === 'function' ? getSelectedImageGenModel() : '') || undefined,
-        audio_llm_id: (typeof getSelectedAudioModel === 'function' ? getSelectedAudioModel() : '') || undefined
+        audio_llm_id: (typeof getSelectedAudioModel === 'function' ? getSelectedAudioModel() : '') || undefined,
+        music_llm_id: (typeof getSelectedMusicModel === 'function' ? getSelectedMusicModel() : '') || undefined
       })
     });
-    if (typeof pendingClearVision !== 'undefined') pendingClearVision = false;
     const j = await r.json().catch(async () => {
       const text = await r.text().catch(() => '');
       return { detail: text || r.statusText };
@@ -220,14 +226,26 @@ function switchToPage(id) {
 function activatePage(id) {
   switchToPage(id);
   try { localStorage.setItem(TAB_KEY, id); } catch (_) {}
-  if (id === 'config') { loadChatEnvConfig(); loadLlmPresets(); loadConfigPaths(); loadGitRemoteConfig(); }
+  if (id === 'config') {
+    loadChatEnvConfig();
+    loadLlmPresets();
+    if (typeof loadMcpEnvConfig === 'function') loadMcpEnvConfig();
+    loadConfigPaths();
+    loadGitRemoteConfig();
+  }
   if (id === 'tasks') { loadCronPanel(); }
   // id 'tasks' 对应导航栏「计划」
   if (id === 'agent') { loadAgentPage(); }
   if (id === 'chat' && webuiSessionsEnabled) {
     refreshSessionList().catch(() => {});
-    loadTranscriptIntoLog(true);
+    loadSessionHistoryIntoLog(true);
   }
-  if (id === 'chat' || id === 'config') refreshModelSelect().catch(() => {});
+  if (id === 'chat' || id === 'config') {
+    if (typeof refreshMultimodalModelSelects === 'function') {
+      refreshMultimodalModelSelects().catch(function() {});
+    } else {
+      refreshModelSelect().catch(function() {});
+    }
+  }
 }
 

@@ -37,7 +37,7 @@ function bubble(role, text, opts) {
   const ts = formatBubbleTime(at);
   meta.textContent = ts ? label + ' · ' + ts : label;
 
-  // ── 存储原始消息索引（来自 transcript API 的 idx 字段）用于回滚 ──
+  // ── 存储原始消息索引（来自 session/history API 的 idx 字段）用于回滚 ──
   var msgIdx = (opts && opts.idx != null) ? opts.idx : null;
   if (msgIdx != null) wrap.setAttribute('data-msg-idx', String(msgIdx));
 
@@ -65,10 +65,10 @@ function bubble(role, text, opts) {
             });
             var j = await r.json();
             if (!r.ok) { alert('回滚失败：' + (j.detail || r.statusText)); return; }
-            // 清除现有 log，重新加载 transcript
+            // 清除现有 log，重新加载会话历史
             if (typeof clearLog === 'function') clearLog();
-            if (typeof loadTranscriptIntoLog === 'function') {
-              await loadTranscriptIntoLog();
+            if (typeof loadSessionHistoryIntoLog === 'function') {
+              await loadSessionHistoryIntoLog();
             }
           } catch (err) { alert('回滚请求失败：' + err.message); }
         }
@@ -96,6 +96,9 @@ function bubble(role, text, opts) {
   ensureLinksOpenNewTab(b);
   col.appendChild(meta);
   col.appendChild(b);
+  if (role === 'agent' && typeof appendBubbleTtsBar === 'function') {
+    appendBubbleTtsBar(col, text, { role: role });
+  }
   wrap.appendChild(col);
   if (opts.prepend && log.firstChild) {
     log.insertBefore(wrap, log.firstChild);

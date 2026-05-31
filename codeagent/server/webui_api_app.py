@@ -15,7 +15,7 @@ import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict
 
 from starlette.applications import Starlette
 from starlette.requests import Request
@@ -31,8 +31,8 @@ def _default_agent_id() -> str:
     return ca_env.default_agent_id()
 
 
-def _json_default_transcript(o: Any) -> Any:
-    """Best-effort encoder for transcript payloads (tool_trace may hold bytes, sets, etc.)."""
+def _json_default_history(o: Any) -> Any:
+    """Best-effort encoder for session history payloads (tool_trace may hold bytes, sets, etc.)."""
     if isinstance(o, bytes):
         return o.decode("utf-8", errors="replace")
     if isinstance(o, (set, frozenset)):
@@ -40,12 +40,12 @@ def _json_default_transcript(o: Any) -> Any:
     return str(o)
 
 
-def _transcript_payload_json_safe(payload: dict[str, Any]) -> dict[str, Any]:
+def _history_payload_json_safe(payload: dict[str, Any]) -> dict[str, Any]:
     """Round-trip through JSON so Starlette JSONResponse never raises TypeError."""
     try:
-        return json.loads(json.dumps(payload, default=_json_default_transcript))
+        return json.loads(json.dumps(payload, default=_json_default_history))
     except (TypeError, ValueError) as e:
-        logger.warning("transcript JSON sanitize fallback: %s", e)
+        logger.warning("session history JSON sanitize fallback: %s", e)
         return json.loads(json.dumps(payload, default=str))
 
 
@@ -269,31 +269,23 @@ def _archive_session_path(path: Path) -> bool:
         return False
 
 
-def _transcript_json_for_session(
+def _session_history_json_for_session(
     sess: Any,
     before_block_index: int | None,
 ) -> dict[str, Any]:
     from . import (
-        _webui_transcript_partition_user_blocks,
-        _webui_transcript_rows_from_session,
+        _webui_history_partition_user_blocks,
+        _webui_history_rows_from_session,
     )
 
-    try:
-        from codeagent.core import env as ca_env
+    from codeagent.core import env as ca_env
 
-        max_chars = ca_env.pick_int(12000, ca_env.WEBUI_TRANSCRIPT_MAX_CHARS)
-    except ValueError:
-        max_chars = 12000
-    try:
-        from codeagent.core import env as ca_env
-
-        max_blocks = ca_env.pick_int(10, ca_env.WEBUI_TRANSCRIPT_USER_BLOCKS)
-    except ValueError:
-        max_blocks = 10
+    max_chars = ca_env.pick_int(12000, ca_env.WEBUI_SESSION_HISTORY_MAX_CHARS)
+    max_blocks = ca_env.pick_int(10, ca_env.WEBUI_SESSION_HISTORY_USER_BLOCKS)
     max_blocks = max(1, min(max_blocks, 200))
 
-    rows = _webui_transcript_rows_from_session(sess, max_chars)
-    blocks = _webui_transcript_partition_user_blocks(rows)
+    rows = _webui_history_rows_from_session(sess, max_chars)
+    blocks = _webui_history_partition_user_blocks(rows)
     n = len(blocks)
     if n == 0:
         return {
@@ -322,17 +314,12 @@ def _transcript_json_for_session(
     for b in sel:
         messages.extend(b)
 
-    try:
-        from codeagent.core import env as ca_env
-
-        max_msg = ca_env.pick_int(300, ca_env.WEBUI_TRANSCRIPT_MAX_MESSAGES)
-    except ValueError:
-        max_msg = 300
+    max_msg = ca_env.pick_int(300, ca_env.WEBUI_SESSION_HISTORY_MAX_MESSAGES)
     max_msg = max(10, min(max_msg, 5000))
     if len(messages) > max_msg:
         messages = messages[-max_msg:]
 
-    return _transcript_payload_json_safe(
+    return _history_payload_json_safe(
         {
             "messages": messages,
             "first_block_index": first_idx,
@@ -363,8 +350,8 @@ def build_webui_api_app(project_root: Path) -> Starlette:
     )
     from seed.core.llm_sess import (
         archive_stored_llm_session,
-        delete_stored_llm_session,
-        list_stored_llm_sessions_meta,
+        delete_stored_session,
+        list_stored_sessions_meta,
         load_chat_session_from_disk,
     )
     from seed.core.proj_reg import (
@@ -462,17 +449,28 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         return JSONResponse({"ok": True})
 
     async def api_mcp_get(_: Request) -> JSONResponse:
+        import shutil
+
         from seed.integrations.mcp_client import get_mcp_manager, mcp_globally_enabled
-        from seed.integrations.mcp_config import load_mcp_config, mcp_config_path
+        from seed.integrations.mcp_config import (
+            MINIMAX_MCP_SERVER_ID,
+            build_minimax_token_plan_mcp_server,
+            load_mcp_config,
+            mcp_config_path,
+            minimax_mcp_output_dir,
+        )
 
         try:
-            status = get_mcp_manager().list_servers_status()
+            status = get_mcp_manager().list_servers_status(probe=True)
         except Exception as e:
             logger.exception("api_mcp_get status")
             status = []
             err = str(e)
         else:
             err = None
+        uvx = shutil.which("uvx") or ""
+        from codeagent.core.image_understanding import image_understanding_status
+
         return JSONResponse(
             {
                 "enabled": mcp_globally_enabled(),
@@ -480,6 +478,17 @@ def build_webui_api_app(project_root: Path) -> Starlette:
                 "config": load_mcp_config(project_root),
                 "servers_status": status,
                 "error": err,
+                "minimax_server_id": MINIMAX_MCP_SERVER_ID,
+                "minimax_output_dir": str(minimax_mcp_output_dir(project_root)),
+                "minimax_template": build_minimax_token_plan_mcp_server(
+                    api_key="",
+                    base=project_root,
+                    uvx_command=uvx or "uvx",
+                ),
+                "uvx_path": uvx,
+                "image_understanding": image_understanding_status(
+                    project_root, probe=True, servers_status=status
+                ),
             }
         )
 
@@ -530,6 +539,33 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         except ValueError as e:
             return JSONResponse({"detail": str(e)}, status_code=400)
         return JSONResponse({"ok": True, "path": str(path)})
+
+    async def api_mcp_test(request: Request) -> JSONResponse:
+        from seed.integrations.mcp_client import probe_mcp_server_config
+        from seed.integrations.mcp_config import server_config_from_dict
+
+        try:
+            body = await request.json()
+        except Exception:
+            return JSONResponse({"detail": "invalid json"}, status_code=400)
+        if not isinstance(body, dict):
+            return JSONResponse({"detail": "invalid body"}, status_code=400)
+        sid = str(body.get("id") or body.get("server_id") or "").strip()
+        try:
+            cfg = server_config_from_dict(sid, body)
+        except ValueError as e:
+            return JSONResponse({"detail": str(e)}, status_code=400)
+        if cfg.transport != "stdio":
+            return JSONResponse({"detail": "only stdio transport supported"}, status_code=400)
+        if not cfg.command:
+            return JSONResponse({"detail": "command required"}, status_code=400)
+        result = probe_mcp_server_config(cfg)
+        if not result.get("ok"):
+            return JSONResponse(
+                {"ok": False, "detail": result.get("error") or "probe failed"},
+                status_code=502,
+            )
+        return JSONResponse({"ok": True, **result})
 
     async def api_md_get(request: Request) -> JSONResponse:
         name = (request.path_params.get("name") or "").strip()
@@ -739,9 +775,9 @@ def build_webui_api_app(project_root: Path) -> Starlette:
             ensure_agent_scaffold(aid)
             rows = list_projects(aid)
             # 检查默认目录是否有未分类会话，有则添加虚拟项目
-            from seed.core.llm_sess import list_stored_llm_sessions_meta
+            from seed.core.llm_sess import list_stored_sessions_meta
 
-            unassigned = list_stored_llm_sessions_meta(
+            unassigned = list_stored_sessions_meta(
                 limit=1, agent_id=aid,
                 filter_by_project=True, filter_project_id="",
             )
@@ -1078,19 +1114,19 @@ def build_webui_api_app(project_root: Path) -> Starlette:
             lim = 80
         pid = (request.query_params.get("project_id") or "").strip()
         if pid == _UNASSIGNED_PROJECT_ID:
-            rows = list_stored_llm_sessions_meta(
+            rows = list_stored_sessions_meta(
                 limit=lim, agent_id=aid,
                 filter_by_project=True, filter_project_id="",
             )
         elif pid:
-            rows = list_stored_llm_sessions_meta(
+            rows = list_stored_sessions_meta(
                 limit=lim,
                 agent_id=aid,
                 filter_by_project=True,
                 filter_project_id=pid,
             )
         else:
-            rows = list_stored_llm_sessions_meta(limit=lim, agent_id=aid, filter_by_project=False)
+            rows = list_stored_sessions_meta(limit=lim, agent_id=aid, filter_by_project=False)
         return JSONResponse({"sessions": rows})
 
     async def api_sessions_running(request: Request) -> JSONResponse:
@@ -1105,7 +1141,8 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         ]
         return JSONResponse({"running": running})
 
-    async def api_session_transcript(request: Request) -> JSONResponse:
+    async def api_session_history(request: Request) -> JSONResponse:
+        """Chat history for Web UI bubbles (projection of Session.messages)."""
         try:
             sid = (request.query_params.get("session_id") or "").strip()
             aid = (request.query_params.get("agent_id") or "").strip() or _default_agent_id()
@@ -1134,9 +1171,9 @@ def build_webui_api_app(project_root: Path) -> Starlette:
                         "truncated_start": False,
                     }
                 )
-            return JSONResponse(_transcript_json_for_session(sess, before_i))
+            return JSONResponse(_session_history_json_for_session(sess, before_i))
         except Exception as e:
-            logger.exception("api_session_transcript failed")
+            logger.exception("api_session_history failed")
             return JSONResponse({"detail": str(e)}, status_code=500)
 
     async def api_session_archive(request: Request) -> JSONResponse:
@@ -1164,7 +1201,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         sid = str(body.get("session_id") or "").strip()
         aid = str(body.get("agent_id") or "").strip()
         pid = _resolve_project_id(str(body.get("project_id") or "").strip())
-        ok = delete_stored_llm_session(sid, aid, pid or None)
+        ok = delete_stored_session(sid, aid, pid or None)
         if not ok:
             loc = _locate_session_file(sid, aid, pid)
             if loc and loc.is_file():
@@ -1180,6 +1217,61 @@ def build_webui_api_app(project_root: Path) -> Starlette:
 
     async def api_env_chat_get(_: Request) -> JSONResponse:
         return JSONResponse(_env_chat_view(project_root))
+
+    def _env_mcp_specs() -> list[tuple[tuple[str, ...], str]]:
+        from seed.core.env_access import MCP_CALL_TIMEOUT, MCP_ENABLED, MCP_REGISTER_TOOLS
+
+        return [
+            (MCP_ENABLED, "1"),
+            (MCP_REGISTER_TOOLS, "1"),
+            (MCP_CALL_TIMEOUT, "120"),
+        ]
+
+    def _env_mcp_view(root: Path) -> dict[str, str]:
+        from seed.integrations.env_config import ENV_FILENAME, LEGACY_ENV_FILENAME
+
+        p_seed = root / "config" / ENV_FILENAME
+        p_leg = root / "config" / LEGACY_ENV_FILENAME
+        file_vals = dict(_parse_env_file(p_leg))
+        file_vals.update(_parse_env_file(p_seed))
+        out: dict[str, str] = {}
+        for keys, default in _env_mcp_specs():
+            val = _resolve_env_value(keys, file_vals, default)
+            for k in keys:
+                out[k] = val
+        return out
+
+    async def api_env_mcp_get(_: Request) -> JSONResponse:
+        return JSONResponse(_env_mcp_view(project_root))
+
+    async def api_env_mcp_post(request: Request) -> JSONResponse:
+        try:
+            body = await request.json()
+        except Exception:
+            return JSONResponse({"detail": "invalid json"}, status_code=400)
+        updates: dict[str, str] = {}
+        for keys, _default in _env_mcp_specs():
+            canonical = keys[0]
+            for k in keys:
+                if k in body:
+                    updates[canonical] = str(body[k])
+                    break
+        if not updates:
+            return JSONResponse({"detail": "no known keys"}, status_code=400)
+        from seed.integrations.env_config import ENV_FILENAME
+
+        _write_env_file_merge(project_root / "config" / ENV_FILENAME, updates)
+        for k, v in updates.items():
+            os.environ[k] = v
+        from codeagent.core.seed_bridge import bridge_codeagent_env_to_seed
+
+        bridge_codeagent_env_to_seed()
+        from seed.integrations.mcp_client import reset_mcp_manager
+        from codeagent.tools.agent_tools import reset_agent_tools_cache
+
+        reset_mcp_manager()
+        reset_agent_tools_cache()
+        return JSONResponse({"ok": True, "hint": "已写入 config/seed.env；重启服务后 MCP 开关完全生效。"})
 
     async def api_env_chat_post(request: Request) -> JSONResponse:
         try:
@@ -1204,17 +1296,42 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         bridge_codeagent_env_to_seed()
         return JSONResponse({"ok": True, "hint": "已写入 config/seed.env；内核项已同步 SEED_*。"})
 
+    async def api_tts_options(_: Request) -> JSONResponse:
+        from codeagent.core.speech_synth import minimax_tts_configured
+        from codeagent.core.tts_voices import tts_options_payload
+
+        return JSONResponse(tts_options_payload(configured=minimax_tts_configured(project_root)))
+
     async def api_llm_presets_get(_: Request) -> JSONResponse:
-        return JSONResponse({"presets": load_presets(), "default_id": get_default_preset_id()})
+        from seed.core.model_providers import enrich_presets_for_ui, list_provider_catalog
+
+        return JSONResponse(
+            {
+                "presets": enrich_presets_for_ui(load_presets()),
+                "default_id": get_default_preset_id(),
+                "providers": list_provider_catalog(),
+            }
+        )
+
+    async def api_llm_providers_get(_: Request) -> JSONResponse:
+        from seed.core.model_providers import list_provider_catalog
+
+        return JSONResponse({"providers": list_provider_catalog()})
 
     async def api_llm_presets_post(request: Request) -> JSONResponse:
         try:
             body = await request.json()
         except Exception:
             return JSONResponse({"detail": "invalid json"}, status_code=400)
+        from seed.core.model_providers import materialize_preset_from_form, provider_requires_api_key
+
+        body = materialize_preset_from_form(body)
         err = _validate_preset(body)
         if err:
             return JSONResponse({"detail": err}, status_code=400)
+        prov = str(body.get("provider") or "").strip()
+        if provider_requires_api_key(prov) and not str(body.get("api_key") or "").strip():
+            return JSONResponse({"detail": "该服务商需要填写 API Key"}, status_code=400)
         pid = str(body.get("id") or "").strip()
         presets = load_presets()
         replaced = False
@@ -1253,6 +1370,9 @@ def build_webui_api_app(project_root: Path) -> Starlette:
             body = await request.json()
         except Exception:
             return JSONResponse({"detail": "invalid json"}, status_code=400)
+        from seed.core.model_providers import materialize_preset_from_form
+
+        body = materialize_preset_from_form(body)
         return await _llm_probe_response(body)
 
     async def api_cron_toggle(request: Request) -> JSONResponse:
@@ -1537,84 +1657,23 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         return JSONResponse({"detail": "unsupported git command"}, status_code=400)
 
     async def api_pick_directory(_: Request) -> JSONResponse:
-        path = ""
         from codeagent.core import env as ca_env
+        from codeagent.core.folder_picker import pick_directory_sync
 
         skip = ca_env.pick_default("", ca_env.SKIP_FOLDER_PICKER).strip().lower()
         if skip in ("1", "true", "yes", "on"):
             return JSONResponse({"path": "", "skipped": True})
         try:
-            if sys.platform == "darwin":
-                script = (
-                    'POSIX path of (choose folder with prompt '
-                    '"选择目录" default location (path to desktop folder))'
-                )
-                proc = await asyncio.create_subprocess_exec(
-                    "osascript",
-                    "-e",
-                    script,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                )
-                out_b, _ = await proc.communicate()
-                cand = (out_b or b"").decode("utf-8").strip()
-                if cand and Path(cand).is_dir():
-                    path = cand
-            elif sys.platform == "win32":
-                ps = r"""
-                Add-Type -AssemblyName System.Windows.Forms
-                $top = New-Object System.Windows.Forms.Form
-                $top.TopMost = $true
-                $top.WindowState = [System.Windows.Forms.FormWindowState]::Minimized
-                $top.ShowInTaskbar = $false
-                $top.Size = New-Object System.Drawing.Size(0, 0)
-                $top.StartPosition = "Manual"
-                $top.Location = New-Object System.Drawing.Point(-32000, -32000)
-                $null = $top.Show()
-                [System.Windows.Forms.Application]::DoEvents()
-                try {
-                  $d = New-Object System.Windows.Forms.FolderBrowserDialog
-                  $d.Description = "选择项目目录"
-                  $d.ShowNewFolderButton = $true
-                  if ($d.ShowDialog($top) -eq "OK") { Write-Output $d.SelectedPath }
-                } finally { $top.Close(); $top.Dispose() }
-                """
-                proc = await asyncio.create_subprocess_exec(
-                    "powershell",
-                    "-NoProfile",
-                    "-Command",
-                    ps,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                )
-                out_b, _ = await proc.communicate()
-                cand = (out_b or b"").decode("utf-8", errors="replace").strip()
-                if cand and Path(cand).is_dir():
-                    path = cand
-            else:
-                for bin_name in ("zenity", "kdialog"):
-                    cmd = (
-                        [bin_name, "--file-selection", "--directory"]
-                        if bin_name == "zenity"
-                        else [bin_name, "--getexistingdirectory"]
-                    )
-                    try:
-                        proc = await asyncio.create_subprocess_exec(
-                            *cmd,
-                            stdout=asyncio.subprocess.PIPE,
-                            stderr=asyncio.subprocess.PIPE,
-                        )
-                        out_b, _ = await proc.communicate()
-                        cand = (out_b or b"").decode().strip()
-                        if cand and Path(cand).is_dir():
-                            path = cand
-                            break
-                    except FileNotFoundError:
-                        continue
+            path, skipped, hint = await asyncio.to_thread(pick_directory_sync)
         except Exception as e:
             logger.exception("pick_directory")
             return JSONResponse({"detail": str(e)}, status_code=500)
-        return JSONResponse({"path": path})
+        payload: Dict[str, Any] = {"path": path}
+        if skipped:
+            payload["skipped"] = True
+        if hint:
+            payload["hint"] = hint
+        return JSONResponse(payload)
 
     async def api_files_list(request: Request) -> JSONResponse:
         pid = (request.query_params.get("project_id") or "").strip()
@@ -1733,6 +1792,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         Route("/plugins", api_plugins_post, methods=["POST"]),
         Route("/mcp", api_mcp_get, methods=["GET"]),
         Route("/mcp", api_mcp_post, methods=["POST"]),
+        Route("/mcp/test", api_mcp_test, methods=["POST"]),
         Route("/hooks", api_hooks_get, methods=["GET"]),
         Route("/hooks", api_hooks_post, methods=["POST"]),
         Route("/md/{name}", api_md_get, methods=["GET"]),
@@ -1751,13 +1811,17 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         Route("/projects/todos", api_projects_todos_list, methods=["GET"]),
         Route("/sessions", api_sessions, methods=["GET"]),
         Route("/sessions/running", api_sessions_running, methods=["GET"]),
-        Route("/session/transcript", api_session_transcript, methods=["GET"]),
+        Route("/session/history", api_session_history, methods=["GET"]),
         Route("/session/archive", api_session_archive, methods=["POST"]),
         Route("/session/delete", api_session_delete, methods=["POST"]),
         Route("/env/chat", api_env_chat_get, methods=["GET"]),
         Route("/env/chat", api_env_chat_post, methods=["POST"]),
+        Route("/env/mcp", api_env_mcp_get, methods=["GET"]),
+        Route("/env/mcp", api_env_mcp_post, methods=["POST"]),
+        Route("/tts/options", api_tts_options, methods=["GET"]),
         Route("/llm/presets", api_llm_presets_get, methods=["GET"]),
         Route("/llm/presets", api_llm_presets_post, methods=["POST"]),
+        Route("/llm/providers", api_llm_providers_get, methods=["GET"]),
         Route("/llm/presets/default", api_llm_presets_default, methods=["POST"]),
         Route("/llm/presets/delete", api_llm_presets_delete, methods=["POST"]),
         Route("/llm/presets/test", api_llm_presets_test, methods=["POST"]),

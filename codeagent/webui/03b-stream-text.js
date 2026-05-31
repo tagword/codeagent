@@ -55,7 +55,7 @@ function finalizeStreamBubble(text, _toolTrace) {
   const roundText = _streamDeltaText(text);
   _noteStreamFullText(text); // record length, do NOT advance consumed
   try {
-    // 时间轴拆分：正文只在气泡内，工具由独立 system-tools 块展示（与 transcript 一致）
+    // 时间轴拆分：正文只在气泡内，工具由独立 system-tools 块展示（与会话历史一致）
     b.innerHTML = buildAgentBubbleInnerHtml(roundText || '', [], null);
     ensureLinksOpenNewTab(b);
   } catch (_) {
@@ -65,6 +65,10 @@ function finalizeStreamBubble(text, _toolTrace) {
   if (meta) {
     const ts = formatBubbleTime(Date.now());
     meta.textContent = ts ? '助手 · ' + ts : '助手';
+  }
+  const col = wrap.querySelector('.msg-col');
+  if (col && typeof appendBubbleTtsBar === 'function') {
+    appendBubbleTtsBar(col, text, { role: 'agent' });
   }
   scrollLog();
   return wrap;
@@ -96,6 +100,10 @@ function splitStreamBubbleAtToolStart() {
         if (meta) {
           var ts = formatBubbleTime(Date.now());
           meta.textContent = ts ? '助手 · ' + ts : '助手';
+        }
+        var col = wrap.querySelector('.msg-col');
+        if (col && typeof appendBubbleTtsBar === 'function') {
+          appendBubbleTtsBar(col, txt, { role: 'agent' });
         }
       }
     }

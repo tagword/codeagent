@@ -56,7 +56,7 @@
           appendProjectTreeNode(j.project);            resetAgentReplyDedupe(); log.innerHTML = ''; reconnectWsForSession();
             if (webuiSessionsEnabled) {
               await refreshSessionList(); updateMainHeaderForSession(sessionId);
-              await loadTranscriptIntoLog(true);
+              await loadSessionHistoryIntoLog(true);
             }
             try { document.dispatchEvent(new CustomEvent('project-changed')); } catch (_) {}
           }
@@ -123,14 +123,14 @@
       localStorage.setItem(_sidStorageKey(agentId, projectId), sessionId);
       updateComposerButtons(); updateMainHeaderForSession(sessionId);
       await refreshSessionList(); reconnectWsForSession(); resetAgentReplyDedupe(); log.innerHTML = '';
-      await loadTranscriptIntoLog(true);
+      await loadSessionHistoryIntoLog(true);
       if (typeof refreshSessionsUnderProject === 'function') refreshSessionsUnderProject(projectId);
       if (typeof activatePage === 'function') activatePage('chat');
     });
     }
     await refreshSessionList();
     updateMainHeaderForSession(sessionId);
-    await loadTranscriptIntoLog(true);
+    await loadSessionHistoryIntoLog(true);
     // 单窗口下不再定时轮询会话子树；新建/删会话、切项目等路径会主动 refreshSessionsUnderProject / refreshSessionList。
   } catch (_) { if (sidebar) sidebar.style.display = 'none'; }
 }

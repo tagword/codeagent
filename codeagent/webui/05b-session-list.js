@@ -37,7 +37,7 @@ function bindSessListOnce() {
       const titleHint = (rowEl.querySelector('.sess-item__title') && rowEl.querySelector('.sess-item__title').textContent) || sid;
       try {
         if (act === 'archive') {
-          if (!confirm('确定归档「' + titleHint + '」？文件将移到 llm_sessions/archived/。')) return;
+          if (!confirm('确定归档「' + titleHint + '」？文件将移到 sessions/archived/。')) return;
           const r = await fetch('/api/ui/session/archive', {
             method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
             body: JSON.stringify({ session_id: sid, agent_id: agentId })
@@ -72,7 +72,7 @@ function bindSessListOnce() {
       await refreshSessionList();
       highlightSessList(sessionId);
       updateMainHeaderForSession(sessionId);
-      await loadTranscriptIntoLog(true);
+      await loadSessionHistoryIntoLog(true);
       if (typeof activatePage === 'function') activatePage('chat');
       return;
     }
@@ -88,7 +88,7 @@ function bindSessListOnce() {
     reconnectWsForSession(); resetAgentReplyDedupe();
     highlightSessList(sid); updateMainHeaderForSession(sid);
     refreshSessionList().catch(() => {});
-    loadTranscriptIntoLog(true);
+    loadSessionHistoryIntoLog(true);
     if (typeof activatePage === 'function') activatePage('chat');
   });
 }

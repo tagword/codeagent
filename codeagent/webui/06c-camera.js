@@ -25,7 +25,7 @@
   }
 
   function visionReady() {
-    return typeof visionModelReadyForAttachments === 'function' && visionModelReadyForAttachments();
+    return typeof attachmentImageReady === 'function' && attachmentImageReady();
   }
 
   function stopStream() {
@@ -107,7 +107,7 @@
 
   async function openCameraModal() {
     if (!visionReady()) {
-      systemMsg('err', '请先选择多模态模型');
+      systemMsg('err', '请先配置识图（多模态 LLM 或 MiniMax MCP）');
       return;
     }
     captureCount = 0;
@@ -177,7 +177,7 @@
     if (!cameraBtn) return;
     const ready = visionReady();
     cameraBtn.disabled = !ready;
-    cameraBtn.title = ready ? '摄像头拍照 / 定时截帧' : '请先选择多模态模型';
+    cameraBtn.title = ready ? '摄像头拍照 / 定时截帧' : '请先配置识图（多模态 LLM 或 MiniMax MCP）';
   };
 
   const _origGate = typeof updateAttachmentUiGate === 'function' ? updateAttachmentUiGate : null;
