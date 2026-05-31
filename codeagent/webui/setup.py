@@ -13,7 +13,7 @@ from setuptools import find_packages, setup
 # ── Actual setup call ──────────────────────────────────────────────────
 setup(
     name="codeagent",
-    version="1.0.0",
+    version="1.1.0",
     description="LLM agent with Markdown config, tool loop, Web UI, sessions, memory, and webhooks",
     python_requires=">=3.9",
     packages=find_packages(where="..", include=["seed*", "codeagent*"]),

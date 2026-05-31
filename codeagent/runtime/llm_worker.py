@@ -19,8 +19,7 @@ from seed.core.agent_runtime import (
 from seed.core.llm_exec import LLMError
 from seed.core.llm_presets import llm_executor_from_resolved, resolve_preset
 from seed.core.llm_sess import load_or_create_chat_session, merge_fresh_system, persist_chat_session
-from seed.core.mem_bridge import apply_episodic_to_messages
-from seed.core.config_plane import project_root
+from seed.core.mem_bridge import finalize_episodic_for_llm
 from codeagent.core import env as ca_env
 
 from codeagent.runtime.prompt_enrichment import build_skills_suffix, fresh_system_prompt
@@ -51,7 +50,6 @@ class LLMWorker:
 
         reg, exe = get_tools_for_agent(aid)
         llm = llm_executor_from_resolved(resolve_preset(None))
-        root = project_root()
 
         chat_sess = load_or_create_chat_session(sid, aid, self.project_id or None)
         fresh_sys = fresh_system_prompt(agent_id=aid)
@@ -70,12 +68,15 @@ class LLMWorker:
         compact_result = maybe_compact_context_messages(api_msgs, llm)
         persist_compact_summary(chat_sess.messages, compact_result)
         strip_ephemeral_message_fields(api_msgs)
-        apply_episodic_to_messages(
+        if not isinstance(chat_sess.metadata, dict):
+            chat_sess.metadata = {}
+        finalize_episodic_for_llm(
             api_msgs,
-            root,
-            sid,
+            chat_sess.metadata,
+            agent_id=aid,
+            session_id=sid,
             project_id=self.project_id or None,
-            project_scope=bool(self.project_id),
+            compact_happened=compact_result is not None,
         )
 
         set_active_llm_session(mkey)

@@ -82,18 +82,49 @@ def build_skills_suffix(
 
 
 def vision_multimodal_appendix() -> str:
-    return (
-        "\n\n## Multimodal (images)\n\n"
-        "When the user message contains `[attachment:...]` or `[image_dir:...]`, "
-        "you MUST call `vision_analyze` or `vision_analyze_directory` before answering "
-        "about image content. Do not claim to see images without tool results.\n\n"
+    from codeagent.core.image_understanding import (
+        MCP_QUALIFIED_UNDERSTAND_IMAGE,
+        minimax_mcp_configured,
+    )
+    from codeagent.core.vision_models import list_vision_presets
+
+    mcp = minimax_mcp_configured()
+    has_vision = bool(list_vision_presets())
+    parts = ["\n\n## Multimodal (images)\n\n"]
+
+    if mcp:
+        parts.append(
+            "When the user message contains `[attachment:<id> ...]` and you need to **understand** "
+            "image content, call `attachment_resolve_path` with the attachment id, then "
+            f"`{MCP_QUALIFIED_UNDERSTAND_IMAGE}` with `image_url` set to the returned absolute "
+            "`path` and a clear `prompt` describing what to extract. "
+            "Do not claim to see images without tool results.\n\n"
+        )
+    if has_vision:
+        parts.append(
+            "When `[attachment:...]` or `[image_dir:...]` appears, you may also use "
+            "`vision_analyze` or `vision_analyze_directory` (requires an active vision LLM preset). "
+            "Prefer the tool that matches your available backends.\n\n"
+        )
+    elif not mcp:
+        parts.append(
+            "Image understanding requires a vision LLM preset or MiniMax MCP; "
+            "do not guess image content without tools.\n\n"
+        )
+
+    parts.append(
         "When the user asks to **create, draw, or generate** an image, call `image_generate` "
-        "with a detailed prompt. Share the returned `attachment_id` / URL in your reply so "
-        "the user can view the result.\n\n"
+        "with a detailed prompt. For image-to-image (keep subject/style from a photo), pass "
+        "`attachment_ids` or `reference_image_urls`. Share returned `attachment_id` / URL in your reply.\n\n"
+        "When the user asks to **compose, write, or generate music or a song**, call `music_generate` "
+        "with a style `prompt` and `lyrics` (use [Verse]/[Chorus] tags). For instrumental-only, "
+        "set `is_instrumental=true`. If lyrics are missing, use `lyrics_optimizer=true` or ask the user. "
+        "Share the returned `attachment_id` / URL for playback.\n\n"
         "For **audio** attachments, call `audio_transcribe` before answering about spoken content.\n"
         "For **video** attachments, call `video_analyze` (requires server ffmpeg for frame sampling).\n"
-        "Camera captures appear as `[attachment:...]` — use `vision_analyze` on them like uploaded photos.\n"
+        "Camera captures appear as `[attachment:...]` — analyze them like uploaded photos.\n"
     )
+    return "".join(parts)
 
 
 def record_chat_turn_diary(

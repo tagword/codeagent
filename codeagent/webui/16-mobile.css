@@ -280,35 +280,71 @@
     border-radius: var(--r-lg);
   }
 
-  .compose__actions {
+  .compose__dock {
     flex-wrap: wrap;
-    gap: var(--sp-2);
-    padding: 4px 8px 8px;
+    gap: 6px;
+    padding: 6px;
   }
 
-  .compose__hint {
+  .compose__dock-mid {
+    order: 3;
     flex: 1 1 100%;
-    margin-right: 0;
-    padding-left: 4px;
-    white-space: normal;
+    justify-content: flex-start;
   }
 
-  .compose__model-select {
+  .compose__model-pill {
     max-width: 100%;
   }
 
-  .compose__attachments {
-    padding-left: var(--sp-2);
-    padding-right: var(--sp-2);
+  .compose__sheet-grid {
+    grid-template-columns: 1fr;
+    padding: 2px 8px 10px;
+  }
+
+  .compose__head {
+    padding: 8px 8px 0;
+  }
+
+  .compose-attach-chip {
+    width: 60px;
+  }
+
+  .compose-attach-chip img {
+    width: 60px;
+    height: 46px;
+  }
+
+  .compose__editor #msg,
+  .compose__box > #msg {
+    padding: 10px 12px 6px;
+    font-size: 14px;
+  }
+
+  .btn--send .btn__send-label { display: inline; }
+  .btn--send {
+    width: auto;
+    height: 32px;
+    padding: 0 12px;
+    border-radius: var(--r-md);
+    gap: 4px;
   }
 
   .compose-attach-chip {
     max-width: 160px;
   }
 
-  .bubble-user__img {
+  .bubble .md-content img,
+  .chat-inline-img,
+  .bubble-user__img,
+  .oa-tool-gen-images img,
+  .chat-img-wrap > img {
     max-width: 100%;
-    max-height: 140px;
+    max-height: min(40vh, 280px);
+  }
+
+  .chat-img-wrap__actions {
+    opacity: 1;
+    pointer-events: auto;
   }
 
   .camera-modal__dialog {
@@ -404,6 +440,19 @@
   .preset-card__actions {
     margin-left: 0;
     justify-content: flex-end;
+  }
+
+  .preset-use-type-seg__btn {
+    font-size: 11px;
+    padding: 3px 8px;
+  }
+
+  .compose-stack-panel__body--grid {
+    grid-template-columns: 1fr;
+  }
+
+  .compose-stack-row {
+    grid-template-columns: 44px minmax(0, 1fr);
   }
 
   /* ---- Cron / tasks ---- */

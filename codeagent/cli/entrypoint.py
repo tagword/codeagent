@@ -15,7 +15,7 @@ def main():
         prog='codeagent',
         description="CodeAgent: Autonomous agent for task execution with command routing and session management"
     )
-    parser.add_argument('--version', '-v', action='version', version='CodeAgent v1.0.0')
+    parser.add_argument('--version', '-v', action='version', version='CodeAgent v1.1.0')
     subparsers = parser.add_subparsers(dest='command', help='Available commands')
 
     # Run command

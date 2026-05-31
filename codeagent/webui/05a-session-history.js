@@ -1,7 +1,7 @@
 /* ================================================================
- * 05-transcript.js
- *   - Transcript loading (loadTranscriptIntoLog)
- *   - Older transcript paging (loadOlderTranscriptChunk)
+ * 05a-session-history.js
+ *   - Session history loading (loadSessionHistoryIntoLog)
+ *   - Older history paging (loadOlderSessionHistoryChunk)
  *   - Session list fetch / refresh (refreshSessionList)
  *   - Session list bindings (bindSessListOnce)
  *   - Web UI sessions initialization (initWebUiSessions)
@@ -18,20 +18,20 @@
   });
 })();
 
-// ---------------- Transcript loading ----------------
+// ---------------- Session history loading ----------------
 
-function bindTranscriptPagingOnce() {
-  if (transcriptPagingBound || !log) return;
-  transcriptPagingBound = true;
+function bindHistoryPagingOnce() {
+  if (historyPagingBound || !log) return;
+  historyPagingBound = true;
   log.addEventListener('scroll', () => {
-    if (!transcriptHasMoreOlder || transcriptLoadingOlder) return;
+    if (!historyHasMoreOlder || historyLoadingOlder) return;
     if (log.scrollTop > 120) return;
-    if (transcriptScrollTimer) return;
-    transcriptScrollTimer = setTimeout(() => {
-      transcriptScrollTimer = null;
-      if (!transcriptHasMoreOlder || transcriptLoadingOlder) return;
+    if (historyScrollTimer) return;
+    historyScrollTimer = setTimeout(() => {
+      historyScrollTimer = null;
+      if (!historyHasMoreOlder || historyLoadingOlder) return;
       if (log.scrollTop > 120) return;
-      loadOlderTranscriptChunk();
+      loadOlderSessionHistoryChunk();
     }, 120);
   }, { passive: true });
 }
@@ -47,16 +47,16 @@ async function parseJsonResponse(r) {
   }
 }
 
-async function loadOlderTranscriptChunk() {
-  if (!webuiSessionsEnabled || !transcriptHasMoreOlder || transcriptLoadingOlder ||
-      transcriptFirstBlockIndex == null || transcriptFirstBlockIndex <= 0) return;
-  transcriptLoadingOlder = true;
+async function loadOlderSessionHistoryChunk() {
+  if (!webuiSessionsEnabled || !historyHasMoreOlder || historyLoadingOlder ||
+      historyFirstBlockIndex == null || historyFirstBlockIndex <= 0) return;
+  historyLoadingOlder = true;
   const oldH = log.scrollHeight;
   const oldT = log.scrollTop;
   try {
-    const r = await fetch('/api/ui/session/transcript?session_id=' + encodeURIComponent(sessionId) +
+    const r = await fetch('/api/ui/session/history?session_id=' + encodeURIComponent(sessionId) +
       '&agent_id=' + encodeURIComponent(agentId) + projectQuerySuffix() +
-      '&before_block_index=' + encodeURIComponent(String(transcriptFirstBlockIndex)));
+      '&before_block_index=' + encodeURIComponent(String(historyFirstBlockIndex)));
     const j = await parseJsonResponse(r);
     if (!r.ok) throw new Error(j.detail || r.statusText);
     const rows = j.messages || [];
@@ -76,26 +76,26 @@ async function loadOlderTranscriptChunk() {
         }
       }
     });
-    if (j.first_block_index != null) transcriptFirstBlockIndex = j.first_block_index;
-    transcriptHasMoreOlder = !!j.has_more_older;
+    if (j.first_block_index != null) historyFirstBlockIndex = j.first_block_index;
+    historyHasMoreOlder = !!j.has_more_older;
     const fixTop = () => { log.scrollTop = oldT + (log.scrollHeight - oldH); };
     fixTop();
     requestAnimationFrame(() => { requestAnimationFrame(fixTop); });
   } catch (e) { systemMsg('err', '加载更早记录失败：' + String(e)); }
-  finally { transcriptLoadingOlder = false; }
+  finally { historyLoadingOlder = false; }
 }
 
-async function loadTranscriptIntoLog(skipTreeRefresh) {
+async function loadSessionHistoryIntoLog(skipTreeRefresh) {
   try {
-    const r = await fetch('/api/ui/session/transcript?session_id=' + encodeURIComponent(sessionId) +
+    const r = await fetch('/api/ui/session/history?session_id=' + encodeURIComponent(sessionId) +
       '&agent_id=' + encodeURIComponent(agentId) + projectQuerySuffix());
     const j = await parseJsonResponse(r);
     if (!r.ok) throw new Error(j.detail || r.statusText);
     log.innerHTML = '';
     resetAgentReplyDedupe();
-    transcriptFirstBlockIndex = j.first_block_index != null ? j.first_block_index : null;
-    transcriptHasMoreOlder = !!j.has_more_older;
-    bindTranscriptPagingOnce();
+    historyFirstBlockIndex = j.first_block_index != null ? j.first_block_index : null;
+    historyHasMoreOlder = !!j.has_more_older;
+    bindHistoryPagingOnce();
     if (j.truncated_start || j.has_more_older) {
       systemMsg('info', '历史较长：默认只载入最近若干轮对话；上滑到顶部可继续加载更早内容。', { skipScroll: true });
     }
@@ -117,7 +117,7 @@ async function loadTranscriptIntoLog(skipTreeRefresh) {
       }
     });
     requestAnimationFrame(() => { requestAnimationFrame(() => scrollLogForce()); });
-    // 转录加载完成后粗略估算 token 用量
+    // 历史加载完成后粗略估算 token 用量
     if (typeof recalcTokenUsageFromDom === 'function') {
       setTimeout(recalcTokenUsageFromDom, 100);
     }
@@ -132,8 +132,8 @@ async function loadTranscriptIntoLog(skipTreeRefresh) {
     const row = lastSessionsCache.find((r) => r.session_id === sessionId);
     markSessionReadByCount(sessionId, row ? (row.message_count || 0) : 0);
   } catch (e) {
-    transcriptFirstBlockIndex = null;
-    transcriptHasMoreOlder = false;
+    historyFirstBlockIndex = null;
+    historyHasMoreOlder = false;
     systemMsg('err', '载入会话记录失败：' + String(e));
   }
 }

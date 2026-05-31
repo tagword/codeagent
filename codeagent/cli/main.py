@@ -1,82 +1,15 @@
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
-import time
 from datetime import datetime
 
 from seed_tools import setup_builtin_tools
 
 from seed.core.persistence import ensure_session_dir, list_sessions, save_session
 from seed.core.routing import find_commands, get_all_commands, get_command
-
-
-def _pids_listening_on_port_windows(port: int) -> set[int]:
-    """
-    Returns process IDs listening on TCP port using `netstat -ano`.
-    Works on Windows; best-effort parsing.
-    """
-    try:
-        cp = subprocess.run(
-            ["netstat", "-ano"],
-            check=False,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            **_win_no_window_kwargs(),
-        )
-    except Exception:
-        return set()
-    out = cp.stdout or ""
-    pids: set[int] = set()
-    needle = f":{int(port)}"
-    for line in out.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        # Example:
-        # TCP    127.0.0.1:8765   0.0.0.0:0   LISTENING   32352
-        if "LISTENING" not in line.upper():
-            continue
-        if needle not in line:
-            continue
-        parts = line.split()
-        if not parts:
-            continue
-        try:
-            pid = int(parts[-1])
-        except ValueError:
-            continue
-        if pid > 0:
-            pids.add(pid)
-    return pids
-
-
-def _kill_pid_windows(pid: int) -> bool:
-    try:
-        cp = subprocess.run(
-            ["taskkill", "/PID", str(int(pid)), "/F"],
-            check=False,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            **_win_no_window_kwargs(),
-        )
-        return cp.returncode == 0
-    except Exception:
-        return False
-
-
-def _wait_port_released_windows(port: int, timeout_sec: float) -> bool:
-    deadline = time.time() + max(0.1, float(timeout_sec))
-    while time.time() < deadline:
-        if not _pids_listening_on_port_windows(port):
-            return True
-        time.sleep(0.15)
-    return not _pids_listening_on_port_windows(port)
 
 
 def cmd_restart(args):
@@ -88,23 +21,23 @@ def cmd_restart(args):
     port = int(getattr(args, "port", 8765))
     timeout_sec = float(getattr(args, "timeout_sec", 5.0))
 
-    # Best effort: stop any existing listeners on this port.
-    if os.name == "nt":
-        pids = _pids_listening_on_port_windows(port)
-        pids.discard(os.getpid())
-        if pids:
-            print(f"Stopping existing listener(s) on port {port}: {sorted(pids)}")
-        for pid in sorted(pids):
-            ok = _kill_pid_windows(pid)
-            if not ok:
-                print(f"Warning: failed to stop pid {pid}", file=sys.stderr)
-        _wait_port_released_windows(port, timeout_sec)
-    else:
-        print(
-            "restart serve: automatic stop is only implemented on Windows right now; "
-            "continuing to start serve.",
-            file=sys.stderr,
-        )
+    from codeagent.core.process_ports import stop_listeners_on_port
+
+    stopped = stop_listeners_on_port(
+        port,
+        timeout_sec=timeout_sec,
+        exclude_pid=os.getpid(),
+        log=print,
+    )
+    if not stopped and os.name != "nt":
+        import shutil
+
+        if not shutil.which("lsof") and not shutil.which("ss") and not shutil.which("fuser"):
+            print(
+                "restart serve: install lsof (macOS) or iproute2/ss (Linux) "
+                "to stop the previous listener automatically.",
+                file=sys.stderr,
+            )
 
     # Start server in current process (foreground).
     cmd_serve(args)
@@ -135,7 +68,9 @@ def cmd_run(args):
 
     if args.save:
         save_session(session_id, [prompt], 0, 0)
-        print(f"Session saved to: ~/.codeagent/sessions/{session_id}.json")
+        from seed.core.llm_sess import agent_sessions_dir
+
+        print(f"Session saved to: {agent_sessions_dir() / f'{session_id}.json'}")
 
 def cmd_route(args):
     """Handle route subcommand."""
@@ -190,23 +125,29 @@ def cmd_summary(args):
 
     print("=== CodeAgent Session Summary")
 
-    if session_id:
-        save_dir = os.path.expanduser("~/.codeagent/sessions")
-        file_path = os.path.join(save_dir, f"{session_id}.json")
+    from seed.core.llm_sess import agent_sessions_dir, list_stored_sessions_meta
 
-        if not os.path.exists(file_path):
+    if session_id:
+        from codeagent.core import env as ca_env
+
+        aid = ca_env.default_agent_id()
+        file_path = agent_sessions_dir(aid) / f"{session_id}.json"
+
+        if not file_path.is_file():
             print(f"Warning: Session file not found: {file_path}")
-            sessions = list_sessions()
-            print(f"Available sessions: {len(sessions)}")
+            rows = list_stored_sessions_meta(limit=50, agent_id=aid)
+            print(f"Available chat sessions: {len(rows)}")
         else:
             print(f"Session: {session_id}")
             print(f"File: {file_path}")
     else:
         sessions = list_sessions()
         if not sessions:
-            print("No saved sessions.")
-        print("Sessions directory: ~/.codeagent/sessions/")
-        print(f"Found {len(sessions)} sessions.")
+            print("No saved sessions (legacy QueryEngine store).")
+        print(f"Chat sessions directory: {agent_sessions_dir()}")
+        rows = list_stored_sessions_meta(limit=200)
+        print(f"Stored chat sessions: {len(rows)}")
+        print(f"Legacy persistence sessions: {len(sessions)}")
 
 
 
@@ -243,7 +184,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
 
-    parser.add_argument('--version', action='version', version='CodeAgent v1.0.0')
+    parser.add_argument('--version', action='version', version='CodeAgent v1.1.0')
     subparsers = parser.add_subparsers(dest='command', help='Available commands')
 
     # Run command
@@ -275,9 +216,34 @@ def main():
     summary_parser.add_argument('--session', '-S', help='Session ID')
 
     # Session command
-    sess_parser = subparsers.add_parser('session', help='Manage sessions')
-    sess_parser.add_argument('action', choices=['list', 'save', 'load', 'delete', 'help'], help='Action')
-    sess_parser.add_argument('session_id', nargs='?', help='Session ID')
+    sess_parser = subparsers.add_parser('session', help='Manage chat sessions (agents/<id>/sessions/)')
+    sess_parser.add_argument(
+        'action',
+        choices=['list', 'migrate', 'delete', 'audit-list', 'audit-show', 'help'],
+        help='Action',
+    )
+    sess_parser.add_argument(
+        '--seq',
+        type=int,
+        default=None,
+        help='With audit-show: snapshot sequence number from audit-list',
+    )
+    sess_parser.add_argument(
+        '--project-id',
+        default=None,
+        help='Project id when session lives under projects-data/<id>/sessions/',
+    )
+    sess_parser.add_argument('session_id', nargs='?', help='Session ID (for delete)')
+    sess_parser.add_argument(
+        '--agent-id',
+        default=None,
+        help='Agent id (default: CODEAGENT_AGENT_ID or default)',
+    )
+    sess_parser.add_argument(
+        '--dry-run',
+        action='store_true',
+        help='With migrate: print planned moves without writing',
+    )
 
     # Interactive chat (command routing only until LLM runtime is wired)
     chat_parser = subparsers.add_parser(
@@ -288,7 +254,7 @@ def main():
     chat_parser.add_argument(
         '--session',
         '-S',
-        help='LLM chat session id: resume/save under agents/<agent>/sessions/llm_sessions (override SEED_LLM_SESSIONS_DIR)',
+        help='Chat session id: resume/save under agents/<agent>/sessions (override SEED_AGENT_SESSIONS_DIR or SEED_LLM_SESSIONS_DIR)',
     )
     chat_parser.add_argument(
         '--llm',
@@ -330,6 +296,11 @@ def main():
         '--audio-llm',
         metavar='PRESET_ID',
         help='Audio transcription preset for audio_transcribe (or CODEAGENT_AUDIO_PRESET_ID)',
+    )
+    chat_parser.add_argument(
+        '--music-llm',
+        metavar='PRESET_ID',
+        help='Music generation preset for music_generate (or CODEAGENT_MUSIC_GEN_PRESET_ID)',
     )
 
     serve_parser = subparsers.add_parser(
@@ -467,6 +438,15 @@ def _cli_image_gen_preset_id(args) -> str:
     return ca_env.pick_default('', 'CODEAGENT_IMAGE_GEN_PRESET_ID').strip()
 
 
+def _cli_music_preset_id(args) -> str:
+    from codeagent.core import env as ca_env
+
+    pid = (getattr(args, 'music_llm', None) or '').strip()
+    if pid:
+        return pid
+    return ca_env.pick_default('', 'CODEAGENT_MUSIC_GEN_PRESET_ID').strip()
+
+
 def _cli_vision_preset_id(args) -> str:
     from codeagent.core import env as ca_env
 
@@ -587,6 +567,7 @@ def _cmd_chat_llm(args):
         set_active_image_gen_preset,
         set_active_llm_session,
         set_active_vision_preset,
+        set_active_music_preset,
     )
     from seed.core.agent_runtime import (
         build_api_projection_messages,
@@ -608,7 +589,7 @@ def _cmd_chat_llm(args):
         merge_fresh_system,
         persist_chat_session,
     )
-    from seed.core.mem_bridge import apply_episodic_to_messages
+    from seed.core.mem_bridge import finalize_episodic_for_llm
     from seed.integrations.session_title import maybe_llm_refresh_session_title
 
     name = getattr(args, 'session', None) or 'cli-chat'
@@ -625,6 +606,7 @@ def _cmd_chat_llm(args):
     vision_preset_id = _cli_vision_preset_id(args)
     image_gen_preset_id = _cli_image_gen_preset_id(args)
     audio_preset_id = _cli_audio_preset_id(args)
+    music_preset_id = _cli_music_preset_id(args)
     chat_sess = load_or_create_chat_session(name, agent_id)
     fresh_sys = fresh_system_prompt(agent_id=agent_id)
     chat_sess.messages[:] = merge_fresh_system(chat_sess.messages, fresh_sys)
@@ -644,6 +626,8 @@ def _cmd_chat_llm(args):
         print(f"  Image gen preset: {image_gen_preset_id}")
     if audio_preset_id:
         print(f"  Audio preset: {audio_preset_id}")
+    if music_preset_id:
+        print(f"  Music preset: {music_preset_id}")
     print("  命令: /attach <path>  /attach-dir <path>  /clear-vision")
     while True:
         try:
@@ -695,9 +679,18 @@ def _cmd_chat_llm(args):
             pending_attachments,
             image_dir_tag=pending_dir_tag,
         )
-        if message_has_image_attachments(user_msg) or message_has_video_attachments(user_msg) or pending_dir_tag:
-            if not vision_preset_id or not preset_supports_vision_id(vision_preset_id):
-                print('[error] 发送图片/视频需要有效的 --vision-llm 或 CODEAGENT_VISION_PRESET_ID')
+        from codeagent.core.image_understanding import image_attachment_allowed, video_attachment_allowed
+
+        if message_has_image_attachments(user_msg) or pending_dir_tag:
+            if not image_attachment_allowed(vision_preset_id or ""):
+                print(
+                    '[error] 发送图片需要 --vision-llm（supports_vision）'
+                    ' 或已配置 MiniMax MCP（understand_image）'
+                )
+                continue
+        if message_has_video_attachments(user_msg):
+            if not video_attachment_allowed(vision_preset_id or ""):
+                print('[error] 发送视频需要有效的 --vision-llm 或 CODEAGENT_VISION_PRESET_ID')
                 continue
         if message_has_audio_attachments(user_msg):
             if not audio_preset_id or not preset_supports_audio_id(audio_preset_id):
@@ -709,12 +702,6 @@ def _cmd_chat_llm(args):
 
         chat_sess.messages.append(user_msg)
         user_text = str(user_msg.get('content') or '')
-        try:
-            from seed.integrations.transcript_store import append_transcript_entries
-
-            append_transcript_entries(name, [chat_sess.messages[-1]], agent_id=agent_id)
-        except Exception:
-            pass
         max_hist = ca_env.pick_int(12, ca_env.CHAT_USER_ROUNDS)
         from codeagent.core.attachments import content_text_for_skills
 
@@ -727,12 +714,22 @@ def _cmd_chat_llm(args):
         compact_result = maybe_compact_context_messages(api_msgs, llm)
         persist_compact_summary(chat_sess.messages, compact_result)
         strip_ephemeral_message_fields(api_msgs)
-        apply_episodic_to_messages(api_msgs, project_root, name)
+        if not isinstance(chat_sess.metadata, dict):
+            chat_sess.metadata = {}
+        finalize_episodic_for_llm(
+            api_msgs,
+            chat_sess.metadata,
+            agent_id=agent_id,
+            session_id=name,
+            project_id=None,
+            compact_happened=compact_result is not None,
+        )
         set_active_llm_session(f'{agent_id}::{name}')
         set_active_agent_id(agent_id)
         set_active_vision_preset(vision_preset_id or None)
         set_active_image_gen_preset(image_gen_preset_id or None)
         set_active_audio_preset(audio_preset_id or None)
+        set_active_music_preset(music_preset_id or None)
         try:
             n_before = len(api_msgs)
             reply, _, tools_used, _tool_trace, _loop_meta = asyncio.run(
@@ -745,13 +742,6 @@ def _cmd_chat_llm(args):
                 )
             )
             tail = merge_llm_tail_into_full(chat_sess.messages, api_msgs, n_before)
-            try:
-                from seed.integrations.transcript_store import append_transcript_entries
-
-                if tail:
-                    append_transcript_entries(name, tail, agent_id=None)
-            except Exception:
-                pass
             print(reply)
             if tools_used:
                 print(f"  [tools] {', '.join(tools_used)}")
@@ -888,27 +878,83 @@ def cmd_config(args):
 
 
 def cmd_session(args):
-    """Handle session subcommand."""
+    """Handle session subcommand (Seed chat sessions on disk)."""
+    from codeagent.core import env as ca_env
+
     action = getattr(args, 'action', 'list')
     session_id = getattr(args, 'session_id', None)
+    agent_id = (getattr(args, 'agent_id', None) or ca_env.default_agent_id()).strip() or 'default'
 
     if action == 'list':
-        sessions = list_sessions()
-        print("=== Session List")
-        print(f"Total: {len(sessions)}")
-        for s in sessions:
-            print(f" - {s}")
+        from seed.core.llm_sess import list_stored_sessions_meta
+
+        rows = list_stored_sessions_meta(limit=200, agent_id=agent_id)
+        print(f"=== Chat sessions (agent={agent_id})")
+        print(f"Total: {len(rows)}")
+        for row in rows:
+            title = row.get('display_title') or row.get('session_id')
+            print(f" - {row.get('session_id')}: {title}")
+    elif action == 'migrate':
+        from seed.core.llm_sess import migrate_legacy_agent_sessions
+
+        stats = migrate_legacy_agent_sessions(
+            agent_id,
+            dry_run=bool(getattr(args, 'dry_run', False)),
+        )
+        print(json.dumps(stats, ensure_ascii=False, indent=2))
+    elif action == 'audit-list':
+        if not session_id:
+            print("Usage: codeagent session audit-list <session_id> [--agent-id ...] [--project-id ...]")
+            return
+        from seed.core.projection_audit import list_projection_audit_index
+
+        rows = list_projection_audit_index(
+            session_id,
+            agent_id=agent_id,
+            project_id=getattr(args, 'project_id', None),
+        )
+        if not rows:
+            print("No LLM projection audit snapshots (enable SEED_LLM_PROJECTION_AUDIT=1).")
+            return
+        print(f"=== LLM projection audit (agent={agent_id}, session={session_id})")
+        for row in rows:
+            print(
+                f" seq={row.get('seq')} kind={row.get('kind')} round={row.get('round')} "
+                f"bytes={row.get('body_bytes')} file={row.get('file')}"
+            )
+    elif action == 'audit-show':
+        if not session_id:
+            print("Usage: codeagent session audit-show <session_id> --seq N")
+            return
+        seq = getattr(args, 'seq', None)
+        if seq is None:
+            print("--seq is required for audit-show")
+            return
+        from seed.core.projection_audit import load_projection_audit_snapshot
+
+        snap = load_projection_audit_snapshot(
+            session_id,
+            seq=seq,
+            agent_id=agent_id,
+            project_id=getattr(args, 'project_id', None),
+        )
+        if not snap:
+            print(f"Audit snapshot not found: seq={seq}")
+            return
+        print(json.dumps(snap, ensure_ascii=False, indent=2))
     elif action == 'help':
-        print("Available actions: list, save, load, delete, help")
+        print("Actions: list, migrate, delete, audit-list, audit-show, help")
+        print("  codeagent session migrate [--agent-id default] [--dry-run]")
+        print("  codeagent session audit-list <session_id>")
+        print("  codeagent session audit-show <session_id> --seq N")
+        print("  Enable snapshots: SEED_LLM_PROJECTION_AUDIT=1 in config/seed.env")
     elif action == 'delete' and session_id:
-        from seed.core.persistence import delete_session
-        if delete_session(session_id):
+        from seed.core.llm_sess import delete_stored_session
+
+        if delete_stored_session(session_id, agent_id):
             print(f"Session deleted: {session_id}")
         else:
             print(f"Session not found: {session_id}")
-    elif action == 'save' and session_id:
-        save_session(session_id, [], 0, 0)
-        print(f"Session saved: {session_id}")
     else:
         print(f"Session action '{action}': invalid or missing arguments.")
 

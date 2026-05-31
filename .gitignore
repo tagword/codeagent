@@ -21,6 +21,7 @@ build/
 team-knowledge-base/
 super-mines-game/
 llm_sessions/
+**/sessions/llm_sessions/
 
 # Backup files (keep locally)
 *.bak

@@ -1,11 +1,29 @@
 
 const THINK_KEY = 'oa_enable_thinking';
+const REASONING_EFFORT_KEY = 'oa_reasoning_effort';
+
 function getThinkState() {
   try {
     const v = localStorage.getItem(THINK_KEY);
     if (v === null) return true;
     return v === '1';
   } catch (_) { return true; }
+}
+function getReasoningEffort() {
+  try {
+    const v = localStorage.getItem(REASONING_EFFORT_KEY);
+    return v === 'max' ? 'max' : 'high';
+  } catch (_) { return 'high'; }
+}
+function syncReasoningEffortUi() {
+  const on = getThinkState();
+  if (reasoningEffortSelect) {
+    reasoningEffortSelect.disabled = !on;
+    reasoningEffortSelect.value = getReasoningEffort();
+    reasoningEffortSelect.title = on
+      ? '推理强度（DeepSeek 思考模式）：高 = reasoning_effort high，最高 = max'
+      : '开启「思考」后可选择推理强度';
+  }
 }
 function setThinkState(on) {
   try { localStorage.setItem(THINK_KEY, on ? '1' : '0'); } catch (_) {}
@@ -15,10 +33,22 @@ function setThinkState(on) {
       ? '思考：已开启。模型会先思考再回答（慢但更准）。点击关闭。'
       : '思考：已关闭。模型直接回答（更快）。点击开启。';
   }
+  syncReasoningEffortUi();
+}
+function setReasoningEffort(val) {
+  const effort = val === 'max' ? 'max' : 'high';
+  try { localStorage.setItem(REASONING_EFFORT_KEY, effort); } catch (_) {}
+  syncReasoningEffortUi();
 }
 if (thinkToggle) {
   setThinkState(getThinkState());
   thinkToggle.addEventListener('click', () => setThinkState(!getThinkState()));
+}
+if (reasoningEffortSelect) {
+  syncReasoningEffortUi();
+  reasoningEffortSelect.addEventListener('change', () => {
+    setReasoningEffort(reasoningEffortSelect.value);
+  });
 }
 
 // ---------------- Session/agent identity ----------------
@@ -54,12 +84,12 @@ function saveProjectIdForAgent(aid, pid) {
 
 let projectId = loadProjectIdForAgent(agentId);
 
-// Transcript paging state
-let transcriptFirstBlockIndex = null;
-let transcriptHasMoreOlder = false;
-let transcriptLoadingOlder = false;
-let transcriptScrollTimer = null;
-let transcriptPagingBound = false;
+// Session history paging state (GET /api/ui/session/history)
+let historyFirstBlockIndex = null;
+let historyHasMoreOlder = false;
+let historyLoadingOlder = false;
+let historyScrollTimer = null;
+let historyPagingBound = false;
 
 function _sidStorageKey(aid, pid) {
   const p = String(pid || '').trim();
@@ -199,7 +229,7 @@ function fillSessionsList(childrenEl, pid, sessions) {
       updateComposerButtons();
       log.innerHTML = '';
       try { reconnectWsForSession(); } catch (_) {}
-      loadTranscriptIntoLog(true);
+      loadSessionHistoryIntoLog(true);
       syncTreeProjectActiveHighlight();
       syncTreeSessionActiveHighlight();
     });
@@ -285,7 +315,7 @@ function handleProjectRowClick(pid) {
     syncTreeProjectActiveHighlight();
     syncTreeSessionActiveHighlight();
     if (typeof refreshSessionList === 'function') refreshSessionList().catch(function() {});
-    if (typeof loadTranscriptIntoLog === 'function') loadTranscriptIntoLog(true).catch(function() {});
+    if (typeof loadSessionHistoryIntoLog === 'function') loadSessionHistoryIntoLog(true).catch(function() {});
     var inp = document.getElementById('treeSearchInput');
     if (inp) inp.value = '';
   }
@@ -557,6 +587,7 @@ function showProjectDirectoryDialog(pid) {
       .then(function(r) { return r.json(); })
       .then(function(j) {
         if (j.path) inp.value = j.path;
+        else if (j.hint) console.warn('pick-directory:', j.hint);
         else if (j.detail) console.warn('pick-directory:', j.detail);
       })
       .catch(function(err) { console.error('pick-directory error:', err); })

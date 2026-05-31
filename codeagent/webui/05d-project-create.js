@@ -83,6 +83,7 @@
           .then(function(r) { return r.json(); })
           .then(function(j) {
             if (j.path) inpPath.value = j.path;
+            else if (j.hint) console.warn('pick-directory:', j.hint);
             else if (j.detail) console.warn('pick-directory:', j.detail);
           })
           .catch(function(e) { console.error('pick-directory error:', e); })

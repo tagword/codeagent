@@ -1,5 +1,5 @@
 /**
- * 时间轴上的单条工具记录（与 transcript / WS 实时共用 DOM 结构）。
+ * 时间轴上的单条工具记录（与会话历史 / WS 实时共用 DOM 结构）。
  * @param {object} row { tool, arguments, result }
  * @param {number} index
  * @param {number} total
@@ -27,14 +27,42 @@ function appendGeneratedImagesToToolRow(detailsEl, row) {
   images.forEach(function(img) {
     if (!img || !img.attachment_id) return;
     const el = document.createElement('img');
-    el.className = 'bubble-user__img';
+    el.className = 'chat-inline-img bubble-user__img';
     el.alt = img.filename || 'generated';
     el.src = '/api/attachments/' + encodeURIComponent(img.attachment_id)
       + '?session_id=' + encodeURIComponent(typeof sessionId !== 'undefined' ? sessionId : 'web-chat')
       + '&agent_id=' + encodeURIComponent(typeof agentId !== 'undefined' ? agentId : 'default');
     wrap.appendChild(el);
   });
-  if (wrap.childNodes.length) detailsEl.appendChild(wrap);
+  if (wrap.childNodes.length) {
+    detailsEl.appendChild(wrap);
+    if (typeof enhanceChatImagesInBubble === 'function') enhanceChatImagesInBubble(wrap);
+  }
+}
+
+function appendGeneratedMusicToToolRow(detailsEl, row) {
+  if (!detailsEl || !row) return;
+  const name = (row.tool || row.name || '').toLowerCase();
+  if (name !== 'music_generate') return;
+  let payload = null;
+  try {
+    payload = JSON.parse(String(row.result || ''));
+  } catch (_) {
+    return;
+  }
+  const audio = payload && payload.audio;
+  if (!audio || !audio.attachment_id) return;
+  detailsEl.querySelectorAll('.oa-tool-gen-audio').forEach(function(n) { n.remove(); });
+  const wrap = document.createElement('div');
+  wrap.className = 'oa-tool-gen-audio';
+  const el = document.createElement('audio');
+  el.controls = true;
+  el.preload = 'metadata';
+  el.src = '/api/attachments/' + encodeURIComponent(audio.attachment_id)
+    + '?session_id=' + encodeURIComponent(typeof sessionId !== 'undefined' ? sessionId : 'web-chat')
+    + '&agent_id=' + encodeURIComponent(typeof agentId !== 'undefined' ? agentId : 'default');
+  wrap.appendChild(el);
+  detailsEl.appendChild(wrap);
 }
 
 function appendAgentToolTraceRowToLog(row, index, total, opts) {
@@ -74,6 +102,7 @@ function appendAgentToolTraceRowToLog(row, index, total, opts) {
   wrap.appendChild(pre);
 
   appendGeneratedImagesToToolRow(wrap, row);
+  appendGeneratedMusicToToolRow(wrap, row);
 
   if (opts.prepend && log.firstChild) {
     log.insertBefore(wrap, log.firstChild);

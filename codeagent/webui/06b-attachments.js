@@ -1,10 +1,17 @@
 /* Attachment composer: files, folder, paste, drag-drop */
 
 const pendingAttachments = [];
-let pendingClearVision = false;
 
 function fileNeedsVision(mime) {
   return mime.startsWith('image/') || mime.startsWith('video/');
+}
+
+function fileNeedsImageOnly(mime) {
+  return mime.startsWith('image/');
+}
+
+function fileNeedsVideo(mime) {
+  return mime.startsWith('video/');
 }
 
 function fileNeedsAudio(mime) {
@@ -17,48 +24,41 @@ function fileIsDocOnly(mime) {
 
 function canStageFile(mime) {
   if (fileIsDocOnly(mime)) return true;
-  if (fileNeedsVision(mime)) {
-    return typeof visionModelReadyForAttachments === 'function' && visionModelReadyForAttachments();
+  if (fileNeedsImageOnly(mime)) {
+    return typeof attachmentImageReady === 'function' && attachmentImageReady();
+  }
+  if (fileNeedsVideo(mime)) {
+    return typeof attachmentVideoReady === 'function' && attachmentVideoReady();
   }
   if (fileNeedsAudio(mime)) {
     return typeof audioModelReadyForAttachments === 'function' && audioModelReadyForAttachments();
   }
-  return typeof visionModelReadyForAttachments === 'function' && visionModelReadyForAttachments();
+  return typeof attachmentImageReady === 'function' && attachmentImageReady();
 }
 
 function updateAttachmentUiGate() {
-  const visionReady = typeof visionModelReadyForAttachments === 'function' && visionModelReadyForAttachments();
+  const imageReady = typeof attachmentImageReady === 'function' && attachmentImageReady();
+  const videoReady = typeof attachmentVideoReady === 'function' && attachmentVideoReady();
   const audioReady = typeof audioModelReadyForAttachments === 'function' && audioModelReadyForAttachments();
   const btn = document.getElementById('attachBtn');
   const fbtn = document.getElementById('attachFolderBtn');
   if (btn) {
-    btn.disabled = !(visionReady || audioReady);
+    btn.disabled = !(imageReady || videoReady || audioReady);
     btn.title = btn.disabled
-      ? '请先选择多模态或音频转写模型'
+      ? '请先配置识图（多模态 LLM 或 MiniMax MCP）或音频转写'
       : '附加图片、视频、音频或文档';
   }
   if (fbtn) {
-    fbtn.disabled = !visionReady;
-    fbtn.title = visionReady ? '选择文件夹' : '请先选择多模态模型';
+    fbtn.disabled = !imageReady;
+    fbtn.title = imageReady ? '选择文件夹' : '请先配置识图（多模态 LLM 或 MiniMax MCP）';
   }
-  updateVisionContextBar();
 }
 
-function updateVisionContextBar() {
-  const bar = document.getElementById('visionContextBar');
-  if (!bar) return;
-  const v = typeof getSelectedVisionModel === 'function' ? getSelectedVisionModel() : '';
-  if (!v) {
-    bar.style.display = 'none';
-    return;
-  }
-  bar.style.display = 'flex';
-  const label = bar.querySelector('.compose__vision-label');
-  if (label) {
-    const n = pendingAttachments.length;
-    const extra = n ? ' · 待发 ' + n + ' 个附件' : '';
-    label.textContent = '视觉上下文 · Vision: ' + v + extra;
-  }
+function updateComposeHeadVisibility() {
+  const head = document.getElementById('composeHead');
+  const att = document.getElementById('composeAttachments');
+  if (!head || !att) return;
+  head.hidden = att.style.display === 'none';
 }
 
 function renderAttachmentPreview() {
@@ -67,6 +67,7 @@ function renderAttachmentPreview() {
   bar.innerHTML = '';
   if (!pendingAttachments.length) {
     bar.style.display = 'none';
+    updateComposeHeadVisibility();
     return;
   }
   bar.style.display = 'flex';
@@ -78,6 +79,8 @@ function renderAttachmentPreview() {
       img.src = item.previewUrl;
       img.alt = item.filename || '';
       chip.appendChild(img);
+    } else {
+      chip.classList.add('compose-attach-chip--file');
     }
     const label = document.createElement('span');
     label.textContent = item.filename || 'file';
@@ -93,6 +96,7 @@ function renderAttachmentPreview() {
     chip.appendChild(rm);
     bar.appendChild(chip);
   });
+  updateComposeHeadVisibility();
 }
 
 function fileToBase64(file) {
@@ -116,7 +120,7 @@ async function stageFiles(files) {
     if (mime === 'image/svg+xml') continue;
     if (!canStageFile(mime)) {
       if (fileNeedsAudio(mime)) systemMsg('err', '请先选择音频转写模型');
-      else systemMsg('err', '请先选择支持多模态的模型');
+      else systemMsg('err', '请先配置识图（多模态 LLM 或 MiniMax MCP）');
       continue;
     }
     try {
@@ -163,7 +167,6 @@ async function uploadPendingAttachments() {
   const attachBtn = document.getElementById('attachBtn');
   const folderBtn = document.getElementById('attachFolderBtn');
   const composeBox = document.querySelector('.compose__box');
-  const clearBtn = document.getElementById('visionContextClear');
 
   attachBtn && attachBtn.addEventListener('click', function() {
     if (fileInput) fileInput.click();
@@ -204,11 +207,6 @@ async function uploadPendingAttachments() {
     if (files.length) stageFiles(files);
   });
 
-  clearBtn && clearBtn.addEventListener('click', function() {
-    pendingClearVision = true;
-    systemMsg('info', '已标记清除视觉上下文，下次发送生效');
-  });
-
   refreshVisionModelSelect().catch(function() {});
 })();
 
@@ -219,12 +217,15 @@ function renderUserAttachmentsInBubble(container, attachments) {
   attachments.forEach(function(a) {
     if (!a || a.kind !== 'image') return;
     const img = document.createElement('img');
-    img.className = 'bubble-user__img';
+    img.className = 'chat-inline-img bubble-user__img';
     img.alt = a.filename || a.id || '';
     img.src = '/api/attachments/' + encodeURIComponent(a.id)
       + '?session_id=' + encodeURIComponent(sessionId)
       + '&agent_id=' + encodeURIComponent(agentId);
     wrap.appendChild(img);
   });
-  if (wrap.childNodes.length) container.insertBefore(wrap, container.firstChild);
+  if (wrap.childNodes.length) {
+    container.insertBefore(wrap, container.firstChild);
+    if (typeof enhanceChatImagesInBubble === 'function') enhanceChatImagesInBubble(wrap);
+  }
 }

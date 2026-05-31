@@ -25,6 +25,9 @@ function bubbleAgentWithSplitToolTrace(text, toolTrace, reasoningContent, opts) 
     ensureLinksOpenNewTab(b);
     col.appendChild(meta);
     col.appendChild(b);
+    if (typeof appendBubbleTtsBar === 'function') {
+      appendBubbleTtsBar(col, text, { role: 'agent' });
+    }
     wrap.appendChild(col);
     if (opts.prepend && log.firstChild) {
       log.insertBefore(wrap, log.firstChild);
