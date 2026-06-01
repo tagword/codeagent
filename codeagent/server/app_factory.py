@@ -138,6 +138,7 @@ def create_app():
             image_gen_llm_id = str(body.get("image_gen_llm_id") or "").strip()
             audio_llm_id = str(body.get("audio_llm_id") or "").strip()
             music_llm_id = str(body.get("music_llm_id") or "").strip()
+            video_gen_llm_id = str(body.get("video_gen_llm_id") or "").strip()
 
             from codeagent.server.attachment_api import parse_chat_multimodal_body
             from codeagent.core.attachments import content_text_for_skills
@@ -249,6 +250,7 @@ def create_app():
                 set_active_image_gen_preset,
                 set_active_audio_preset,
                 set_active_music_preset,
+                set_active_video_gen_preset,
             )
 
             set_active_llm_session(f"{agent_id}::{session_id}")
@@ -260,6 +262,7 @@ def create_app():
             set_active_image_gen_preset(image_gen_llm_id or None)
             set_active_audio_preset(audio_llm_id or None)
             set_active_music_preset(music_llm_id or None)
+            set_active_video_gen_preset(video_gen_llm_id or None)
             from seed.core.proj_reg import get_project, resolve_project_path
             if project_id:
                 set_active_project_episodic(True, project_id)
@@ -760,6 +763,123 @@ def create_app():
             return JSONResponse({"cancelled": True})
         return JSONResponse({"cancelled": False, "reason": "not_running"})
 
+    # ---- Per-session model stack override (Session.metadata) ----
+    # Stored keys on Session.metadata:
+    #   llm_id, vision_llm_id, image_gen_llm_id,
+    #   audio_llm_id, music_llm_id, video_gen_llm_id
+    _MODEL_STACK_KEYS = (
+        "llm_id",
+        "vision_llm_id",
+        "image_gen_llm_id",
+        "audio_llm_id",
+        "music_llm_id",
+        "video_gen_llm_id",
+    )
+
+    def _read_model_stack_from_metadata(metadata):
+        if not isinstance(metadata, dict):
+            return {}
+        out = {}
+        for k in _MODEL_STACK_KEYS:
+            v = metadata.get(k)
+            if isinstance(v, str) and v.strip():
+                out[k] = v.strip()
+        return out
+
+    def _resolve_session_agent_id(body):
+        from codeagent.core import env as ca_env
+        return (
+            str(body.get("agent_id") or ca_env.default_agent_id()).strip() or "default"
+        )
+
+    async def api_session_model_stack_get(request: Request) -> JSONResponse:
+        """GET /api/ui/session/model-stack?session_id=...&agent_id=...
+
+        Returns the per-session model overrides stored in Session.metadata.
+        Empty fields mean "use the global default".
+        """
+        from seed.core.llm_sess import load_or_create_chat_session
+        try:
+            body = dict(request.query_params)
+        except Exception:
+            body = {}
+        session_id = str(body.get("session_id") or "").strip()
+        if not session_id:
+            return JSONResponse({"detail": "session_id required"}, status_code=400)
+        agent_id = _resolve_session_agent_id(body)
+        chat_sess = load_or_create_chat_session(session_id, agent_id)
+        overrides = _read_model_stack_from_metadata(chat_sess.metadata)
+        return JSONResponse(
+            {"ok": True, "session_id": session_id, "agent_id": agent_id, "overrides": overrides}
+        )
+
+    async def api_session_model_stack_set(request: Request) -> JSONResponse:
+        """POST /api/ui/session/model-stack
+
+        Body: {"session_id": "...", "agent_id": "...", "overrides": {<key>: <preset_id|"" >, ...}}
+
+        Empty string or null for a key clears that override (back to global default).
+        Unknown keys are ignored. Returns the persisted overrides.
+        """
+        from seed.core.llm_sess import load_or_create_chat_session, persist_chat_session
+        try:
+            body = await request.json()
+        except Exception:
+            return JSONResponse({"detail": "invalid json"}, status_code=400)
+        session_id = str(body.get("session_id") or "").strip()
+        if not session_id:
+            return JSONResponse({"detail": "session_id required"}, status_code=400)
+        agent_id = _resolve_session_agent_id(body)
+        overrides_in = body.get("overrides")
+        if not isinstance(overrides_in, dict):
+            return JSONResponse({"detail": "overrides must be an object"}, status_code=400)
+        # Running sessions must be stopped first (consistency with rollback endpoint)
+        from . import _running_sessions, _memkey
+        if _memkey(agent_id, session_id) in _running_sessions:
+            return JSONResponse(
+                {"detail": "session is currently running, stop it first"}, status_code=409
+            )
+        chat_sess = load_or_create_chat_session(session_id, agent_id)
+        if not isinstance(chat_sess.metadata, dict):
+            chat_sess.metadata = {}
+        for k in _MODEL_STACK_KEYS:
+            if k not in overrides_in:
+                continue
+            v = overrides_in.get(k)
+            if v is None or (isinstance(v, str) and not v.strip()):
+                chat_sess.metadata.pop(k, None)
+            else:
+                chat_sess.metadata[k] = str(v).strip()
+        persist_chat_session(chat_sess, agent_id)
+        persisted = _read_model_stack_from_metadata(chat_sess.metadata)
+        return JSONResponse(
+            {"ok": True, "session_id": session_id, "agent_id": agent_id, "overrides": persisted}
+        )
+
+    async def api_session_model_stack_clear(request: Request) -> JSONResponse:
+        """POST /api/ui/session/model-stack/clear — convenience: remove all 6 overrides."""
+        from seed.core.llm_sess import load_or_create_chat_session, persist_chat_session
+        try:
+            body = await request.json()
+        except Exception:
+            return JSONResponse({"detail": "invalid json"}, status_code=400)
+        session_id = str(body.get("session_id") or "").strip()
+        if not session_id:
+            return JSONResponse({"detail": "session_id required"}, status_code=400)
+        agent_id = _resolve_session_agent_id(body)
+        from . import _running_sessions, _memkey
+        if _memkey(agent_id, session_id) in _running_sessions:
+            return JSONResponse(
+                {"detail": "session is currently running, stop it first"}, status_code=409
+            )
+        chat_sess = load_or_create_chat_session(session_id, agent_id)
+        if not isinstance(chat_sess.metadata, dict):
+            chat_sess.metadata = {}
+        for k in _MODEL_STACK_KEYS:
+            chat_sess.metadata.pop(k, None)
+        persist_chat_session(chat_sess, agent_id)
+        return JSONResponse({"ok": True, "session_id": session_id, "agent_id": agent_id, "overrides": {}})
+
     async def api_chat_rollback(request: Request) -> JSONResponse:
         """Roll back session to a given message index — subsequent turns will project from there.
 
@@ -928,6 +1048,24 @@ def create_app():
         Route("/health", health),
         Route("/icon.png", icon_png),
         Route("/favicon.ico", favicon_ico),
+        # NOTE: routes under /api/ui/session/model-stack must be registered
+        # BEFORE the /api/ui Mount, otherwise Starlette will dispatch them
+        # to build_webui_api_app first.
+        Route(
+            "/api/ui/session/model-stack",
+            api_session_model_stack_get,
+            methods=["GET"],
+        ),
+        Route(
+            "/api/ui/session/model-stack",
+            api_session_model_stack_set,
+            methods=["POST"],
+        ),
+        Route(
+            "/api/ui/session/model-stack/clear",
+            api_session_model_stack_clear,
+            methods=["POST"],
+        ),
         Mount("/api/ui", app=build_webui_api_app(project_root)),
         Route("/api/attachments", api_attachment_upload, methods=["POST"]),
         Route("/api/attachments/batch", api_attachment_batch, methods=["POST"]),

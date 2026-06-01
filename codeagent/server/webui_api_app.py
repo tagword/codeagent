@@ -353,6 +353,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         delete_stored_session,
         list_stored_sessions_meta,
         load_chat_session_from_disk,
+        load_or_create_chat_session,
     )
     from seed.core.proj_reg import (
         create_project,
@@ -1127,6 +1128,32 @@ def build_webui_api_app(project_root: Path) -> Starlette:
             )
         else:
             rows = list_stored_sessions_meta(limit=lim, agent_id=aid, filter_by_project=False)
+
+        # Annotate each row with whether it has any per-session model-stack override
+        # so the sidebar can show a 📌 badge without re-fetching every session.
+        _MODEL_STACK_KEYS_B2 = (
+            "llm_id", "vision_llm_id", "image_gen_llm_id",
+            "audio_llm_id", "music_llm_id", "video_gen_llm_id",
+        )
+        # rows from list_stored_sessions_meta do NOT include metadata inline,
+        # so we resolve the on-disk JSON for each session. Bounded by `lim` (≤500).
+        for r in rows:
+            try:
+                sid = r.get("session_id") if isinstance(r, dict) else None
+                if not isinstance(sid, str) or not sid.strip():
+                    r["model_stack_overrides"] = {"count": 0, "has_any": False}
+                    continue
+                chat_sess = load_or_create_chat_session(sid.strip(), aid)
+                md = chat_sess.metadata if isinstance(chat_sess.metadata, dict) else {}
+                present = [k for k in _MODEL_STACK_KEYS_B2 if isinstance(md.get(k), str) and md.get(k).strip()]
+                r["model_stack_overrides"] = {
+                    "count": len(present),
+                    "has_any": bool(present),
+                    "keys": present,
+                }
+            except Exception:
+                r["model_stack_overrides"] = {"count": 0, "has_any": False}
+
         return JSONResponse({"sessions": rows})
 
     async def api_sessions_running(request: Request) -> JSONResponse:

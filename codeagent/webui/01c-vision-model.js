@@ -1,12 +1,25 @@
-const VISION_MODEL_KEY = 'oa_vision_preset_id';
+/* Vision LLM selector — per-session via ModelStackState */
+
+const VISION_MODEL_KEY = 'oa_vision_preset_id';  // legacy, kept for migration
 
 function getSelectedVisionModel() {
+  if (window.ModelStackState) return window.ModelStackState.getEffectiveModel('vision');
   try { return localStorage.getItem(VISION_MODEL_KEY) || ''; } catch (_) { return ''; }
 }
-
 function setSelectedVisionModel(val) {
+  if (window.ModelStackState) {
+    if (val && val !== '__none__') {
+      window.ModelStackState.setSessionOverride('vision', val);
+      window.ModelStackState.schedulePersistToBackend();
+    } else {
+      window.ModelStackState.clearSessionOverride('vision');
+      window.ModelStackState.schedulePersistToBackend();
+    }
+    return;
+  }
   try { localStorage.setItem(VISION_MODEL_KEY, String(val || '').trim()); } catch (_) {}
 }
+function clearSelectedVisionModel() { setSelectedVisionModel(''); }
 
 function hasVisionPresets() {
   return typeof _visionPresetsCache !== 'undefined' && _visionPresetsCache.length > 0;

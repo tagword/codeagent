@@ -1,10 +1,22 @@
-const AUDIO_MODEL_KEY = 'oa_audio_preset_id';
+/* Audio transcription LLM selector — per-session via ModelStackState */
+
+const AUDIO_MODEL_KEY = 'oa_audio_preset_id';  // legacy, kept for migration
 
 function getSelectedAudioModel() {
+  if (window.ModelStackState) return window.ModelStackState.getEffectiveModel('audio');
   try { return localStorage.getItem(AUDIO_MODEL_KEY) || ''; } catch (_) { return ''; }
 }
-
 function setSelectedAudioModel(val) {
+  if (window.ModelStackState) {
+    if (val && val !== '__none__') {
+      window.ModelStackState.setSessionOverride('audio', val);
+      window.ModelStackState.schedulePersistToBackend();
+    } else {
+      window.ModelStackState.clearSessionOverride('audio');
+      window.ModelStackState.schedulePersistToBackend();
+    }
+    return;
+  }
   try { localStorage.setItem(AUDIO_MODEL_KEY, String(val || '').trim()); } catch (_) {}
 }
 

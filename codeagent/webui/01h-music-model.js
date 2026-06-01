@@ -1,10 +1,22 @@
-const MUSIC_MODEL_KEY = 'oa_music_preset_id';
+/* Music LLM selector — per-session via ModelStackState */
+
+const MUSIC_MODEL_KEY = 'oa_music_preset_id';  // legacy, kept for migration
 
 function getSelectedMusicModel() {
+  if (window.ModelStackState) return window.ModelStackState.getEffectiveModel('music');
   try { return localStorage.getItem(MUSIC_MODEL_KEY) || ''; } catch (_) { return ''; }
 }
-
 function setSelectedMusicModel(val) {
+  if (window.ModelStackState) {
+    if (val && val !== '__none__') {
+      window.ModelStackState.setSessionOverride('music', val);
+      window.ModelStackState.schedulePersistToBackend();
+    } else {
+      window.ModelStackState.clearSessionOverride('music');
+      window.ModelStackState.schedulePersistToBackend();
+    }
+    return;
+  }
   try { localStorage.setItem(MUSIC_MODEL_KEY, String(val || '').trim()); } catch (_) {}
 }
 

@@ -61,6 +61,12 @@ function autoSelectModelStackPresets() {
     typeof setSelectedMusicModel === 'function' ? setSelectedMusicModel : null,
     window._musicPresetsCache
   );
+  autoSelectSinglePreset(
+    document.getElementById('videoGenModelSelect'),
+    typeof getSelectedVideoGenModel === 'function' ? getSelectedVideoGenModel : null,
+    typeof setSelectedVideoGenModel === 'function' ? setSelectedVideoGenModel : null,
+    window._videoGenPresetsCache
+  );
 
   const chatSel = document.getElementById('modelSelect');
   if (chatSel && !chatSel.disabled) {
@@ -83,6 +89,7 @@ function updateComposeStackMissingHint() {
     { sel: document.getElementById('imageGenModelSelect'), cache: window._imageGenPresetsCache },
     { sel: document.getElementById('audioModelSelect'), cache: window._audioPresetsCache },
     { sel: document.getElementById('musicModelSelect'), cache: window._musicPresetsCache },
+    { sel: document.getElementById('videoGenModelSelect'), cache: window._videoGenPresetsCache },
   ];
   let anyMissing = false;
   checks.forEach(function(c) {
@@ -93,6 +100,7 @@ function updateComposeStackMissingHint() {
 
 function updateComposeModelStackPill() {
   const pill = document.getElementById('composeModelPillLabel');
+  const pin = document.getElementById('composeModelPillPin');
   const trigger = document.getElementById('composeModelTrigger');
   const chatSel = document.getElementById('modelSelect');
   if (!pill || !chatSel) return;
@@ -117,11 +125,34 @@ function updateComposeModelStackPill() {
   const musicLabel = getSelectShortLabel(musicSel);
   if (musicLabel) parts.push('音乐 ' + musicLabel);
 
+  const videoGenSel = document.getElementById('videoGenModelSelect');
+  const videoGenLabel = getSelectShortLabel(videoGenSel);
+  if (videoGenLabel) parts.push('视频 ' + videoGenLabel);
+
   const summary = parts.join(' · ');
   const display = truncateStackLabel(summary, 42);
   pill.textContent = display;
   pill.title = summary;
   if (trigger) trigger.title = '模型栈：' + summary;
+
+  // Per-session override pin badge + "clear overrides" button visibility
+  let hasOverride = false;
+  if (window.ModelStackState) {
+    const slots = window.ModelStackState.listSessionOverrideSlots();
+    hasOverride = slots.length > 0;
+  }
+  if (pin) {
+    pin.hidden = !hasOverride;
+    if (hasOverride) pin.title = '本会话已自定义模型（按 session 隔离）';
+  }
+  const clearBtn = document.getElementById('composeClearOverridesBtn');
+  if (clearBtn) clearBtn.hidden = !hasOverride;
+  const hint = document.getElementById('composeStackActionsHint');
+  if (hint) {
+    hint.textContent = hasOverride
+      ? '当前会话已自定义以下模型：切到别的会话不会受影响。'
+      : '当前会话未自定义：使用全局默认。';
+  }
 }
 
 function refreshComposeModelStackUi() {
@@ -135,7 +166,7 @@ function refreshComposeModelStackUi() {
 }
 
 (function initModelStackUi() {
-  ['modelSelect', 'visionModelSelect', 'imageGenModelSelect', 'audioModelSelect', 'musicModelSelect'].forEach(function(id) {
+  ['modelSelect', 'visionModelSelect', 'imageGenModelSelect', 'audioModelSelect', 'musicModelSelect', 'videoGenModelSelect'].forEach(function(id) {
     const sel = document.getElementById(id);
     if (!sel) return;
     sel.addEventListener('change', function() {
@@ -149,5 +180,25 @@ function refreshComposeModelStackUi() {
   });
   if (document.readyState !== 'loading') {
     setTimeout(refreshComposeModelStackUi, 0);
+  }
+
+  // Bind "clear all overrides" button (only meaningful when MS is available)
+  const clearBtn = document.getElementById('composeClearOverridesBtn');
+  if (clearBtn) {
+    clearBtn.addEventListener('click', async function() {
+      if (!window.ModelStackState) return;
+      const sid = window.ModelStackState.getModelStackScope();
+      if (!sid) return;
+      if (!confirm('清除当前会话的所有模型覆盖吗？将恢复为全局默认。')) return;
+      window.ModelStackState.clearAllSessionOverrides(sid);
+      // Persist (empty) to backend
+      try { await window.ModelStackState.persistToBackendNow(); } catch (_) {}
+      // Re-apply selectors
+      if (typeof window.refreshModelStackUi === 'function') {
+        window.refreshModelStackUi();
+      } else {
+        refreshComposeModelStackUi();
+      }
+    });
   }
 })();
