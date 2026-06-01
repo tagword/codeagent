@@ -99,7 +99,8 @@ sendBtn.onclick = async () => {
         vision_llm_id: (typeof getSelectedVisionModel === 'function' ? getSelectedVisionModel() : '') || undefined,
         image_gen_llm_id: (typeof getSelectedImageGenModel === 'function' ? getSelectedImageGenModel() : '') || undefined,
         audio_llm_id: (typeof getSelectedAudioModel === 'function' ? getSelectedAudioModel() : '') || undefined,
-        music_llm_id: (typeof getSelectedMusicModel === 'function' ? getSelectedMusicModel() : '') || undefined
+        music_llm_id: (typeof getSelectedMusicModel === 'function' ? getSelectedMusicModel() : '') || undefined,
+        video_gen_llm_id: (typeof getSelectedVideoGenModel === 'function' ? getSelectedVideoGenModel() : '') || undefined
       })
     });
     const j = await r.json().catch(async () => {

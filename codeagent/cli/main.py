@@ -302,6 +302,11 @@ def main():
         metavar='PRESET_ID',
         help='Music generation preset for music_generate (or CODEAGENT_MUSIC_GEN_PRESET_ID)',
     )
+    chat_parser.add_argument(
+        '--video-gen-llm',
+        metavar='PRESET_ID',
+        help='Video generation preset for video_generate (or CODEAGENT_VIDEO_GEN_PRESET_ID)',
+    )
 
     serve_parser = subparsers.add_parser(
         'serve',
@@ -447,6 +452,15 @@ def _cli_music_preset_id(args) -> str:
     return ca_env.pick_default('', 'CODEAGENT_MUSIC_GEN_PRESET_ID').strip()
 
 
+def _cli_video_gen_preset_id(args) -> str:
+    from codeagent.core import env as ca_env
+
+    pid = (getattr(args, 'video_gen_llm', None) or '').strip()
+    if pid:
+        return pid
+    return ca_env.pick_default('', 'CODEAGENT_VIDEO_GEN_PRESET_ID').strip()
+
+
 def _cli_vision_preset_id(args) -> str:
     from codeagent.core import env as ca_env
 
@@ -568,6 +582,7 @@ def _cmd_chat_llm(args):
         set_active_llm_session,
         set_active_vision_preset,
         set_active_music_preset,
+        set_active_video_gen_preset,
     )
     from seed.core.agent_runtime import (
         build_api_projection_messages,
@@ -607,6 +622,7 @@ def _cmd_chat_llm(args):
     image_gen_preset_id = _cli_image_gen_preset_id(args)
     audio_preset_id = _cli_audio_preset_id(args)
     music_preset_id = _cli_music_preset_id(args)
+    video_gen_preset_id = _cli_video_gen_preset_id(args)
     chat_sess = load_or_create_chat_session(name, agent_id)
     fresh_sys = fresh_system_prompt(agent_id=agent_id)
     chat_sess.messages[:] = merge_fresh_system(chat_sess.messages, fresh_sys)
@@ -628,6 +644,8 @@ def _cmd_chat_llm(args):
         print(f"  Audio preset: {audio_preset_id}")
     if music_preset_id:
         print(f"  Music preset: {music_preset_id}")
+    if video_gen_preset_id:
+        print(f"  Video gen preset: {video_gen_preset_id}")
     print("  命令: /attach <path>  /attach-dir <path>  /clear-vision")
     while True:
         try:
@@ -730,6 +748,7 @@ def _cmd_chat_llm(args):
         set_active_image_gen_preset(image_gen_preset_id or None)
         set_active_audio_preset(audio_preset_id or None)
         set_active_music_preset(music_preset_id or None)
+        set_active_video_gen_preset(video_gen_preset_id or None)
         try:
             n_before = len(api_msgs)
             reply, _, tools_used, _tool_trace, _loop_meta = asyncio.run(

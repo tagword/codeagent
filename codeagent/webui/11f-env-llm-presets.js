@@ -5,8 +5,8 @@ let llmDefaultId = '';
 let llmProviderCatalog = [];
 window._llmPresetsCache = [];
 
-var PRESET_USE_TYPE_LABELS = { chat: '对话', image: '生图', vision: '识图', audio: '音频', speech: '朗读', music: '音乐' };
-var PRESET_USE_TYPE_ORDER = ['chat', 'vision', 'image', 'audio', 'music', 'speech'];
+var PRESET_USE_TYPE_LABELS = { chat: '对话', image: '生图', vision: '识图', audio: '音频', speech: '朗读', music: '音乐', video_gen: '视频生成' };
+var PRESET_USE_TYPE_ORDER = ['chat', 'vision', 'image', 'audio', 'music', 'video_gen', 'speech'];
 var SELF_HOSTED_PROVIDERS = ['ollama', 'openai_compatible', 'sglang', 'custom'];
 
 var PRESET_BOARD_EMPTY_HINTS = {
@@ -15,6 +15,7 @@ var PRESET_BOARD_EMPTY_HINTS = {
   image: '添加生图模型，供 image_generate 工具调用',
   audio: '添加音频转写模型（如 Whisper）',
   music: '添加 MiniMax music-2.6 等音乐生成模型',
+  video_gen: '添加 Agnes agnes-video-v2.0 等视频生成模型',
   speech: '朗读 preset 供参考；气泡 TTS 优先用 MCP 按量 Key',
 };
 
@@ -46,6 +47,7 @@ function inferPresetUseType(p) {
   if (p.supports_audio) return 'audio';
   if (p.supports_speech) return 'speech';
   if (p.supports_music) return 'music';
+  if (p.supports_video_gen) return 'video_gen';
   if (p.supports_vision) return 'vision';
   return 'chat';
 }
@@ -89,6 +91,7 @@ function inferUseTypeForProviderModel(providerId, modelId) {
   }
   const low = mid.toLowerCase();
   if (providerId === 'minimax' && low.startsWith('music')) return 'music';
+  if (providerId === 'agnes' && low.indexOf('video') >= 0) return 'video_gen';
   if (providerId === 'minimax' && low.startsWith('speech')) return 'speech';
   if (providerId === 'minimax' && low.startsWith('image')) return 'image';
   return 'chat';
@@ -113,6 +116,7 @@ function presetCapabilityHint(providerId, useType) {
   if (ut === 'vision') return '将用于 vision_analyze / 发送图片附件。';
   if (ut === 'audio') return '将用于 audio_transcribe / 发送音频附件。';
   if (ut === 'music') return '将用于 music_generate 工具（当前仅 MiniMax）。';
+  if (ut === 'video_gen') return '将用于 video_generate 工具（Agnes agnes-video-v2.0）。';
   if (ut === 'speech') return '供朗读模型参考；气泡 TTS 使用 MCP / 按量 Key。';
   return '主 Agent 对话与工具路由的默认 LLM。';
 }
@@ -126,6 +130,7 @@ function resolvePresetProviderId(p) {
   const url = (p.base_url || '').toLowerCase();
   if (url.indexOf('api.deepseek.com') >= 0) return 'deepseek';
   if (url.indexOf('minimaxi.com') >= 0 || url.indexOf('minimax.io') >= 0) return 'minimax';
+  if (url.indexOf('agnes-ai.com') >= 0) return 'agnes';
   if (url.indexOf('volces.com') >= 0 || url.indexOf('volcengine') >= 0) return 'volcengine';
   if (url.indexOf('api.openai.com') >= 0) return 'openai';
   if (url.indexOf('127.0.0.1') >= 0 || url.indexOf('localhost') >= 0) return 'ollama';
