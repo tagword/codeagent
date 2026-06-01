@@ -1,10 +1,22 @@
-const IMAGE_GEN_MODEL_KEY = 'oa_image_gen_preset_id';
+/* Image-gen LLM selector — per-session via ModelStackState */
+
+const IMAGE_GEN_MODEL_KEY = 'oa_image_gen_preset_id';  // legacy, kept for migration
 
 function getSelectedImageGenModel() {
+  if (window.ModelStackState) return window.ModelStackState.getEffectiveModel('image_gen');
   try { return localStorage.getItem(IMAGE_GEN_MODEL_KEY) || ''; } catch (_) { return ''; }
 }
-
 function setSelectedImageGenModel(val) {
+  if (window.ModelStackState) {
+    if (val && val !== '__none__') {
+      window.ModelStackState.setSessionOverride('image_gen', val);
+      window.ModelStackState.schedulePersistToBackend();
+    } else {
+      window.ModelStackState.clearSessionOverride('image_gen');
+      window.ModelStackState.schedulePersistToBackend();
+    }
+    return;
+  }
   try { localStorage.setItem(IMAGE_GEN_MODEL_KEY, String(val || '').trim()); } catch (_) {}
 }
 

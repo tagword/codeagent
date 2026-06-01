@@ -1,13 +1,27 @@
 
-const MODEL_KEY = 'oa_llm_preset_id';
+/* Chat main LLM selector — now per-session (delegates to ModelStackState) */
+
 function getSelectedModel() {
-  try { return localStorage.getItem(MODEL_KEY) || ''; } catch (_) { return ''; }
+  // 1) session override, 2) global default, 3) empty
+  if (window.ModelStackState) return window.ModelStackState.getEffectiveModel('llm');
+  try { return localStorage.getItem('oa_llm_preset_id') || ''; } catch (_) { return ''; }
 }
 function setSelectedModel(val) {
-  try { localStorage.setItem(MODEL_KEY, String(val || '').trim()); } catch (_) {}
+  if (window.ModelStackState) {
+    if (val && val !== '__default__') {
+      window.ModelStackState.setSessionOverride('llm', val);
+      window.ModelStackState.schedulePersistToBackend();
+    } else {
+      window.ModelStackState.clearSessionOverride('llm');
+      window.ModelStackState.schedulePersistToBackend();
+    }
+    return;
+  }
+  try { localStorage.setItem('oa_llm_preset_id', String(val || '').trim()); } catch (_) {}
 }
 async function refreshModelSelect() {
   if (!modelSelect) return;
+  // Effective value (session override → global default → empty)
   const cur = getSelectedModel();
   try {
     const r = await fetch('/api/ui/llm/presets');
@@ -36,10 +50,8 @@ async function refreshModelSelect() {
       modelSelect.value = cur;
     } else if (defaultId && presets.some(function(p) { return p.id === defaultId; })) {
       modelSelect.value = defaultId;
-      setSelectedModel(defaultId);
     } else {
       modelSelect.value = '__default__';
-      setSelectedModel('');
     }
     if (typeof updateComposeModelPill === 'function') updateComposeModelPill();
   } catch (_) {}
@@ -47,6 +59,7 @@ async function refreshModelSelect() {
 const refreshChatModelSelect = refreshModelSelect;
 modelSelect && modelSelect.addEventListener('change', function() {
   setSelectedModel(modelSelect.value);
+  if (typeof updateComposeModelPill === 'function') updateComposeModelPill();
 });
 
 // ---------------- Thinking toggle persistence ----------------
