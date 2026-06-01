@@ -65,6 +65,31 @@ function appendGeneratedMusicToToolRow(detailsEl, row) {
   detailsEl.appendChild(wrap);
 }
 
+function appendGeneratedVideoToToolRow(detailsEl, row) {
+  if (!detailsEl || !row) return;
+  const name = (row.tool || row.name || '').toLowerCase();
+  if (name !== 'video_generate') return;
+  let payload = null;
+  try {
+    payload = JSON.parse(String(row.result || ''));
+  } catch (_) {
+    return;
+  }
+  const video = payload && payload.video;
+  if (!video || !video.attachment_id) return;
+  detailsEl.querySelectorAll('.oa-tool-gen-video').forEach(function(n) { n.remove(); });
+  const wrap = document.createElement('div');
+  wrap.className = 'oa-tool-gen-video';
+  const el = document.createElement('video');
+  el.controls = true;
+  el.preload = 'metadata';
+  el.src = '/api/attachments/' + encodeURIComponent(video.attachment_id)
+    + '?session_id=' + encodeURIComponent(typeof sessionId !== 'undefined' ? sessionId : 'web-chat')
+    + '&agent_id=' + encodeURIComponent(typeof agentId !== 'undefined' ? agentId : 'default');
+  wrap.appendChild(el);
+  detailsEl.appendChild(wrap);
+}
+
 function appendAgentToolTraceRowToLog(row, index, total, opts) {
   opts = opts || {};
   const name = (row && (row.tool || row.name)) || 'tool';
@@ -103,6 +128,7 @@ function appendAgentToolTraceRowToLog(row, index, total, opts) {
 
   appendGeneratedImagesToToolRow(wrap, row);
   appendGeneratedMusicToToolRow(wrap, row);
+  appendGeneratedVideoToToolRow(wrap, row);
 
   if (opts.prepend && log.firstChild) {
     log.insertBefore(wrap, log.firstChild);

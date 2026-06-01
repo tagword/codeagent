@@ -348,6 +348,11 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         save_presets,
         set_default_preset_id,
     )
+    from codeagent.core.default_presets import (
+        SLOTS as DEFAULT_PRESET_SLOTS,
+        get_default_preset_ids,
+        set_default_preset_id_for_slot,
+    )
     from seed.core.llm_sess import (
         archive_stored_llm_session,
         delete_stored_session,
@@ -1332,10 +1337,15 @@ def build_webui_api_app(project_root: Path) -> Starlette:
     async def api_llm_presets_get(_: Request) -> JSONResponse:
         from seed.core.model_providers import enrich_presets_for_ui, list_provider_catalog
 
+        default_ids = get_default_preset_ids()
         return JSONResponse(
             {
                 "presets": enrich_presets_for_ui(load_presets()),
-                "default_id": get_default_preset_id(),
+                # New: per-slot default map (slot → preset_id)
+                "default_preset_ids": default_ids,
+                "default_slots": list(DEFAULT_PRESET_SLOTS),
+                # Legacy: kept so older UI code still gets the chat default
+                "default_id": default_ids.get("chat", get_default_preset_id()),
                 "providers": list_provider_catalog(),
             }
         )
@@ -1377,8 +1387,22 @@ def build_webui_api_app(project_root: Path) -> Starlette:
             body = await request.json()
         except Exception:
             return JSONResponse({"detail": "invalid json"}, status_code=400)
-        set_default_preset_id(str(body.get("preset_id") or ""))
-        return JSONResponse({"ok": True})
+        pid = str(body.get("preset_id") or "").strip()
+        use_type = str(body.get("use_type") or "chat").strip() or "chat"
+        if use_type not in DEFAULT_PRESET_SLOTS:
+            return JSONResponse(
+                {"detail": f"use_type must be one of {list(DEFAULT_PRESET_SLOTS)}"},
+                status_code=400,
+            )
+        set_default_preset_id_for_slot(use_type, pid)
+        # Keep seed's legacy single-id in sync for the chat slot so other
+        # in-process callers (speech_synth etc.) keep working.
+        if use_type == "chat":
+            set_default_preset_id(pid)
+        return JSONResponse(
+            {"ok": True, "use_type": use_type, "preset_id": pid,
+             "default_preset_ids": get_default_preset_ids()}
+        )
 
     async def api_llm_presets_delete(request: Request) -> JSONResponse:
         try:
@@ -1388,9 +1412,17 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         pid = str(body.get("preset_id") or "").strip()
         presets = [p for p in load_presets() if str(p.get("id") or "").strip() != pid]
         save_presets(presets)
+        # Clear this preset from default_preset_ids for any slot
+        cur_defaults = get_default_preset_ids()
+        changed = False
+        for slot, def_pid in list(cur_defaults.items()):
+            if def_pid == pid:
+                set_default_preset_id_for_slot(slot, "")
+                changed = True
+        # Legacy single-id sync (chat only)
         if get_default_preset_id() == pid:
             set_default_preset_id("")
-        return JSONResponse({"ok": True})
+        return JSONResponse({"ok": True, "defaults_changed": changed})
 
     async def api_llm_presets_test(request: Request) -> JSONResponse:
         try:
