@@ -173,13 +173,53 @@
           <span class="new-msg-btn__text">新消息 ↓</span>
         </button>
         <div class="compose">
+          <div class="compose__head" id="composeHead" hidden>
+            <div id="composeAttachments" class="compose__attachments" style="display:none"></div>
+          </div>
           <div class="compose__box" id="composeBox">
-            <div class="compose__head" id="composeHead" hidden>
-              <div id="composeAttachments" class="compose__attachments" style="display:none"></div>
-            </div>
             <div class="compose__editor">
+              <div class="compose__attach-wrap">
+                <button type="button" class="btn btn--ghost btn--icon compose__attach-inline" id="attachBtnInline" title="附加文件">+</button>
+              </div>
               <textarea id="msg" rows="1" placeholder="输入消息，Enter 发送 · Shift+Enter 换行" autocomplete="off" spellcheck="true"></textarea>
-            </div>
+              <div class="compose__editor-actions">
+                <span id="tokenUsage" class="token-usage token-usage--seg token-usage--compact" role="meter" aria-label="上下文占用" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" title="上下文占用" style="display:none">
+                  <svg class="token-usage__icon" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M8 2L2 5.5v5L8 14l6-3.5v-5L8 2z"/>
+                    <path d="M8 8L2 5.5M8 8l6-3.5M8 8v6"/>
+                  </svg>
+                  <span class="token-usage__segs" aria-hidden="true">
+                    <span class="token-usage__seg"></span>
+                    <span class="token-usage__seg"></span>
+                    <span class="token-usage__seg"></span>
+                    <span class="token-usage__seg"></span>
+                    <span class="token-usage__seg"></span>
+                  </span>
+                  <span class="token-usage__pct">0%</span>
+                </span>
+                <button type="button" class="btn btn--primary btn--icon btn--send compose__send-inline" id="send" title="发送 (Enter)">
+                  <svg class="compose__send-icon" viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg>
+                  <svg class="compose__stop-icon" viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true" style="display:none"><rect x="2" y="2" width="12" height="12" rx="2"/></svg>
+                  <span class="btn__send-label">发送</span>
+                </button>
+                <button type="button" class="btn btn--ghost btn--icon compose__more-inline" id="moreBtn" title="更多选项">⋮</button>
+              </div>
+              <div class="compose__more-popup" id="morePopup" style="display:none" role="menu">
+                <button type="button" class="compose__more-option" id="composeModelTrigger" aria-expanded="false" aria-controls="composeSettingsSheet" title="模型栈设置">
+                  <span class="compose__more-option-icon">
+                    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 2v12M2 8h12"/></svg>
+                  </span>
+                  <span class="compose__more-option-label" id="composeModelPillLabel">默认模型</span>
+                  <svg class="compose__more-option-chevron" viewBox="0 0 16 16" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6l4 4 4-4"/></svg>
+                </button>
+                <div class="compose__more-divider"></div>
+                <button type="button" class="compose__more-option" id="thinkToggle" aria-pressed="true" title="思考：开启时先推理再回答">
+                  <span class="compose__more-option-icon">
+                    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 1.8a4.5 4.5 0 0 0-3 7.9V11h6V9.7a4.5 4.5 0 0 0-3-7.9z"/><path d="M6.5 13.5h3M7 15h2"/></svg>
+                  </span>
+                  <span class="compose__more-option-label">思考</span>
+                </button>
+              </div>
             <div class="compose__sheet" id="composeSettingsSheet" hidden>
               <div class="compose__sheet-head">
                 <span class="compose__sheet-title">模型栈</span>
@@ -250,71 +290,54 @@
                 </label>
               </div>
             </div>
-            <div class="compose__dock">
-              <div class="compose__dock-start">
-                <div class="compose__tool-group" role="group" aria-label="附件">
-                  <button type="button" class="btn btn--ghost btn--icon" id="attachBtn" disabled title="附加文件">
-                    <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M6.5 2.5 11 7l-4.2 4.2a2.8 2.8 0 1 1-4-4L9.5 3.5"/></svg>
-                  </button>
-                  <button type="button" class="btn btn--ghost btn--icon" id="attachFolderBtn" disabled title="选择文件夹">
-                    <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 4.5A1.5 1.5 0 0 1 3.5 3H6l1.5 1.5H12.5A1.5 1.5 0 0 1 14 6v6.5A1.5 1.5 0 0 1 12.5 14h-9A1.5 1.5 0 0 1 2 12.5V4.5z"/></svg>
-                  </button>
-                  <button type="button" class="btn btn--ghost btn--icon" id="cameraBtn" disabled title="摄像头">
-                    <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 5.5h2.2L5.5 4h5l1.3 1.5H14v7H2v-7z"/><circle cx="8" cy="9" r="2.2"/></svg>
-                  </button>
-                </div>
-              </div>
-              <div class="compose__dock-mid">
-                <button type="button" class="compose__model-pill" id="composeModelTrigger" aria-expanded="false" aria-controls="composeSettingsSheet" title="模型栈设置">
-                  <span class="compose__model-pill-pin" id="composeModelPillPin" hidden aria-label="本会话已自定义">📌</span>
-                  <span class="compose__model-pill-label" id="composeModelPillLabel">默认模型</span>
-                  <svg class="compose__model-pill-chevron" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6l4 4 4-4"/></svg>
-                </button>
-              </div>
-              <div class="compose__dock-end">
-                <span id="tokenUsage" class="token-usage token-usage--seg token-usage--compact" role="meter" aria-label="上下文占用" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" title="上下文占用" style="display:none">
-                  <svg class="token-usage__icon" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path d="M8 2L2 5.5v5L8 14l6-3.5v-5L8 2z"/>
-                    <path d="M8 8L2 5.5M8 8l6-3.5M8 8v6"/>
-                  </svg>
-                  <span class="token-usage__segs" aria-hidden="true">
-                    <span class="token-usage__seg"></span>
-                    <span class="token-usage__seg"></span>
-                    <span class="token-usage__seg"></span>
-                    <span class="token-usage__seg"></span>
-                    <span class="token-usage__seg"></span>
-                  </span>
-                  <span class="token-usage__pct">0%</span>
-                </span>
-                <button type="button" class="btn btn--ghost btn--icon think-toggle" id="thinkToggle" aria-pressed="true" title="思考：开启时先推理再回答">
-                  <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 1.8a4.5 4.5 0 0 0-3 7.9V11h6V9.7a4.5 4.5 0 0 0-3-7.9z"/><path d="M6.5 13.5h3M7 15h2"/></svg>
-                  <span class="think-toggle__label">思考</span>
-                </button>
-                <button type="button" class="btn btn--ghost btn--sm compose__stop" id="stop" disabled>停止</button>
-                <button type="button" class="btn btn--primary btn--icon btn--send" id="send" title="发送 (Enter)">
-                  <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg>
-                  <span class="btn__send-label">发送</span>
-                </button>
-              </div>
-            </div>
             <input type="file" id="attachFileInput" accept="image/*,video/*,audio/*,.pdf,.txt,.md" multiple hidden />
             <input type="file" id="attachFolderInput" webkitdirectory multiple hidden />
             <input type="file" id="nativeCameraInput" accept="image/*" capture="environment" hidden />
-            <div id="cameraModal" class="modal-overlay camera-modal" style="display:none" role="dialog" aria-label="摄像头">
+            <input type="file" id="nativeVideoInput" accept="video/*" capture="environment" hidden />
+          </div><!-- .compose__box -->
+          <div class="compose__attach-popup" id="attachPopup" style="display:none" role="menu">
+            <button type="button" class="compose__attach-option" data-action="file" role="menuitem">
+              <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 4.5A1.5 1.5 0 0 1 3.5 3H6l1.5 1.5H12.5A1.5 1.5 0 0 1 14 6v6.5A1.5 1.5 0 0 1 12.5 14h-9A1.5 1.5 0 0 1 2 12.5V4.5z"/></svg>
+              选择文件
+            </button>
+            <button type="button" class="compose__attach-option" data-action="camera" role="menuitem">
+              <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 5.5h2.2L5.5 4h5l1.3 1.5H14v7H2v-7z"/><circle cx="8" cy="9" r="2.2"/></svg>
+              拍照
+            </button>
+            <button type="button" class="compose__attach-option" data-action="video" role="menuitem">
+              <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 4h8a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"/><path d="M11 7l3-2v6l-3-2"/></svg>
+              录制视频
+            </button>
+          </div>
+          <div id="cameraModal" class="modal-overlay camera-modal" style="display:none" role="dialog" aria-label="摄像头">
               <div class="modal-dialog camera-modal__dialog">
                 <div class="modal-dialog__header">
-                  <span class="modal-dialog__title">摄像头</span>
+                  <span class="modal-dialog__title" id="cameraModalTitle">摄像头</span>
                   <button type="button" class="modal-dialog__close" id="cameraModalClose" aria-label="关闭">&times;</button>
                 </div>
                 <div class="modal-dialog__body camera-modal__body">
-                  <video id="cameraPreview" class="camera-modal__video" autoplay playsinline muted></video>
-                  <canvas id="cameraCanvas" style="display:none" aria-hidden="true"></canvas>
-                  <p id="cameraStatus" class="camera-modal__status"></p>
+                  <div class="camera-modal__mode" id="cameraModeBar" role="tablist" aria-label="模式">
+                    <button type="button" class="camera-modal__mode-btn is-active" data-mode="photo" role="tab" aria-selected="true">拍照</button>
+                    <button type="button" class="camera-modal__mode-btn" data-mode="video" role="tab" aria-selected="false">录像</button>
+                  </div>
+                  <div class="camera-modal__stage" id="cameraStage">
+                    <video id="cameraPreview" class="camera-modal__video" autoplay playsinline muted></video>
+                    <div class="camera-modal__rec-indicator" id="cameraRecIndicator" hidden>
+                      <span class="camera-modal__rec-dot"></span>
+                      <span id="cameraRecTimer">00:00</span>
+                    </div>
+                    <canvas id="cameraCanvas" style="display:none" aria-hidden="true"></canvas>
+                    <p id="cameraStatus" class="camera-modal__status"></p>
+                  </div>
                 </div>
-                <div class="modal-dialog__footer camera-modal__footer">
+                <div class="modal-dialog__footer camera-modal__footer" id="cameraFooterPhoto">
                   <button type="button" class="btn btn--ghost btn--sm" id="cameraToggleInterval">定时截帧</button>
                   <button type="button" class="btn btn--primary btn--sm" id="cameraCaptureBtn">拍照</button>
                   <button type="button" class="btn btn--subtle btn--sm" id="cameraModalDone">完成</button>
+                </div>
+                <div class="modal-dialog__footer camera-modal__footer" id="cameraFooterVideo" hidden>
+                  <button type="button" class="btn btn--primary btn--sm" id="cameraRecordBtn">开始录制</button>
+                  <button type="button" class="btn btn--subtle btn--sm" id="cameraModalDoneVideo">完成</button>
                 </div>
               </div>
             </div>
@@ -443,47 +466,6 @@
             <button type="button" class="btn btn--primary btn--sm" id="btnChatEnvSave">保存</button>
           </div>
           <div id="chatEnvStatus" class="status-line"></div>
-        </fieldset>
-
-        <fieldset class="section" id="fieldsetGlobalDefaultModels">
-          <div class="section__header">
-            <h3 class="section__title">全局默认模型栈</h3>
-            <div class="row-actions" style="display:flex;gap:var(--sp-2);margin:0;">
-              <button type="button" class="btn btn--primary btn--sm" id="btnGlobalDefaultSave">保存</button>
-              <button type="button" class="btn btn--ghost btn--sm" id="btnGlobalDefaultReset" title="恢复为「系统默认」">重置</button>
-            </div>
-          </div>
-          <p class="section__desc">
-            新会话默认使用的模型栈。每个会话可在聊天页「模型栈」里单独覆盖（带 📌 角标）。
-            「默认」= 跟随系统在多模型预设里标为「默认」的那条。
-          </p>
-          <div class="grid grid--2" id="globalDefaultGrid">
-            <label class="field">
-              <span class="field__label">主模型 · 对话</span>
-              <select class="field__select" id="globalDefaultLlm" data-slot="llm"><option value="">跟随系统默认</option></select>
-            </label>
-            <label class="field">
-              <span class="field__label">识图</span>
-              <select class="field__select" id="globalDefaultVision" data-slot="vision"><option value="">跟随系统默认</option></select>
-            </label>
-            <label class="field">
-              <span class="field__label">生图</span>
-              <select class="field__select" id="globalDefaultImageGen" data-slot="image_gen"><option value="">跟随系统默认</option></select>
-            </label>
-            <label class="field">
-              <span class="field__label">音频转写</span>
-              <select class="field__select" id="globalDefaultAudio" data-slot="audio"><option value="">跟随系统默认</option></select>
-            </label>
-            <label class="field">
-              <span class="field__label">音乐生成</span>
-              <select class="field__select" id="globalDefaultMusic" data-slot="music"><option value="">跟随系统默认</option></select>
-            </label>
-            <label class="field">
-              <span class="field__label">视频生成</span>
-              <select class="field__select" id="globalDefaultVideoGen" data-slot="video_gen"><option value="">跟随系统默认</option></select>
-            </label>
-          </div>
-          <div id="globalDefaultStatus" class="status-line"></div>
         </fieldset>
 
         <fieldset class="section" id="fieldsetLlmPresets">
