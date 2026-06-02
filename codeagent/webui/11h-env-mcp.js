@@ -306,6 +306,15 @@ function buildMcpServerCard(serverId, cfg, status, meta) {
     if (!confirm('确定删除 MCP 服务「' + serverId + '」？')) return;
     wrap.remove();
     updateMcpBoardEmptyState();
+    // 删除后自动保存
+    var statusEl = document.getElementById('mcpEnvStatus');
+    if (statusEl) statusEl.textContent = '已删除，正在保存…';
+    saveMcpEnvAndConfig().catch(function(e) {
+      if (statusEl) {
+        statusEl.classList.add('is-err');
+        statusEl.textContent = '删除成功但保存失败：' + String(e.message || e) + '，请点击「保存全部」重试。';
+      }
+    });
   });
 
   actions.appendChild(btnTest);
@@ -461,7 +470,14 @@ function showNewMcpServerForm(templateId) {
       const card = buildMcpServerCard(row.id, row.config, null, window._mcpMeta || {});
       board.appendChild(card);
       wrap.remove();
-      editStatus.textContent = '';
+      editStatus.textContent = '已添加，正在保存…';
+      // 自动保存全部到 mcp.json
+      saveMcpEnvAndConfig().then(function() {
+        editStatus.textContent = '已添加并保存。';
+      }).catch(function(e) {
+        editStatus.classList.add('is-err');
+        editStatus.textContent = '添加成功但保存失败：' + String(e.message || e) + '，请点击「保存全部」重试。';
+      });
     } catch (e) {
       editStatus.classList.add('is-err');
       editStatus.textContent = String(e.message || e);
