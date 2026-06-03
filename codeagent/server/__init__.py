@@ -6,6 +6,7 @@ import hmac
 import logging
 import os
 import socket
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -47,7 +48,34 @@ from seed.core._session_cache import (  # noqa: E402
 
 # 当前正在执行中的会话集合（mkey 格式：agent_id::session_id）
 # 用于页面刷新后前端恢复运行状态指示
+# 使用锁保护，因为 api_chat（asyncio）和 api_sessions_running 可能并发访问
 _running_sessions: set[str] = set()
+_running_sessions_lock: threading.Lock = threading.Lock()
+
+def _running_add(mkey: str) -> None:
+    """线程安全地添加会话到运行中集合。"""
+    with _running_sessions_lock:
+        _running_sessions.add(mkey)
+
+def _running_discard(mkey: str) -> None:
+    """线程安全地从运行中集合移除会话。"""
+    with _running_sessions_lock:
+        _running_sessions.discard(mkey)
+
+def _running_contains(mkey: str) -> bool:
+    """线程安全地检查会话是否在运行中。"""
+    with _running_sessions_lock:
+        return mkey in _running_sessions
+
+def _running_list(agent_id: str) -> list[str]:
+    """线程安全地获取指定 agent 的运行中会话 ID 列表。"""
+    prefix = f"{agent_id.strip() or 'default'}::"
+    with _running_sessions_lock:
+        return [
+            mkey.removeprefix(prefix)
+            for mkey in _running_sessions
+            if mkey.startswith(prefix)
+        ]
 
 def _env_truthy(name: str, default: str = "0") -> bool:
     return os.environ.get(name, default).strip().lower() in ("1", "true", "yes", "on")
@@ -404,12 +432,27 @@ def _verify_webhook_signature(body: bytes, sig: str | None) -> bool:
         return False
     return True
 
+_app_html_cache: tuple[str, str, float] | None = None  # (html, etag, mtime)
 
-def get_app_html() -> str:
+
+def get_app_html() -> tuple[str, str]:
+    """Return (html_content, etag).  ETag 基于文件 mtime，浏览器可缓存复用。"""
+    global _app_html_cache
     root = _webui_root()
     shell = root / "webui.html"
     parts_dir = root / "webui"
     body_primary = parts_dir / "body.html"
+
+    latest = shell.stat().st_mtime if shell.is_file() else 0
+    if body_primary.is_file():
+        latest = max(latest, body_primary.stat().st_mtime)
+    for p in parts_dir.glob("*.css"):
+        latest = max(latest, p.stat().st_mtime)
+    for p in parts_dir.glob("*.js"):
+        latest = max(latest, p.stat().st_mtime)
+
+    if _app_html_cache is not None and latest <= _app_html_cache[2]:
+        return _app_html_cache[0], _app_html_cache[1]
 
     shell_html = shell.read_text(encoding="utf-8")
     css_files = sorted(p for p in parts_dir.glob("*.css"))
@@ -423,9 +466,10 @@ def get_app_html() -> str:
     js_files = sorted(p for p in parts_dir.glob("*.js"))
     scripts = "\n\n".join(p.read_text(encoding="utf-8") for p in js_files)
 
-    return (
-        shell_html.replace("/*{{STYLES}}*/", styles).replace("{{BODY}}", body).replace("{{SCRIPTS}}", scripts)
-    )
+    html = shell_html.replace("/*{{STYLES}}*/", styles).replace("{{BODY}}", body).replace("{{SCRIPTS}}", scripts)
+    etag = f'w"{int(latest):x}"'
+    _app_html_cache = (html, etag, latest)
+    return html, etag
 
 
 def get_setup_html() -> str:

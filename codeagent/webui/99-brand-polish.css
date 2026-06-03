@@ -19,6 +19,7 @@
 .topbar {
   background: linear-gradient(180deg, var(--bg-panel) 0%, color-mix(in srgb, var(--bg-panel) 96%, var(--bg)) 100%);
   box-shadow: 0 1px 0 color-mix(in srgb, var(--accent) 8%, transparent);
+  z-index: 160;
 }
 
 .topbar::before {

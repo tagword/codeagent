@@ -42,7 +42,10 @@ function setReasoningEffort(val) {
 }
 if (thinkToggle) {
   setThinkState(getThinkState());
-  thinkToggle.addEventListener('click', () => setThinkState(!getThinkState()));
+  thinkToggle.addEventListener('click', function(e) {
+    e.stopPropagation();
+    setThinkState(!getThinkState());
+  });
 }
 if (reasoningEffortSelect) {
   syncReasoningEffortUi();

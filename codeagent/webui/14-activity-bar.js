@@ -17,6 +17,21 @@ function switchActivityMode(mode) {
   if (!mode || mode === _activeMode) return;
   _activeMode = mode;
 
+  // 切换到非 files/stats 页面时关闭滑出面板
+  if (mode !== 'stats' && mode !== 'files') {
+    ['planPanel','todoPanel','gitPanel'].forEach(function(id) {
+      var p = document.getElementById(id);
+      if (p && p.style.display !== 'none') {
+        p.style.display = 'none';
+        try { localStorage.setItem('oa_' + id.replace('Panel','').toLowerCase() + '_panel_open', '0'); } catch (_) {}
+      }
+    });
+    ['btnTogglePlans','btnToggleTodos','btnToggleGit'].forEach(function(id) {
+      var b = document.getElementById(id);
+      if (b) b.classList.remove('is-active');
+    });
+  }
+
   document.querySelectorAll('.activity-btn').forEach(function(b) {
     if (b.id === 'btnLogout') return;
     b.classList.toggle('active', b.getAttribute('data-mode') === mode);

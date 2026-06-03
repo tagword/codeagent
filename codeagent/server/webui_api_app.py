@@ -60,7 +60,7 @@ def _env_chat_specs() -> list[tuple[tuple[str, ...], str]]:
         ((ca_env.CHAT_AUTO_CONTINUE_MAX_SEGMENTS,), "4"),
         ((ca_env.CHAT_MAX_TOOL_ROUNDS_DEFAULT,), "16"),
         ((ca_env.CONTEXT_COMPACT,), ""),
-        ((ca_env.CONTEXT_COMPACT_MIN_BYTES,), "90000"),
+        ((ca_env.CONTEXT_COMPACT_MIN_TOKENS,), "30000"),
         ((ca_env.CONTEXT_COMPACT_MIN_ROUNDS,), "0"),
         ((ca_env.CONTEXT_COMPACT_SUMMARIZER_BASEURL,), ""),
         ((ca_env.CONTEXT_COMPACT_SUMMARIZER_MODEL,), ""),
