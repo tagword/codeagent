@@ -35,15 +35,12 @@ async function refreshModelSelect() {
     presets.forEach(function(p) {
       const o = document.createElement('option');
       o.value = p.id || '';
-      let label = p.name || p.model || p.id;
-      const prov = (p.provider_label || '').trim();
-      const ut = (p.use_type_label || '').trim();
-      const mdl = (p.model_label || p.model || '').trim();
-      if (prov) label += ' · ' + prov;
-      if (ut) label += ' · ' + ut;
-      if (mdl && mdl !== label) label += ' · ' + mdl;
-      if (p.id === defaultId) label += ' （默认）';
-      o.textContent = label;
+      const isDef = p.id === defaultId;
+      const shortLabel = (typeof presetComposeLabel === 'function')
+        ? presetComposeLabel(p, { isDefault: isDef })
+        : (p.model || p.name || p.id);
+      o.textContent = shortLabel;
+      o.title = (typeof presetOptionDetail === 'function') ? presetOptionDetail(p) : shortLabel;
       modelSelect.appendChild(o);
     });
     if (cur && cur !== '__default__' && presets.some(function(p) { return p.id === cur; })) {

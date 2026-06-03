@@ -1,47 +1,204 @@
-          llm_model: model,
-          llm_api_key: key,
-          llm_auth_scheme: scheme || 'Bearer'
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    function setMsg(id, text, isErr) {
+      const el = $(id);
+      if (!el) return;
+      el.textContent = text || '';
+      el.className = 'msg' + (isErr ? ' err' : text && !isErr ? ' ok' : '');
+    }
+
+    async function postJson(url, body) {
+      const r = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify(body || {})
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.detail || r.statusText);
+      return j;
+    }
+
+    let providerCatalog = [];
+    const SELF_HOSTED = ['ollama', 'openai_compatible', 'sglang', 'custom'];
+
+    const FALLBACK_PROVIDERS = [
+      {
+        id: 'deepseek',
+        label: 'DeepSeek',
+        capabilities: ['chat'],
+        requires_api_key: true,
+        default_base_url: 'https://api.deepseek.com/v1',
+        models: { chat: [
+          { id: 'deepseek-v4-flash', label: 'deepseek-v4-flash' },
+          { id: 'deepseek-v4-pro', label: 'deepseek-v4-pro' },
+        ]},
+      },
+      {
+        id: 'openai_compatible',
+        label: 'OpenAI 兼容',
+        capabilities: ['chat'],
+        requires_api_key: true,
+        default_base_url: '',
+        models: { chat: [] },
+      },
+      {
+        id: 'ollama',
+        label: 'Ollama',
+        capabilities: ['chat'],
+        requires_api_key: false,
+        default_base_url: 'http://127.0.0.1:11434/v1',
+        models: { chat: [] },
+      },
+    ];
+
+    function providerNeedsKey(pid) {
+      const p = providerCatalog.find(function(x) { return x.id === pid; });
+      return p ? !!p.requires_api_key : true;
+    }
+
+    function listChatModels(providerId) {
+      const p = providerCatalog.find(function(x) { return x.id === providerId; });
+      if (!p || !p.models || !p.models.chat) return [];
+      return p.models.chat;
+    }
+
+    function fillProviderSelect() {
+      const sel = $('fProvider');
+      if (!sel) return;
+      sel.innerHTML = '';
+      const chatProviders = providerCatalog.filter(function(p) {
+        return (p.capabilities || []).indexOf('chat') >= 0;
+      });
+      chatProviders.forEach(function(p) {
+        const o = document.createElement('option');
+        o.value = p.id;
+        o.textContent = p.label || p.id;
+        sel.appendChild(o);
+      });
+      if (!chatProviders.length) {
+        const o = document.createElement('option');
+        o.value = 'openai_compatible';
+        o.textContent = 'OpenAI 兼容';
+        sel.appendChild(o);
+      }
+    }
+
+    function fillModelSelect() {
+      const prov = $('fProvider').value;
+      const sel = $('fModel');
+      sel.innerHTML = '';
+      const models = listChatModels(prov);
+      if (models.length) {
+        models.forEach(function(m) {
+          const o = document.createElement('option');
+          o.value = m.id;
+          o.textContent = m.label || m.id;
+          sel.appendChild(o);
         });
-        setMsg('msg1', '连接成功：' + (j.model_hint || 'OK'));
+        sel.disabled = false;
+      } else {
+        const o = document.createElement('option');
+        o.value = '';
+        o.textContent = '请在高级模式填写模型 ID';
+        sel.appendChild(o);
+        sel.disabled = true;
+      }
+      const p = providerCatalog.find(function(x) { return x.id === prov; });
+      if (p && p.default_base_url && $('fBase')) {
+        $('fBase').placeholder = p.default_base_url;
+        if (!$('fBase').value.trim()) $('fBase').value = p.default_base_url;
+      }
+      const needAdv = SELF_HOSTED.indexOf(prov) >= 0 || !models.length;
+      if ($('chkAdvanced')) {
+        $('chkAdvanced').checked = needAdv;
+        toggleAdvanced();
+      }
+    }
+
+    function toggleAdvanced() {
+      const on = $('chkAdvanced') && $('chkAdvanced').checked;
+      if ($('advancedBox')) $('advancedBox').hidden = !on;
+    }
+
+    function collectPresetPayload() {
+      const provider = $('fProvider').value.trim();
+      const modelSel = $('fModel').value.trim();
+      const modelCustom = ($('fModelCustom') && $('fModelCustom').value.trim()) || '';
+      const model = modelCustom || modelSel;
+      const key = $('fKey').value.trim();
+      const advanced = $('chkAdvanced') && $('chkAdvanced').checked;
+      const base = $('fBase').value.trim();
+      if (!provider) throw new Error('请选择服务商');
+      if (!model) throw new Error('请选择或填写模型');
+      if (providerNeedsKey(provider) && !key) throw new Error('该服务商需要 API Key');
+      const payload = {
+        provider: provider,
+        use_type: 'chat',
+        model: model,
+        api_key: key,
+      };
+      if (advanced || SELF_HOSTED.indexOf(provider) >= 0) {
+        payload.advanced = true;
+        if (base) payload.base_url = base;
+      }
+      return payload;
+    }
+
+    async function loadProviders() {
+      try {
+        const r = await fetch('/api/ui/llm/providers', { credentials: 'same-origin' });
+        if (r.ok) {
+          const j = await r.json();
+          providerCatalog = j.providers || [];
+        }
+      } catch (_) {}
+      if (!providerCatalog.length) providerCatalog = FALLBACK_PROVIDERS.slice();
+      fillProviderSelect();
+      fillModelSelect();
+      if (!$('fProvider').options.length) {
+        setMsg('msg1', '无法加载服务商列表', true);
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+      $('fProvider') && $('fProvider').addEventListener('change', fillModelSelect);
+      $('chkAdvanced') && $('chkAdvanced').addEventListener('change', toggleAdvanced);
+      loadProviders();
+    });
+
+    // --- Step 1: save chat preset ---
+
+    $('btnTest').onclick = async () => {
+      setMsg('msg1', '测试连接中…');
+      try {
+        const payload = collectPresetPayload();
+        const j = await postJson('/api/ui/llm/presets/test', payload);
+        setMsg('msg1', '连接成功：' + (j.model_hint || payload.model || 'OK'));
       } catch (e) {
-        setMsg('msg1', String(e), true);
+        setMsg('msg1', String(e.message || e), true);
       }
     };
 
     $('btnSave').onclick = async () => {
-      const name = $('fName').value.trim();
-      const base = $('fBase').value.trim();
-      const model = $('fModel').value.trim();
-      const key = $('fKey').value.trim();
-      const scheme = $('fScheme').value;
-      if (!name) { setMsg('msg1', '预设名称不能为空', true); return; }
-      if (!base) { setMsg('msg1', 'Base URL 不能为空', true); return; }
-      if (!model) { setMsg('msg1', '模型名称不能为空', true); return; }
       setMsg('msg1', '保存中…');
       try {
-        // Auto-generate a stable ID from name
-        const id = name.replace(/[^a-zA-Z0-9\u4e00-\u9fff_-]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '').toLowerCase() || 'default';
-        await postJson('/api/ui/llm/presets', {
-          id: id,
-          name: name,
-          base_url: base,
-          model: model,
-          api_key: key,
-          auth_scheme: scheme === 'Bearer' ? 'Bearer' : ''
-        });
-        // Set as default
-        await postJson('/api/ui/llm/presets/default', { preset_id: id });
-        setMsg('msg1', '预设已保存并设为默认。');
-        // Move to step 2
+        const payload = collectPresetPayload();
+        const saved = await postJson('/api/ui/llm/presets', payload);
+        const pid = saved.preset_id || payload.id;
+        if (!pid) throw new Error('保存成功但未返回 preset_id');
+        await postJson('/api/ui/llm/presets/default', { preset_id: pid, use_type: 'chat' });
+        setMsg('msg1', '主模型已保存并设为默认。');
         document.querySelector('.card.active').classList.remove('active');
         $('step2').classList.add('active');
         setMsg('msg2', '');
       } catch (e) {
-        setMsg('msg1', String(e), true);
+        setMsg('msg1', String(e.message || e), true);
       }
     };
 
-    // --- Step 2: Security ---
+    // --- Step 2: token + env defaults (via finish) ---
 
     let lastToken = '';
 
@@ -53,13 +210,12 @@
         $('tokenVal').value = lastToken;
         $('btnCopyToken').disabled = !lastToken;
         $('tokenHint').style.display = lastToken ? 'block' : 'none';
-        setMsg('msg2', 'Token 已生成。请先复制保存，再进入第 3 步。');
-        $('btnStart').disabled = false;
-        // Enable step 3 link
+        setMsg('msg2', 'Token 已生成。');
+        $('btnStart').disabled = !lastToken;
         document.querySelector('.card.active').classList.remove('active');
         $('step3').classList.add('active');
       } catch (e) {
-        setMsg('msg2', String(e), true);
+        setMsg('msg2', String(e.message || e), true);
       }
     };
 
@@ -74,12 +230,9 @@
       }
     };
 
-    // --- Step 3: Start ---
+    // --- Step 3: enter app ---
 
     $('btnStart').onclick = async () => {
-      // Auto-login with the freshly generated token before redirect,
-      // otherwise the user lands on the login screen without having
-      // saved the token (bad UX).
       if (lastToken) {
         try {
           setMsg('msg3', '登录中…');
@@ -90,8 +243,6 @@
             try { sessionStorage.removeItem('oa_webui_ws_token'); } catch (_) {}
           }
         } catch (e) {
-          // If auto-login fails, still redirect — user can paste the
-          // token manually on the login page (it's preserved in lastToken).
           console.warn('auto-login failed', e);
         }
       }
