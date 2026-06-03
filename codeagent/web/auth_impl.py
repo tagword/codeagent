@@ -92,7 +92,15 @@ def is_setup_bootstrap_route(path: str, method: str) -> bool:
     m = (method or "").upper()
     if path == "/api/ui/llm/presets" and m in ("GET", "HEAD", "POST", "OPTIONS"):
         return True
-    return bool(path == "/api/ui/llm/presets/default" and m in ("POST", "OPTIONS"))
+    if path == "/api/ui/llm/providers" and m in ("GET", "HEAD", "OPTIONS"):
+        return True
+    if path == "/api/ui/llm/presets/test" and m in ("POST", "OPTIONS"):
+        return True
+    if path == "/api/ui/llm/presets/default" and m in ("POST", "OPTIONS"):
+        return True
+    if path == "/api/ui/env/chat" and m in ("POST", "OPTIONS"):
+        return True
+    return False
 
 
 def is_public_webui_route(path: str, method: str) -> bool:
@@ -110,6 +118,8 @@ def is_public_webui_route(path: str, method: str) -> bool:
     if path == "/api/ui/auth" and method == "POST":
         return True
     if path == "/api/ui/auth/logout" and method == "POST":
+        return True
+    if path == "/api/ui/llm/providers" and method == "GET":
         return True
     return bool(method == "GET" and path in ("/icon.png", "/favicon.ico", "/health"))
 

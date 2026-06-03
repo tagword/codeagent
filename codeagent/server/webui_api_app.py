@@ -1380,7 +1380,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         if not replaced:
             presets.append(body)
         save_presets(presets)
-        return JSONResponse({"ok": True})
+        return JSONResponse({"ok": True, "preset_id": pid})
 
     async def api_llm_presets_default(request: Request) -> JSONResponse:
         try:
@@ -1819,6 +1819,10 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         return JSONResponse({"path": str(fp), "content": text, "language": language, "size": size, "lines": lines})
 
     async def api_setup_finish(_: Request) -> JSONResponse:
+        from codeagent.core import env as ca_env
+        from codeagent.core.seed_bridge import bridge_codeagent_env_to_seed
+        from seed.integrations.env_config import ENV_FILENAME
+
         tok = secrets.token_urlsafe(32)
         cfg = project_root / "config"
         cfg.mkdir(parents=True, exist_ok=True)
@@ -1827,6 +1831,24 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         (cfg / TOKEN_FILENAME).write_text(tok + "\n", encoding="utf-8")
         marker = cfg / "codeagent.setup.json"
         marker.write_text(json.dumps({"done": True}, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        # Sensible defaults for new installs (context compact uses tokens, not bytes).
+        _write_env_file_merge(
+            cfg / ENV_FILENAME,
+            {
+                ca_env.CONTEXT_COMPACT: "1",
+                ca_env.CONTEXT_COMPACT_MIN_TOKENS: "30000",
+                ca_env.CONTEXT_COMPACT_MIN_ROUNDS: "0",
+                ca_env.CHAT_MAX_TOOL_ROUNDS_DEFAULT: "16",
+            },
+        )
+        for k, v in {
+            ca_env.CONTEXT_COMPACT: "1",
+            ca_env.CONTEXT_COMPACT_MIN_TOKENS: "30000",
+            ca_env.CONTEXT_COMPACT_MIN_ROUNDS: "0",
+            ca_env.CHAT_MAX_TOOL_ROUNDS_DEFAULT: "16",
+        }.items():
+            os.environ[k] = v
+        bridge_codeagent_env_to_seed()
         return JSONResponse({"webui_token": tok})
 
     async def api_setup_test_llm(request: Request) -> JSONResponse:

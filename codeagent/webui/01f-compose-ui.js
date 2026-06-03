@@ -14,8 +14,17 @@ async function refreshMultimodalModelSelects() {
 
 function truncateComposeLabel(text, maxLen) {
   const s = String(text || '').trim();
-  if (s.length <= maxLen) return s;
-  return s.slice(0, maxLen - 1) + '…';
+  const cap = typeof maxLen === 'number' ? maxLen : 20;
+  if (s.length <= cap) return s;
+  return s.slice(0, cap - 1) + '…';
+}
+
+function composePillMaxLenFallback() {
+  try {
+    return window.matchMedia('(max-width: 768px)').matches ? 12 : 20;
+  } catch (_) {
+    return 20;
+  }
 }
 
 function updateComposeModelPill() {
@@ -26,9 +35,10 @@ function updateComposeModelPill() {
   const pill = document.getElementById('composeModelPillLabel');
   const sel = document.getElementById('modelSelect');
   if (!pill || !sel) return;
-  const opt = sel.options[sel.selectedIndex];
-  const text = (opt && opt.textContent) ? opt.textContent.trim() : '默认模型';
-  pill.textContent = truncateComposeLabel(text, 26);
+  const text = (typeof getChatMainDisplayLabel === 'function')
+    ? getChatMainDisplayLabel(sel)
+    : ((sel.options[sel.selectedIndex] && sel.options[sel.selectedIndex].textContent) || '默认模型').trim();
+  pill.textContent = truncateComposeLabel(text, typeof composePillMaxLen === 'function' ? composePillMaxLen() : composePillMaxLenFallback());
   pill.title = text;
   const trigger = document.getElementById('composeModelTrigger');
   if (trigger) trigger.title = '当前：' + text;

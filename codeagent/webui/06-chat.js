@@ -23,7 +23,7 @@
         credentials: 'same-origin',
         body: JSON.stringify({
           session_id: greetSid, agent_id: agentId, project_id: projectId,
-          message: '请根据当前 config/*.md 向用户主动打招呼，并用 2-4 条要点说明下一步如何配置/使用（包括 config/seed.env 与 skills/插件可选项）。'
+          message: '请向用户简短打招呼（2-3 句），并说明：① 输入框下方可切换思考模式与主模型；② 点模型 pill 可打开模型栈（识图/生图等需在配置页添加）；③ 上下文占用指示器显示 token 用量，超过 30k 会自动压缩；④ 更多设置在左侧「配置」。'
         })
       });
       const j = await r.json().catch(() => ({}));
@@ -42,25 +42,28 @@
 
 // ---------------- Send / stop ----------------
 
-sendBtn.onclick = async () => {
-  // 正在运行中 → 点击停止
-  if (sendBtn.classList.contains('is-stop')) {
-    const requestSid = sessionId;
-    if ((chatInflightBySid[requestSid] || 0) <= 0) return;
-    try {
-      sendBtn.classList.remove('is-stop');
-      const r = await fetch('/api/chat/stop', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: requestSid, agent_id: agentId })
-      });
-      const j = await r.json();
-      if (!r.ok) throw new Error(j.detail || r.statusText);
-      if (sessionId === requestSid) systemMsg('info', j.active ? '已请求停止当前执行；当前工具若支持中断，会尽快停止。' : '当前会话没有正在运行的 agent。');
-    } catch (e) { if (sessionId === requestSid) systemMsg('err', '停止失败：' + String(e)); }
-    finally { updateComposerButtons(); }
+async function stopActiveChat() {
+  const requestSid = sessionId;
+  if ((chatInflightBySid[requestSid] || 0) <= 0) return;
+  const btn = (typeof stopBtn !== 'undefined' && stopBtn) || sendBtn;
+  try {
+    if (btn) btn.disabled = true;
+    const r = await fetch('/api/chat/stop', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: requestSid, agent_id: agentId })
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.detail || r.statusText);
+    if (sessionId === requestSid) systemMsg('info', j.active ? '已请求停止当前执行；当前工具若支持中断，会尽快停止。' : '当前会话没有正在运行的 agent。');
+  } catch (e) { if (sessionId === requestSid) systemMsg('err', '停止失败：' + String(e)); }
+  finally { updateComposerButtons(); }
+}
+
+if (sendBtn) sendBtn.onclick = async () => {
+  if ((chatInflightBySid[sessionId] || 0) > 0) {
+    await stopActiveChat();
     return;
   }
-  // 正常发送
   const text = msg.value.trim();
   const hasPending = typeof pendingAttachments !== 'undefined' && pendingAttachments.length > 0;
   if (!text && !hasPending) return;
@@ -198,9 +201,12 @@ sendBtn.onclick = async () => {
   }
 };
 
+if (typeof stopBtn !== 'undefined' && stopBtn) stopBtn.onclick = stopActiveChat;
+
 updateComposerButtons();
 
-msg.addEventListener('keydown', (e) => {
+if (msg) {
+  msg.addEventListener('keydown', (e) => {
   if (e.key !== 'Enter') return;
   if (e.shiftKey) return;
   // macOS IME (中文输入法) 在候选词确认时也会触发 Enter keydown，
@@ -208,12 +214,13 @@ msg.addEventListener('keydown', (e) => {
   if (e.isComposing || e.keyCode === 229) return;
   e.preventDefault();
   sendBtn.click();
-});
+  });
 
-msg.addEventListener('input', () => {
-  msg.style.height = 'auto';
-  msg.style.height = Math.min(msg.scrollHeight, 220) + 'px';
-});
+  msg.addEventListener('input', () => {
+    msg.style.height = 'auto';
+    msg.style.height = Math.min(msg.scrollHeight, 220) + 'px';
+  });
+}
 
 // ---------------- Active page persistence (localStorage) ----------------
 
