@@ -7,9 +7,9 @@ function setTokenContextMax(maxTokens) {
 
 /** 更新 token 用量指示器（仅 token 用量，不含费用）
  *  @param {number|Object} curOrUsage - bodyBytes 或 {total_tokens, content_tokens}
- *  @param {number} [compactMinBytes] - 兼容旧格式的 min_bytes
+ *  @param {number} [compactMinTokens] - 兼容旧格式的 min_tokens
  */
-function updateTokenUsage(curOrUsage, compactMinBytes) {
+function updateTokenUsage(curOrUsage, compactMinTokens) {
   var el = document.getElementById('tokenUsage');
   if (!el) return;
   var segEls = el.querySelectorAll('.token-usage__seg');
@@ -17,21 +17,32 @@ function updateTokenUsage(curOrUsage, compactMinBytes) {
   var curTokens = 0;
   var maxTokens = _tokenContextMax;
   if (typeof curOrUsage === 'object' && curOrUsage !== null) {
+    // API prompt_tokens / legacy body_bytes (tokens) beat local estimate
     if (curOrUsage.prompt_tokens != null && Number(curOrUsage.prompt_tokens) > 0) {
       curTokens = Number(curOrUsage.prompt_tokens);
-    } else if (curOrUsage.body_bytes != null && curOrUsage.body_bytes !== '') {
-      curTokens = Math.round(Number(curOrUsage.body_bytes) / 4);
+    } else if (curOrUsage.body_bytes != null && curOrUsage.body_bytes !== '' && Number(curOrUsage.body_bytes) > 0) {
+      curTokens = Number(curOrUsage.body_bytes);
+    } else if (curOrUsage.estimated_tokens != null && Number(curOrUsage.estimated_tokens) > 0) {
+      curTokens = Number(curOrUsage.estimated_tokens);
     } else {
       curTokens = curOrUsage.total_tokens || 0;
     }
-    if (curOrUsage.context_limit) maxTokens = curOrUsage.context_limit;
-    else if (curOrUsage.compact_min_bytes) maxTokens = Math.round(curOrUsage.compact_min_bytes / 4);
+    if (curOrUsage.compact_min_tokens) maxTokens = Number(curOrUsage.compact_min_tokens);
+    else if (curOrUsage.context_limit) maxTokens = curOrUsage.context_limit;
   } else {
     curTokens = Math.round((curOrUsage || 0) / 4);
-    if (compactMinBytes > 0) maxTokens = Math.round(compactMinBytes / 4);
+    if (compactMinTokens > 0) maxTokens = compactMinTokens;
   }
   if (curTokens <= 0) {
-    el.style.display = 'none';
+    // 不隐藏 — 工具执行期间 body_bytes 可能短暂为 0，保持可见
+    el.style.display = 'inline-flex';
+    for (var si = 0; si < segEls.length; si++) {
+      segEls[si].classList.toggle('is-on', false);
+    }
+    if (pctEl) pctEl.textContent = '0%';
+    el.setAttribute('aria-valuenow', '0');
+    el.setAttribute('aria-valuetext', '0 / 5 档，0%');
+    el.title = '上下文占用';
     return;
   }
   el.style.display = 'inline-flex';
@@ -111,8 +122,8 @@ function recalcTokenUsageFromDom() {
   });
   // 每条消息系统开销（role 标记等）
   totalTokens += bubbles.length * 4;
-  var compactMinBytes = _tokenContextMax * 4;
-  updateTokenUsage({ total_tokens: totalTokens }, compactMinBytes);
+  var compactMinTokens = _tokenContextMax;
+  updateTokenUsage({ total_tokens: totalTokens }, compactMinTokens);
 }
 
 function connectWs() {
@@ -151,7 +162,14 @@ function connectWs() {
           if (typeof j.body_bytes_after === 'number') {
             updateTokenUsage({
               body_bytes: j.body_bytes_after,
-              compact_min_bytes: j.compact_min_bytes,
+              context_limit: j.context_limit,
+              compact_min_tokens: j.compact_min_tokens,
+            });
+          } else if (j.prompt_tokens_after != null && Number(j.prompt_tokens_after) > 0) {
+            updateTokenUsage({
+              prompt_tokens: j.prompt_tokens_after,
+              context_limit: j.context_limit,
+              compact_min_tokens: j.compact_min_tokens,
             });
           }
         }
@@ -159,18 +177,23 @@ function connectWs() {
       }
       if (j.type === 'context_usage') {
         if (!j.session_id || j.session_id === sessionId) {
-          // 更新输入区的上下文占用（body_bytes 随工具轮次累加）
-          if (j.body_bytes != null) {
-            updateTokenUsage({
-              body_bytes: j.body_bytes,
-              compact_min_bytes: j.compact_min_bytes,
-            });
+          var _cu = {
+            context_limit: j.context_limit,
+            compact_min_tokens: j.compact_min_tokens,
+          };
+          if (j.prompt_tokens != null && Number(j.prompt_tokens) > 0) {
+            _cu.prompt_tokens = Number(j.prompt_tokens);
+            updateTokenUsage(_cu);
+          } else if (j.body_bytes != null && Number(j.body_bytes) > 0) {
+            _cu.body_bytes = Number(j.body_bytes);
+            updateTokenUsage(_cu);
+          } else if (j.estimated_tokens != null && Number(j.estimated_tokens) > 0) {
+            _cu.estimated_tokens = Number(j.estimated_tokens);
+            updateTokenUsage(_cu);
           } else if (j.token_usage) {
-            updateTokenUsage(j.token_usage, j.compact_min_bytes);
+            updateTokenUsage(j.token_usage, j.compact_min_tokens);
           } else {
-            const cur = Number(j.body_bytes || 0);
-            const minb = Number(j.compact_min_bytes || 0);
-            updateTokenUsage(cur, minb);
+            updateTokenUsage(Number(j.body_bytes || 0), Number(j.compact_min_tokens || 0));
           }
           if (j.accumulated_usage && typeof updateSidebarCost === 'function') {
             updateSidebarCost(j.accumulated_usage);
@@ -251,3 +274,29 @@ try {
     connectWs();
   }).catch(_ => {});
 } catch (_) {}
+
+// ── Compact 阈值输入框（tokens） ────────────────────────────
+function initCompactMinInput() {
+  var inp = document.getElementById('inpCompactMinTokens');
+  if (!inp) return;
+  // 加载当前值
+  fetch('/api/ui/compact-config').then(r => r.json()).then(d => {
+    if (d.compact_min_tokens > 0) inp.value = d.compact_min_tokens;
+  }).catch(_ => {});
+  // 变更时保存
+  inp.addEventListener('change', function() {
+    var val = parseInt(this.value, 10) || 0;
+    fetch('/api/ui/compact-config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ compact_min_tokens: val }),
+      credentials: 'same-origin',
+    }).catch(_ => {});
+  });
+}
+// 页面加载完成后初始化
+if (document.readyState === 'complete' || document.readyState === 'interactive') {
+  setTimeout(initCompactMinInput, 500);
+} else {
+  document.addEventListener('DOMContentLoaded', function() { setTimeout(initCompactMinInput, 500); });
+}

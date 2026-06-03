@@ -85,8 +85,65 @@ async function loadOlderSessionHistoryChunk() {
   finally { historyLoadingOlder = false; }
 }
 
+/**
+ * 在消息列表顶部渲染每轮 context_usage 历史表格
+ */
+function renderContextUsageHistory(history) {
+  const log = document.getElementById('log');
+  if (!log) return;
+  const old = document.getElementById('ctxHistoryPanel');
+  if (old) old.remove();
+  var panel = document.createElement('div');
+  panel.id = 'ctxHistoryPanel';
+  panel.className = 'ctx-history';
+  var html = '<div class="ctx-history__header" onclick="var n=this.nextElementSibling; n.style.display=n.style.display===\'none\'?\'table\':\'none\'">' +
+    '📊 上下文历史 (' + history.length + ' 轮)' +
+    ' <span style="font-size:11px;color:#888">点击展开/折叠</span></div>';
+  html += '<table class="ctx-history__table" style="display:none">' +
+    '<thead><tr><th>#</th><th>prompt_tokens</th><th>context_limit</th><th>占比</th><th>body_bytes</th><th>估 token</th></tr></thead><tbody>';
+  for (var i = 0; i < history.length; i++) {
+    var h = history[i];
+    var pt = Number(h.prompt_tokens || 0);
+    var cl = Number(h.context_limit || 1);
+    var pct = (pt / cl * 100).toFixed(1) + '%';
+    html += '<tr>' +
+      '<td>' + (i + 1) + '</td>' +
+      '<td>' + pt.toLocaleString() + '</td>' +
+      '<td>' + cl.toLocaleString() + '</td>' +
+      '<td>' + pct + '</td>' +
+      '<td>' + (Number(h.body_bytes || 0)).toLocaleString() + '</td>' +
+      '<td>' + (Number(h.estimated_tokens || 0)).toLocaleString() + '</td>' +
+      '</tr>';
+  }
+  html += '</tbody></table>';
+  panel.innerHTML = html;
+  log.appendChild(panel);
+}
+
 async function loadSessionHistoryIntoLog(skipTreeRefresh) {
   try {
+    // 立即用持久化的 context_usage 恢复指示器，避免在历史加载完成前变成 1% 误显示
+    try {
+      const cuRow = (lastSessionsCache || []).find((r) => r.session_id === sessionId);
+      const cu = cuRow && cuRow.context_usage;
+      if (cu && typeof updateTokenUsage === 'function') {
+        if (Number(cu.prompt_tokens) > 0) {
+          updateTokenUsage({
+            prompt_tokens: cu.prompt_tokens,
+            context_limit: cu.context_limit,
+            body_bytes: cu.body_bytes,
+            estimated_tokens: cu.estimated_tokens,
+            compact_min_tokens: cu.compact_min_tokens,
+          });
+        } else if (Number(cu.estimated_tokens) > 0) {
+          updateTokenUsage({
+            estimated_tokens: cu.estimated_tokens,
+            context_limit: cu.context_limit,
+            compact_min_tokens: cu.compact_min_tokens,
+          });
+        }
+      }
+    } catch (_) {}
     const r = await fetch('/api/ui/session/history?session_id=' + encodeURIComponent(sessionId) +
       '&agent_id=' + encodeURIComponent(agentId) + projectQuerySuffix());
     const j = await parseJsonResponse(r);
@@ -99,6 +156,13 @@ async function loadSessionHistoryIntoLog(skipTreeRefresh) {
     if (j.truncated_start || j.has_more_older) {
       systemMsg('info', '历史较长：默认只载入最近若干轮对话；上滑到顶部可继续加载更早内容。', { skipScroll: true });
     }
+    // 显示上下文历史（每轮 context_usage）
+    try {
+      const ch = j && j.context_usage_history;
+      if (Array.isArray(ch) && ch.length > 0 && typeof renderContextUsageHistory === 'function') {
+        renderContextUsageHistory(ch);
+      }
+    } catch (_) {}
     const rows = j.messages || [];
     rows.forEach((m) => {
       const ts = m.ts;
@@ -117,10 +181,31 @@ async function loadSessionHistoryIntoLog(skipTreeRefresh) {
       }
     });
     requestAnimationFrame(() => { requestAnimationFrame(() => scrollLogForce()); });
-    // 历史加载完成后粗略估算 token 用量
-    if (typeof recalcTokenUsageFromDom === 'function') {
-      setTimeout(recalcTokenUsageFromDom, 100);
-    }
+    // 历史加载完成后用持久化的 context_usage 校正指示器
+    try {
+      const cu = j && j.context_usage;
+      if (cu && typeof updateTokenUsage === 'function') {
+        if (Number(cu.prompt_tokens) > 0) {
+          updateTokenUsage({
+            prompt_tokens: cu.prompt_tokens,
+            context_limit: cu.context_limit,
+            body_bytes: cu.body_bytes,
+            estimated_tokens: cu.estimated_tokens,
+            compact_min_tokens: cu.compact_min_tokens,
+          });
+        } else if (Number(cu.estimated_tokens) > 0) {
+          updateTokenUsage({
+            estimated_tokens: cu.estimated_tokens,
+            context_limit: cu.context_limit,
+            compact_min_tokens: cu.compact_min_tokens,
+          });
+        } else if (typeof recalcTokenUsageFromDom === 'function') {
+          setTimeout(recalcTokenUsageFromDom, 100);
+        }
+      } else if (typeof recalcTokenUsageFromDom === 'function') {
+        setTimeout(recalcTokenUsageFromDom, 100);
+      }
+    } catch (_) {}
     // 加载侧边栏费用汇总
     if (j.accumulated_usage && typeof updateSidebarCost === 'function') {
       updateSidebarCost(j.accumulated_usage);

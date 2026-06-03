@@ -143,6 +143,7 @@ function updateComposeModelStackPill() {
   }
   if (pin) {
     pin.hidden = !hasOverride;
+    pin.setAttribute('aria-hidden', hasOverride ? 'false' : 'true');
     if (hasOverride) pin.title = '本会话已自定义模型（按 session 隔离）';
   }
   const clearBtn = document.getElementById('composeClearOverridesBtn');

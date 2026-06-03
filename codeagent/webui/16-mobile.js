@@ -103,4 +103,17 @@
   } catch (_) {
     document.body.setAttribute('data-activity-mode', 'chat');
   }
+
+  // ---- Compose compact mode on mobile ----
+  function toggleComposeCompact() {
+    var box = document.querySelector('.compose__box');
+    if (!box) return;
+    if (isMobile()) {
+      box.classList.add('compose--compact');
+    } else {
+      box.classList.remove('compose--compact');
+    }
+  }
+  toggleComposeCompact();
+  MQ.addEventListener('change', toggleComposeCompact);
 })();

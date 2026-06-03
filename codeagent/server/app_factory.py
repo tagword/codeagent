@@ -65,8 +65,8 @@ def create_app():
             with contextlib.suppress(Exception):
                 await ws.send_json(msg)
 
-    async def homepage(_: Request) -> HTMLResponse:
-        from starlette.responses import RedirectResponse
+    async def homepage(request: Request) -> HTMLResponse:
+        from starlette.responses import RedirectResponse, Response
 
         setup_marker = project_root / "config" / "codeagent.setup.json"
         done = False
@@ -78,7 +78,17 @@ def create_app():
                 done = False
         if not done:
             return RedirectResponse("/setup", status_code=302)
-        return HTMLResponse(get_app_html())
+        html, etag = get_app_html()
+        if_none = request.headers.get("if-none-match")
+        if if_none and if_none == etag:
+            return Response(status_code=304, headers={"ETag": etag})
+        return HTMLResponse(
+            html,
+            headers={
+                "ETag": etag,
+                "Cache-Control": "private, max-age=0, must-revalidate",
+            },
+        )
 
     async def setup_page(_: Request) -> HTMLResponse:
         return HTMLResponse(get_setup_html())
@@ -108,7 +118,7 @@ def create_app():
         from seed.integrations.session_title import maybe_llm_refresh_session_title
         import threading
 
-        from . import SESSIONS, _DEFAULT_AUTO_CONTINUE_NUDGE, _running_sessions, tools_for_agent, ACTIVE_CHAT_CANCELS, PENDING_INJECTIONS
+        from . import SESSIONS, _DEFAULT_AUTO_CONTINUE_NUDGE, _running_add, _running_discard, tools_for_agent, ACTIVE_CHAT_CANCELS, PENDING_INJECTIONS
 
         try:
             body = await request.json()
@@ -199,7 +209,7 @@ def create_app():
                     status_code=202,
                 )
             PENDING_INJECTIONS[_run_mkey] = []
-            _running_sessions.add(_run_mkey)
+            _running_add(_run_mkey)
 
             mkey = _memkey(agent_id, session_id)
             try:
@@ -309,7 +319,12 @@ def create_app():
                 skills_suffix=_skills_suffix,
                 **_kwargs,
             )
-            compact_result = await asyncio.to_thread(maybe_compact_context_messages, api_msgs, llm)
+            _api_pt = None
+            if isinstance(chat_sess.metadata, dict):
+                _prev_cu = chat_sess.metadata.get("context_usage")
+                if isinstance(_prev_cu, dict):
+                    _api_pt = int(_prev_cu.get("prompt_tokens") or 0) or None
+            compact_result = await asyncio.to_thread(maybe_compact_context_messages, api_msgs, llm, api_prompt_tokens=_api_pt)
             persist_compact_summary(chat_sess.messages, compact_result)
             strip_ephemeral_message_fields(api_msgs)
             if not isinstance(chat_sess.metadata, dict):
@@ -468,6 +483,7 @@ def create_app():
                     _final_reply = ""
                     _final_meta: dict = {}
                     _acc_usage: dict = {}
+                    _seg_last_meta: dict = {}
                     from seed.core.usage_accumulator import (
                         begin_usage_accumulation,
                         end_usage_accumulation,
@@ -477,7 +493,7 @@ def create_app():
                     while _segment < _max_seg:
                         _seg_token = begin_usage_accumulation()
                         try:
-                            _seg_reply, __, _seg_used, _seg_trace, _seg_meta = await run_llm_tool_loop(
+                            _seg_reply, _seg_last_meta, _seg_used, _seg_trace, _seg_meta = await run_llm_tool_loop(
                                 llm, exe,
                                 messages=api_msgs,
                                 registry=reg,
@@ -535,6 +551,7 @@ def create_app():
                     tools_used = _all_used
                     tool_trace = _all_trace
                     _loop_meta = _final_meta
+                    _last_meta = _seg_last_meta or {}
                     if _acc_usage:
                         _loop_meta["usage_summary"] = _acc_usage
                 else:
@@ -558,6 +575,7 @@ def create_app():
                             enable_thinking=chat_enable_thinking,
                             reasoning_effort=chat_reasoning_effort,
                         )
+                        _last_meta = _meta or {}
                     except Exception:
                         reset_usage_accumulation(_norm_token)
                         raise
@@ -668,7 +686,8 @@ def create_app():
                     )
                     _ctx = build_context_usage_snapshot(
                         _proj_ctx,
-                        _loop_meta if isinstance(_loop_meta, dict) else None,
+                        _last_meta if isinstance(_last_meta, dict) else None,
+                        model_name=_model_name,
                     )
                     with contextlib.suppress(Exception):
                         from codeagent.core.token_counter import estimate_context_tokens
@@ -677,12 +696,23 @@ def create_app():
                         _ctx["estimated_tokens"] = int(_tok.get("total_tokens") or 0)
 
                     # 5. 构造 WS 事件（body_bytes = 下次请求上下文体积，非计费 token）
+                    # NOTE: _ctx 来自 build_context_usage_snapshot，不包含 body_bytes 键，
+                    #       所以用 prompt_tokens（或 estimated_tokens 兜底）作为上下文占用值。
+                    from seed.core.agent_runtime import _get_compact_min_tokens as _get_cmt
+                    _ctx_pt = int(_ctx.get("prompt_tokens") or 0)
+                    _ctx_est = int(_ctx.get("estimated_tokens") or 0)
+                    _ctx_body = _ctx.get("body_bytes")
+                    if _ctx_body is None:
+                        _ctx_body = _ctx_pt or _ctx_est
                     _ws_evt = {
                         "type": "context_usage",
                         "session_id": session_id,
                         "agent_id": agent_id,
-                        "body_bytes": _ctx.get("body_bytes", 0),
-                        "compact_min_bytes": _ctx.get("compact_min_bytes", 0),
+                        "prompt_tokens": _ctx_pt,
+                        "body_bytes": _ctx_body,
+                        "context_limit": _ctx.get("context_limit", 0),
+                        "estimated_tokens": _ctx_est if _ctx_pt <= 0 else 0,
+                        "compact_min_tokens": _get_cmt(),
                         "message_count": _ctx.get("message_count", 0),
                         "token_usage": _api_usage,
                         "accumulated_usage": _acc,
@@ -696,6 +726,34 @@ def create_app():
                 except Exception:
                     _api_usage = {}
                     _cost_info = {}
+                # 持久化当前 context_usage 到 session 元数据，刷新页面后可立即恢复
+                try:
+                    if isinstance(_ctx, dict) and _ctx:
+                        if not isinstance(chat_sess.metadata, dict):
+                            chat_sess.metadata = {}
+                        _snap_body = _ctx.get("body_bytes")
+                        if _snap_body is None:
+                            _snap_body = _ctx.get("prompt_tokens", _ctx.get("estimated_tokens", 0))
+                        _snap = {
+                            "prompt_tokens": int(_ctx.get("prompt_tokens") or 0),
+                            "context_limit": int(_ctx.get("context_limit") or 0),
+                            "message_count": int(_ctx.get("message_count") or 0),
+                            "body_bytes": int(_snap_body or 0),
+                            "estimated_tokens": int(_ctx.get("estimated_tokens") or 0),
+                            "compact_min_tokens": int(_get_cmt()),
+                            "updated_at": chat_sess.updated_at or "",
+                        }
+                        chat_sess.metadata["context_usage"] = _snap
+                        # 维护每轮 context_usage 历史
+                        _history = chat_sess.metadata.get("context_usage_history")
+                        if not isinstance(_history, list):
+                            _history = []
+                        _history.append(_snap)
+                        chat_sess.metadata["context_usage_history"] = _history
+                        from seed.core.llm_sess import persist_chat_session
+                        persist_chat_session(chat_sess, agent_id)
+                except Exception:
+                    logger.exception("persist context_usage failed")
                 if not _ctx:
                     with contextlib.suppress(Exception):
                         _ctx = estimate_context_usage(
@@ -738,7 +796,7 @@ def create_app():
                 _ev.set()
             raise
         finally:
-            _running_sessions.discard(_run_mkey)
+            _running_discard(_run_mkey)
             PENDING_INJECTIONS.pop(_run_mkey, None)
             _ev = ACTIVE_CHAT_CANCELS.get(_run_mkey)
             if _ev is not None:
@@ -834,8 +892,8 @@ def create_app():
         if not isinstance(overrides_in, dict):
             return JSONResponse({"detail": "overrides must be an object"}, status_code=400)
         # Running sessions must be stopped first (consistency with rollback endpoint)
-        from . import _running_sessions, _memkey
-        if _memkey(agent_id, session_id) in _running_sessions:
+        from . import _running_contains, _memkey
+        if _running_contains(_memkey(agent_id, session_id)):
             return JSONResponse(
                 {"detail": "session is currently running, stop it first"}, status_code=409
             )
@@ -867,8 +925,8 @@ def create_app():
         if not session_id:
             return JSONResponse({"detail": "session_id required"}, status_code=400)
         agent_id = _resolve_session_agent_id(body)
-        from . import _running_sessions, _memkey
-        if _memkey(agent_id, session_id) in _running_sessions:
+        from . import _running_contains, _memkey
+        if _running_contains(_memkey(agent_id, session_id)):
             return JSONResponse(
                 {"detail": "session is currently running, stop it first"}, status_code=409
             )
@@ -879,6 +937,31 @@ def create_app():
             chat_sess.metadata.pop(k, None)
         persist_chat_session(chat_sess, agent_id)
         return JSONResponse({"ok": True, "session_id": session_id, "agent_id": agent_id, "overrides": {}})
+
+    async def api_compact_config_get(request: Request) -> JSONResponse:
+        """GET /api/ui/compact-config — return current compact min tokens."""
+        from seed.core.agent_runtime import _get_compact_min_tokens, _compact_min_tokens_override
+        return JSONResponse({
+            "compact_min_tokens": _get_compact_min_tokens(),
+            "runtime_override": _compact_min_tokens_override,
+        })
+
+    async def api_compact_config_set(request: Request) -> JSONResponse:
+        """POST /api/ui/compact-config — set compact min tokens at runtime."""
+        from seed.core.agent_runtime import set_compact_min_tokens
+        try:
+            body = await request.json()
+        except Exception:
+            return JSONResponse({"detail": "invalid json"}, status_code=400)
+        val = body.get("compact_min_tokens")
+        if val is None:
+            return JSONResponse({"detail": "compact_min_tokens required"}, status_code=400)
+        try:
+            val = int(val)
+        except (ValueError, TypeError):
+            return JSONResponse({"detail": "compact_min_tokens must be integer"}, status_code=400)
+        set_compact_min_tokens(val)
+        return JSONResponse({"ok": True, "compact_min_tokens": max(0, val)})
 
     async def api_chat_rollback(request: Request) -> JSONResponse:
         """Roll back session to a given message index — subsequent turns will project from there.
@@ -892,7 +975,7 @@ def create_app():
             {"ok": true, "message_idx": 42, "messages_since": [<messages from idx onwards>]}
         """
         from seed.core.llm_sess import load_or_create_chat_session, persist_chat_session
-        from . import _running_sessions, _memkey
+        from . import _running_contains, _memkey
 
         try:
             body = await request.json()
@@ -915,7 +998,7 @@ def create_app():
         message_idx = int(body.get("message_idx", 1))
 
         _run_mkey = _memkey(agent_id, session_id)
-        if _run_mkey in _running_sessions:
+        if _running_contains(_run_mkey):
             return JSONResponse({"detail": "session is currently running, stop it first"}, status_code=409)
 
         chat_sess = load_or_create_chat_session(session_id, agent_id)
@@ -1064,6 +1147,16 @@ def create_app():
         Route(
             "/api/ui/session/model-stack/clear",
             api_session_model_stack_clear,
+            methods=["POST"],
+        ),
+        Route(
+            "/api/ui/compact-config",
+            api_compact_config_get,
+            methods=["GET"],
+        ),
+        Route(
+            "/api/ui/compact-config",
+            api_compact_config_set,
             methods=["POST"],
         ),
         Mount("/api/ui", app=build_webui_api_app(project_root)),

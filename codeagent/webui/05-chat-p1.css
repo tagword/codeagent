@@ -292,7 +292,7 @@
   width: 100%;
   min-height: 48px;
   max-height: 220px;
-  padding: 12px 14px 8px;
+  padding: 12px 14px;
   border: none;
   background: transparent;
   resize: none;
@@ -386,26 +386,227 @@
   color: var(--text-subtle);
 }
 .compose__field-hint a { color: var(--accent); }
+
+/* ── Compose dock — unified chip tray ── */
+.compose__box:focus-within {
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--border));
+  box-shadow:
+    var(--shadow-sm),
+    0 0 0 1px color-mix(in srgb, var(--accent) 10%, transparent);
+}
 .compose__dock {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: var(--sp-2);
-  padding: 6px 8px 8px;
+  gap: 10px;
+  padding: 8px 10px 10px;
+  background: linear-gradient(180deg, transparent 0%, var(--bg-subtle) 100%);
   border-top: 1px solid var(--border);
-  min-height: 44px;
+  min-height: 52px;
 }
-.compose__dock-start { flex-shrink: 0; }
-.compose__dock-mid {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  justify-content: center;
-}
-.compose__dock-end {
-  flex-shrink: 0;
+.compose__dock-tools { flex-shrink: 0; }
+.compose__dock-chips {
   display: flex;
   align-items: center;
   gap: 4px;
+  min-width: 0;
+  padding: 3px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-panel) 88%, var(--bg-subtle));
+  box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 6%, transparent);
+}
+.compose__dock-chips::-webkit-scrollbar { display: none; }
+.compose__dock-actions {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.compose__tool-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--bg-panel);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
+}
+.compose__tool-btn:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+.compose__tool-btn:active:not(:disabled) { transform: scale(0.96); }
+.compose__tool-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+
+.compose__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  height: 32px;
+  max-width: min(280px, 100%);
+  padding: 0 10px 0 8px;
+  border: none;
+  border-radius: calc(var(--r-lg) - 3px);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  font-family: inherit;
+  line-height: 1;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+}
+.compose__chip:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.compose__chip:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+.compose__chip-leading {
+  display: inline-flex;
+  flex-shrink: 0;
+  opacity: 0.72;
+  transition: opacity 0.18s ease, color 0.18s ease;
+}
+.compose__chip-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.compose__chip-chevron {
+  flex-shrink: 0;
+  opacity: 0.45;
+  transition: transform 0.18s ease, opacity 0.18s ease;
+}
+.compose__chip-badge {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-softer);
+}
+.compose__chip-badge[hidden] { display: none; }
+
+/* Think — mini switch, no global strikethrough */
+.compose__dock .think-toggle[aria-pressed="false"] {
+  opacity: 1;
+}
+.compose__dock .think-toggle[aria-pressed="false"] .think-toggle__label {
+  text-decoration: none;
+  color: var(--text-subtle);
+}
+.compose__chip--think {
+  padding-right: 8px;
+}
+.compose__chip--think[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--accent) 11%, var(--bg-panel));
+  color: var(--accent);
+}
+.compose__chip--think[aria-pressed="true"] .compose__chip-leading {
+  opacity: 1;
+  color: var(--accent);
+}
+.compose__chip--think[aria-pressed="false"] .compose__chip-leading {
+  opacity: 0.45;
+}
+.compose__switch {
+  display: inline-flex;
+  flex-shrink: 0;
+  margin-left: 2px;
+}
+.compose__switch-track {
+  position: relative;
+  width: 30px;
+  height: 17px;
+  border-radius: var(--r-full);
+  background: color-mix(in srgb, var(--border-strong) 85%, var(--text-subtle));
+  transition: background 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.compose__chip--think[aria-pressed="true"] .compose__switch-track {
+  background: var(--accent);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+.compose__switch-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.22);
+  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.compose__chip--think[aria-pressed="true"] .compose__switch-thumb {
+  transform: translateX(13px);
+}
+
+/* Model pill */
+.compose__chip--model {
+  max-width: min(300px, 55vw);
+}
+.compose__chip--model.is-open,
+.compose__chip--model[aria-expanded="true"] {
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg-panel));
+  color: var(--accent);
+}
+.compose__chip--model.is-open .compose__chip-leading,
+.compose__chip--model[aria-expanded="true"] .compose__chip-leading {
+  opacity: 1;
+  color: var(--accent);
+}
+.compose__chip--model[aria-expanded="true"] .compose__chip-chevron {
+  transform: rotate(180deg);
+  opacity: 0.75;
+}
+
+.compose__attach-popup {
+  position: fixed;
+  z-index: 200;
+  display: none;
+  flex-direction: column;
+  min-width: 148px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--bg-panel);
+  box-shadow: var(--shadow-md);
+}
+.compose__attach-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: calc(var(--r-md) - 2px);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.compose__attach-option:hover {
+  background: var(--bg-hover);
+  color: var(--text);
 }
 .compose__tool-group {
   display: inline-flex;
@@ -432,59 +633,6 @@
   height: 32px;
   padding: 0;
   flex-shrink: 0;
-}
-.compose__model-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  max-width: min(280px, 100%);
-  padding: 5px 10px 5px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-full);
-  background: var(--bg-panel);
-  color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 500;
-  font-family: inherit;
-  cursor: pointer;
-  transition: border-color 0.12s ease, background 0.12s ease, color 0.12s ease, box-shadow 0.12s ease;
-}
-.compose__model-pill:hover {
-  border-color: var(--border-strong);
-  background: var(--bg-hover);
-  color: var(--text);
-}
-.compose__model-pill.is-open,
-.compose__model-pill[aria-expanded="true"] {
-  border-color: var(--accent);
-  background: var(--accent-softer);
-  color: var(--accent);
-  box-shadow: var(--shadow-focus);
-}
-.compose__model-pill-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.compose__model-pill-chevron {
-  flex-shrink: 0;
-  opacity: 0.55;
-  transition: transform 0.15s ease;
-}
-.compose__model-pill[aria-expanded="true"] .compose__model-pill-chevron {
-  transform: rotate(180deg);
-}
-.compose__dock .think-toggle__label { display: none; }
-.compose__dock .think-toggle {
-  width: 30px;
-  height: 30px;
-  padding: 0;
-  color: var(--text-muted);
-}
-.compose__dock .think-toggle[aria-pressed="true"] {
-  color: var(--accent);
-  background: var(--accent-softer);
-  border-color: var(--accent-soft);
 }
 .compose__stop:disabled { display: none; }
 .compose__stop:not(:disabled) {
@@ -521,6 +669,10 @@
 }
 .compose__box--sheet-open .compose__dock {
   border-top-color: transparent;
+}
+.compose__box--sheet-open .compose__dock-chips {
+  opacity: 0.72;
+  pointer-events: none;
 }
 .bubble-user__attachments {
   display: flex;

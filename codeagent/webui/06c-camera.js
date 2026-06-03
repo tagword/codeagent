@@ -36,8 +36,29 @@
   let recordTimerId = null;
   let isRecording = false;
   let currentMode = 'photo'; // 'photo' | 'video'
-  // 'user' = front, 'environment' = back
-  let currentFacing = 'environment';
+  // 'user' = front, 'environment' = back — prefer front first (desktop / laptop)
+  let currentFacing = 'user';
+  let modeLocked = false; // true when opened from "+" menu (photo vs video)
+
+  function isPreviewMirrored() {
+    return currentFacing === 'user';
+  }
+
+  function updatePreviewMirror() {
+    if (!video) return;
+    video.classList.toggle('camera-modal__video--mirror', isPreviewMirrored());
+  }
+
+  function syncFacingFromStream() {
+    if (!stream) return;
+    const track = stream.getVideoTracks()[0];
+    if (!track || typeof track.getSettings !== 'function') return;
+    try {
+      const fm = track.getSettings().facingMode;
+      if (fm === 'user' || fm === 'environment') currentFacing = fm;
+    } catch (_) {}
+    updatePreviewMirror();
+  }
 
   // --- Helpers ---
   function setStatus(text) {
@@ -95,7 +116,13 @@
     canvas.height = video.videoHeight;
     const ctx = canvas.getContext('2d');
     if (!ctx) return false;
+    const mirror = isPreviewMirrored();
+    if (mirror) {
+      ctx.translate(canvas.width, 0);
+      ctx.scale(-1, 1);
+    }
     ctx.drawImage(video, 0, 0);
+    if (mirror) ctx.setTransform(1, 0, 0, 1, 0, 0);
     return new Promise(function(resolve) {
       canvas.toBlob(function(blob) {
         if (!blob) {
@@ -253,53 +280,92 @@
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       throw new Error('浏览器不支持 getUserMedia');
     }
-    // 1st try: requested facing
+    // 1st try: requested facing (default user / front)
     try {
       return await navigator.mediaDevices.getUserMedia({
         video: { facingMode: { ideal: facing }, width: { ideal: 1280 }, height: { ideal: 720 } },
         audio: currentMode === 'video',
       });
     } catch (e1) {
-      // 2nd try: any camera (desktop usually has front only)
+      // 2nd try: alternate facing (mobile back camera)
+      const alt = facing === 'user' ? 'environment' : 'user';
+      try {
+        return await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: alt }, width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: currentMode === 'video',
+        });
+      } catch (e2) {
+      // 3rd try: any camera (no facing constraint)
       try {
         return await navigator.mediaDevices.getUserMedia({
           video: { width: { ideal: 1280 }, height: { ideal: 720 } },
           audio: currentMode === 'video',
         });
-      } catch (e2) {
-        // 3rd try: no constraints at all
+      } catch (e3) {
+        // 4th try: minimal constraints
         try {
           return await navigator.mediaDevices.getUserMedia({
             video: true,
             audio: currentMode === 'video',
           });
-        } catch (e3) {
-          throw e1; // surface the original error
+        } catch (e4) {
+          throw e1;
         }
+      }
       }
     }
   }
 
-  async function openStream() {
-    if (stream) return stream;
+  function hasMediaDevices() {
+    return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+  }
+
+  function nativeInputForMode(mode) {
+    return (mode === 'video')
+      ? document.getElementById('nativeVideoInput')
+      : nativeInput;
+  }
+
+  async function attachPreviewStream(nextStream) {
+    stream = nextStream;
+    if (!video) return;
+    video.srcObject = stream;
+    video.muted = true;
+    syncFacingFromStream();
+    try { await video.play(); } catch (_) {}
+  }
+
+  async function openStream(forceNew) {
+    if (stream && !forceNew) return stream;
+    if (stream) {
+      stream.getTracks().forEach(function(t) { t.stop(); });
+      stream = null;
+    }
     setStatus('正在打开摄像头…');
     stream = await tryGetStream(currentFacing);
-    if (video) {
-      video.srcObject = stream;
-      video.muted = true;
-      try { await video.play(); } catch (_) {}
-    }
+    await attachPreviewStream(stream);
     return stream;
   }
 
+  function showStreamError(err) {
+    const msg = (err && (err.name || err.message))
+      ? (err.name + (err.message ? ': ' + err.message : ''))
+      : String(err || 'unknown');
+    setStatus('无法访问摄像头：' + msg + '。可点下方「从文件选择」，或改用 HTTPS / localhost 访问。');
+    if (typeof systemMsg === 'function') {
+      systemMsg('err', '无法访问摄像头：' + msg);
+    }
+    const fb = document.getElementById('cameraFallbackBtn');
+    if (fb) fb.hidden = false;
+  }
+
   // --- Modal open ---
-  async function openCameraModal(mode) {
+  async function openCameraModal(mode, preStream) {
     currentMode = (mode === 'video') ? 'video' : 'photo';
-    setModeUi(currentMode);
+    setModeUi(currentMode, false);
 
     if (currentMode === 'photo' && !visionReady()) {
       systemMsg('err', '请先配置识图（多模态 LLM 或 MiniMax MCP）');
-      // Fall through anyway — let user test the camera; the staged file would just be ignored by /api/chat
     }
     if (currentMode === 'video' && !videoModelReady()) {
       systemMsg('err', '请先配置视频识图模型');
@@ -307,36 +373,56 @@
 
     captureCount = 0;
     modal.style.display = 'flex';
-    setStatus('正在打开摄像头…');
-
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      setStatus('当前浏览器不支持实时摄像头，已为你打开系统相机/文件选择器');
-      if (nativeInput) nativeInput.click();
-      // give the native picker a moment, then close the modal
-      setTimeout(function() { try { closeModal(); } catch (_) {} }, 600);
-      return;
-    }
+    const fb = document.getElementById('cameraFallbackBtn');
+    if (fb) fb.hidden = true;
 
     try {
-      await openStream();
+      if (preStream) {
+        await attachPreviewStream(preStream);
+      } else {
+        await openStream(true);
+      }
       setStatus(currentMode === 'video'
         ? '点击「开始录制」开始录像'
         : '对准目标后点击「拍照」，或开启定时截帧');
     } catch (e) {
-      const msg = (e && (e.name || e.message)) ? (e.name + ': ' + (e.message || '')) : String(e);
-      setStatus('无法访问摄像头：' + msg + ' — 回退到系统相机/文件选择器');
-      if (typeof systemMsg === 'function') {
-        systemMsg('err', '无法访问摄像头，已回退到系统相机/文件选择器');
-      }
-      if (nativeInput) {
-        try { nativeInput.click(); } catch (_) {}
-      }
-      setTimeout(function() { try { closeModal(); } catch (_) {} }, 600);
+      showStreamError(e);
     }
   }
 
-  function setModeUi(mode) {
+  /** Called synchronously from "+" menu click — opens modal first, then getUserMedia in the same gesture. */
+  function launchCameraCapture(mode) {
+    const m = (mode === 'video') ? 'video' : 'photo';
+
+    if (!hasMediaDevices()) {
+      const nativeEl = nativeInputForMode(m);
+      if (nativeEl) nativeEl.click();
+      return;
+    }
+
+    currentMode = m;
+    setModeUi(m, true);
+    captureCount = 0;
+    modal.style.display = 'flex';
+    const fb = document.getElementById('cameraFallbackBtn');
+    if (fb) fb.hidden = true;
+    setStatus('正在打开摄像头…');
+
+    tryGetStream(currentFacing).then(function(s) {
+      return attachPreviewStream(s).then(function() {
+        setStatus(m === 'video'
+          ? '点击「开始录制」开始录像'
+          : '对准目标后点击「拍照」，或开启定时截帧');
+      });
+    }).catch(function(err) {
+      showStreamError(err);
+    });
+  }
+
+  function setModeUi(mode, lockMode) {
     currentMode = mode;
+    if (typeof lockMode === 'boolean') modeLocked = lockMode;
+    if (modeBar) modeBar.hidden = modeLocked;
     if (modeBar) {
       Array.from(modeBar.querySelectorAll('.camera-modal__mode-btn')).forEach(function(btn) {
         const isActive = btn.getAttribute('data-mode') === mode;
@@ -344,13 +430,28 @@
         btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
       });
     }
-    if (footerPhoto) footerPhoto.hidden = (mode !== 'photo');
-    if (footerVideo) footerVideo.hidden = (mode !== 'video');
+    if (footerPhoto) {
+      const showPhoto = mode === 'photo';
+      footerPhoto.hidden = !showPhoto;
+      footerPhoto.style.display = showPhoto ? 'flex' : 'none';
+    }
+    if (footerVideo) {
+      const showVideo = mode === 'video';
+      footerVideo.hidden = !showVideo;
+      footerVideo.style.display = showVideo ? 'flex' : 'none';
+    }
     if (modalTitle) modalTitle.textContent = (mode === 'video') ? '录像' : '拍照';
   }
 
   // --- Expose to popup ---
   window.openCameraModal = openCameraModal;
+  window.launchCameraCapture = launchCameraCapture;
+
+  const fallbackBtn = document.getElementById('cameraFallbackBtn');
+  fallbackBtn && fallbackBtn.addEventListener('click', function() {
+    const inp = nativeInputForMode(currentMode);
+    if (inp) inp.click();
+  });
 
   // --- Bindings ---
   captureBtn && captureBtn.addEventListener('click', function() { captureFrame(); });
@@ -361,17 +462,25 @@
     else startRecording();
   });
 
-  // Mode switch
+  // Mode switch — restart stream when audio requirement changes (photo vs video)
   if (modeBar) {
     modeBar.addEventListener('click', function(e) {
       const btn = e.target.closest('.camera-modal__mode-btn');
       if (!btn) return;
       const m = btn.getAttribute('data-mode');
       if (!m || m === currentMode) return;
-      // Stop any in-flight recording before switching
       if (isRecording) stopRecording(true);
+      const prev = currentMode;
       setModeUi(m);
-      setStatus(m === 'video' ? '点击「开始录制」开始录像' : '对准目标后点击「拍照」');
+      if (prev !== m && hasMediaDevices()) {
+        openStream(true).then(function() {
+          setStatus(m === 'video' ? '点击「开始录制」开始录像' : '对准目标后点击「拍照」');
+        }).catch(function(err) {
+          showStreamError(err);
+        });
+      } else {
+        setStatus(m === 'video' ? '点击「开始录制」开始录像' : '对准目标后点击「拍照」');
+      }
     });
   }
 
