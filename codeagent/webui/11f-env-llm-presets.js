@@ -591,6 +591,7 @@ async function loadLlmPresets() {
     const j = await r.json();
     const presets = j.presets || [];
     window._llmPresetsCache = presets;
+    window._llmDefaultId = j.default_id || '';
     llmDefaultId = j.default_id || '';
     if (j.providers && j.providers.length) llmProviderCatalog = j.providers;
 

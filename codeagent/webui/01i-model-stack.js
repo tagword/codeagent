@@ -14,15 +14,89 @@ function presetShortLabel(p) {
   return model || prov || p.id || '';
 }
 
+function stripModelPath(name) {
+  const s = String(name || '').trim();
+  if (!s) return '';
+  const i = s.lastIndexOf('/');
+  return (i >= 0 && i < s.length - 1) ? s.slice(i + 1) : s;
+}
+
+function findChatPresetById(id) {
+  if (!id) return null;
+  return (window._llmPresetsCache || []).find(function(p) {
+    return p.id === id && (typeof inferPresetUseType !== 'function' || inferPresetUseType(p) === 'chat');
+  }) || null;
+}
+
+function presetComposeLabel(p, opts) {
+  if (!p) return '';
+  opts = opts || {};
+  let base = stripModelPath(presetShortLabel(p) || p.model || p.name || p.id || '');
+  if (!base) return '';
+  if (opts.isDefault) base += ' · 默认';
+  return base;
+}
+
+function presetOptionDetail(p) {
+  if (!p) return '';
+  const parts = [];
+  const name = (p.name || '').trim();
+  const model = stripModelPath(p.model_label || p.model || '');
+  const prov = (p.provider_label || p.provider || '').trim();
+  if (name && name !== model) parts.push(name);
+  if (model) parts.push(model);
+  if (prov) parts.push(prov);
+  const ut = (p.use_type_label || '').trim();
+  if (ut) parts.push(ut);
+  return parts.filter(Boolean).join(' · ') || String(p.id || '');
+}
+
+function getChatMainDisplayLabel(sel) {
+  if (!sel || sel.disabled) return '默认模型';
+  const v = sel.value;
+  if (!v || v === '__default__') {
+    const def = findChatPresetById(window._llmDefaultId || '');
+    if (def) return presetComposeLabel(def, { isDefault: true });
+    return '默认模型';
+  }
+  const preset = findChatPresetById(v);
+  if (preset) {
+    return presetComposeLabel(preset, { isDefault: preset.id === (window._llmDefaultId || '') });
+  }
+  return getSelectShortLabel(sel) || '默认模型';
+}
+
 function getSelectShortLabel(sel) {
   if (!sel || sel.disabled) return '';
   const v = sel.value;
   if (!v || v === '__default__' || v === '__none__') return '';
+
+  const chatPreset = findChatPresetById(v);
+  if (chatPreset) return stripModelPath(presetShortLabel(chatPreset) || chatPreset.model || chatPreset.id);
+
   const opt = sel.options[sel.selectedIndex];
-  if (!opt) return '';
-  const t = (opt.textContent || '').trim();
-  const m = t.match(/^(.+?)\s*[·(]/);
-  return (m && m[1] ? m[1].trim() : t.split('(')[0].trim()) || v;
+  if (!opt) return stripModelPath(v);
+  let t = (opt.textContent || '').trim().replace(/\s*（默认）\s*$/, '').replace(/\s*·\s*默认\s*$/, '');
+  const parts = t.split(/\s*·\s*/).map(function(p) { return stripModelPath(p.trim()); }).filter(Boolean);
+  if (!parts.length) return stripModelPath(v);
+
+  const skip = /^(对话|chat|识图|生图|音频|音乐|视频|多模态)$/i;
+  const modelish = parts.filter(function(p) { return p.includes('-') || p.includes('.'); });
+  if (modelish.length) return modelish[0];
+  const filtered = parts.filter(function(p) { return !skip.test(p); });
+  if (filtered.length) {
+    filtered.sort(function(a, b) { return a.length - b.length; });
+    return filtered[0];
+  }
+  return parts[parts.length - 1] || stripModelPath(v);
+}
+
+function composePillMaxLen() {
+  try {
+    return window.matchMedia('(max-width: 768px)').matches ? 12 : 20;
+  } catch (_) {
+    return 20;
+  }
 }
 
 function autoSelectSinglePreset(sel, getVal, setVal, presets) {
@@ -100,39 +174,47 @@ function updateComposeStackMissingHint() {
 
 function updateComposeModelStackPill() {
   const pill = document.getElementById('composeModelPillLabel');
+  const extra = document.getElementById('composeModelPillExtra');
   const pin = document.getElementById('composeModelPillPin');
   const trigger = document.getElementById('composeModelTrigger');
   const chatSel = document.getElementById('modelSelect');
   if (!pill || !chatSel) return;
 
-  const parts = [];
-  const main = getSelectShortLabel(chatSel) || '默认模型';
-  parts.push(main);
+  const main = getChatMainDisplayLabel(chatSel);
+  const extras = [];
 
-  const visionSel = document.getElementById('visionModelSelect');
-  const visionLabel = getSelectShortLabel(visionSel);
-  if (visionLabel) parts.push('识图 ' + visionLabel);
+  const visionLabel = getSelectShortLabel(document.getElementById('visionModelSelect'));
+  if (visionLabel) extras.push('识图 ' + visionLabel);
 
-  const imageSel = document.getElementById('imageGenModelSelect');
-  const imageLabel = getSelectShortLabel(imageSel);
-  if (imageLabel) parts.push('生图 ' + imageLabel);
+  const imageLabel = getSelectShortLabel(document.getElementById('imageGenModelSelect'));
+  if (imageLabel) extras.push('生图 ' + imageLabel);
 
-  const audioSel = document.getElementById('audioModelSelect');
-  const audioLabel = getSelectShortLabel(audioSel);
-  if (audioLabel) parts.push('音频 ' + audioLabel);
+  const audioLabel = getSelectShortLabel(document.getElementById('audioModelSelect'));
+  if (audioLabel) extras.push('音频 ' + audioLabel);
 
-  const musicSel = document.getElementById('musicModelSelect');
-  const musicLabel = getSelectShortLabel(musicSel);
-  if (musicLabel) parts.push('音乐 ' + musicLabel);
+  const musicLabel = getSelectShortLabel(document.getElementById('musicModelSelect'));
+  if (musicLabel) extras.push('音乐 ' + musicLabel);
 
-  const videoGenSel = document.getElementById('videoGenModelSelect');
-  const videoGenLabel = getSelectShortLabel(videoGenSel);
-  if (videoGenLabel) parts.push('视频 ' + videoGenLabel);
+  const videoGenLabel = getSelectShortLabel(document.getElementById('videoGenModelSelect'));
+  if (videoGenLabel) extras.push('视频 ' + videoGenLabel);
 
-  const summary = parts.join(' · ');
-  const display = truncateStackLabel(summary, 42);
-  pill.textContent = display;
-  pill.title = summary;
+  const summary = [main].concat(extras).join(' · ');
+  pill.textContent = truncateStackLabel(main, composePillMaxLen());
+  pill.title = main;
+
+  if (extra) {
+    if (extras.length > 0) {
+      extra.textContent = '+' + extras.length;
+      extra.hidden = false;
+      extra.setAttribute('aria-hidden', 'false');
+      extra.title = extras.join('、');
+    } else {
+      extra.hidden = true;
+      extra.setAttribute('aria-hidden', 'true');
+      extra.textContent = '';
+    }
+  }
+
   if (trigger) trigger.title = '模型栈：' + summary;
 
   // Per-session override pin badge + "clear overrides" button visibility
@@ -174,6 +256,10 @@ function refreshComposeModelStackUi() {
       updateComposeModelStackPill();
       updateComposeStackMissingHint();
     });
+  });
+
+  window.addEventListener('resize', function() {
+    if (typeof updateComposeModelStackPill === 'function') updateComposeModelStackPill();
   });
 
   document.addEventListener('DOMContentLoaded', function() {

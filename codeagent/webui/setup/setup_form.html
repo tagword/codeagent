@@ -62,11 +62,6 @@
       background: var(--c-border);
       border-radius: 4px;
     }
-    .divider {
-      border: none;
-      border-top: 1px solid var(--c-border);
-      margin: 1.25rem 0;
-    }
     .setup-hero {
       display: flex;
       align-items: flex-start;
@@ -102,44 +97,75 @@
     .setup-hero .subtitle {
       margin: 0;
     }
+    .field-advanced {
+      margin-top: 0.75rem;
+      padding: 0.75rem;
+      border-radius: 8px;
+      border: 1px dashed var(--c-border);
+      background: rgba(127, 127, 127, 0.06);
+    }
+    .field-advanced[hidden] { display: none !important; }
+    .check-row {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      font-size: 0.88rem;
+      margin: 0.35rem 0 0.6rem;
+    }
+    .check-row input { width: auto; }
   </style>
 </head>
 <body>
   <div class="setup-hero">
     <img class="setup-hero__icon" src="/icon.png" alt="" width="52" height="52" decoding="async"/>
     <div class="setup-hero__text">
-      <h1>CodeAgent 初始化向导</h1>
-      <p class="subtitle">
-        首次使用需要配置一个 LLM 模型预设。所有数据保存在本地，不会上传到第三方。
-      </p>
-      <p class="hint" style="margin-top:0.75rem;padding:0.65rem 0.75rem;border-radius:8px;background:rgba(234,179,8,0.12);border:1px solid rgba(234,179,8,0.35);">
-        <strong>执行环境：</strong>默认 <code>SEED_EXEC_BACKEND=auto</code>（有 Docker 则在容器内跑 shell；
-        否则在<strong>本机</strong>执行）。生产环境建议安装 Docker 并设置
-        <code>SEED_EXEC_BACKEND=docker</code>，详见项目根目录 <code>ROADMAP.md</code> Phase 2。
-      </p>
+      <h1>初始化</h1>
+      <p class="subtitle">添加主对话模型并生成访问 Token。</p>
     </div>
   </div>
 
-  <!-- Step 1: LLM Preset -->
   <div class="card active" id="step1">
     <div class="card-body">
       <div class="card-title">
         <span class="step-badge">1</span>
-        配置 LLM 预设
+        对话模型
       </div>
-      <p class="card-desc">
-        添加一个 LLM 模型预设（支持任何 <strong>OpenAI 兼容协议</strong> 的 API）。配置后将设为默认模型，后续也可在 WebUI 中随时增删改。
-      </p>
       <div class="field-row">
         <div>
-          <label>预设名称</label>
-          <input id="fName" placeholder="如：我的 DeepSeek" value="默认预设"/>
+          <label for="fProvider">服务商</label>
+          <select id="fProvider"></select>
         </div>
         <div>
-          <label>Base URL</label>
-          <input id="fBase" placeholder="https://api.deepseek.com/v1" value=""/>
+          <label for="fModel">模型</label>
+          <select id="fModel"></select>
         </div>
       </div>
       <div class="field-row">
         <div>
-          <label>模型名称</label>
+          <label for="fKey">API Key</label>
+          <input id="fKey" type="password" placeholder="sk-... 本地 Ollama 等可留空"/>
+        </div>
+      </div>
+      <label class="check-row">
+        <input type="checkbox" id="chkAdvanced"/>
+        <span>自定义 Base URL</span>
+      </label>
+      <div class="field-advanced" id="advancedBox" hidden>
+        <div class="field-row">
+          <div>
+            <label for="fBase">Base URL</label>
+            <input id="fBase" placeholder="https://api.example.com/v1"/>
+          </div>
+          <div>
+            <label for="fModelCustom">自定义模型 ID</label>
+            <input id="fModelCustom" placeholder="模型 ID（覆盖上方下拉）"/>
+          </div>
+        </div>
+      </div>
+      <div class="actions">
+        <button id="btnTest" type="button">测试连接</button>
+        <button id="btnSave" type="button" class="btn-primary">保存并继续 →</button>
+      </div>
+      <div id="msg1" class="msg"></div>
+    </div>
+  </div>
