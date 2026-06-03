@@ -76,8 +76,8 @@
                 启用后，当满足任一触发条件时，用 LLM 对早期对话进行摘要压缩，释放上下文空间。
               </p>
               <div class="form-row sub-row">
-                <label class="form-label" for="inpCompactMinBytes">上下文字节触发阈值</label>
-                <input type="number" id="inpCompactMinBytes" class="form-input-sm" min="0" max="500000" value="90000"/>
+                <label class="form-label" for="inpCompactMinBytes">上下文 token 触发阈值</label>
+                <input type="number" id="inpCompactMinBytes" class="form-input-sm" min="0" max="500000" value="30000"/>
                 <span class="form-hint">消息长度超过此字节数时触发（0=禁用）</span>
               </div>
               <div class="form-row sub-row">

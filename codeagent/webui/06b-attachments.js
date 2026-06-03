@@ -204,13 +204,17 @@ async function uploadPendingAttachments() {
     if (action === 'file' && fileInput) {
       fileInput.click();
     } else if (action === 'camera') {
-      if (typeof openCameraModal === 'function') {
+      if (typeof launchCameraCapture === 'function') {
+        launchCameraCapture('photo');
+      } else if (typeof openCameraModal === 'function') {
         openCameraModal('photo');
       } else if (nativeCameraInput) {
         nativeCameraInput.click();
       }
     } else if (action === 'video') {
-      if (typeof openCameraModal === 'function') {
+      if (typeof launchCameraCapture === 'function') {
+        launchCameraCapture('video');
+      } else if (typeof openCameraModal === 'function') {
         openCameraModal('video');
       } else if (nativeVideoInput) {
         nativeVideoInput.click();
@@ -278,70 +282,6 @@ async function uploadPendingAttachments() {
   });
 
   refreshVisionModelSelect().catch(function() {});
-})();
-
-/* "⋮" 更多菜单 (模型选择 + 思考) */
-(function initMorePopup() {
-  const moreBtn = document.getElementById('moreBtn');
-  const popup = document.getElementById('morePopup');
-  let popupOpen = false;
-
-  function openPopup() {
-    if (!popup || !moreBtn) return;
-    var rect = moreBtn.getBoundingClientRect();
-    popup.style.display = 'flex';
-    popup.style.flexDirection = 'column';
-    popup.style.right = (window.innerWidth - rect.right + 4) + 'px';
-    popup.style.bottom = (window.innerHeight - rect.top + 4) + 'px';
-    popupOpen = true;
-  }
-
-  function closePopup() {
-    popupOpen = false;
-    if (popup) popup.style.display = 'none';
-  }
-
-  function togglePopup(e) {
-    e.stopPropagation();
-    if (popupOpen) { closePopup(); return; }
-    openPopup();
-  }
-
-  moreBtn && moreBtn.addEventListener('click', togglePopup);
-
-  // 模型选择点击 → 打开设置面板
-  const modelTrigger = document.getElementById('composeModelTrigger');
-  if (modelTrigger) {
-    modelTrigger.addEventListener('click', function(e) {
-      closePopup();
-      if (typeof toggleComposeSettings === 'function') {
-        toggleComposeSettings();
-      }
-    });
-  }
-
-  // 思考开关
-  const thinkToggleBtn = document.getElementById('thinkToggle');
-  if (thinkToggleBtn) {
-    thinkToggleBtn.addEventListener('click', function(e) {
-      e.stopPropagation();
-      // setThinkState is already bound in 01c-session.js
-      // Just let the existing listener fire; update visual state
-    });
-  }
-
-  // 点击外部关闭
-  document.addEventListener('click', function(e) {
-    if (!popupOpen) return;
-    if (moreBtn && moreBtn.contains(e.target)) return;
-    if (popup && popup.contains(e.target)) return;
-    closePopup();
-  });
-
-  // Escape 关闭
-  document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape' && popupOpen) closePopup();
-  });
 })();
 
 function renderUserAttachmentsInBubble(container, attachments) {

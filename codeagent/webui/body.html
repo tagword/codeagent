@@ -178,11 +178,34 @@
           </div>
           <div class="compose__box" id="composeBox">
             <div class="compose__editor">
-              <div class="compose__attach-wrap">
-                <button type="button" class="btn btn--ghost btn--icon compose__attach-inline" id="attachBtnInline" title="附加文件">+</button>
-              </div>
               <textarea id="msg" rows="1" placeholder="输入消息，Enter 发送 · Shift+Enter 换行" autocomplete="off" spellcheck="true"></textarea>
-              <div class="compose__editor-actions">
+            </div>
+            <div class="compose__dock">
+              <div class="compose__dock-tools">
+                <button type="button" class="compose__tool-btn" id="attachBtnInline" title="附加文件">
+                  <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg>
+                </button>
+              </div>
+              <div class="compose__dock-chips">
+                <button type="button" class="compose__chip compose__chip--think think-toggle" id="thinkToggle" aria-pressed="true" title="思考：开启时先推理再回答">
+                  <span class="compose__chip-leading" aria-hidden="true">
+                    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1.8a4.5 4.5 0 0 0-3 7.9V11h6V9.7a4.5 4.5 0 0 0-3-7.9z"/><path d="M6.5 13.5h3M7 15h2"/></svg>
+                  </span>
+                  <span class="compose__chip-label think-toggle__label">思考</span>
+                  <span class="compose__switch" aria-hidden="true">
+                    <span class="compose__switch-track"><span class="compose__switch-thumb"></span></span>
+                  </span>
+                </button>
+                <button type="button" class="compose__chip compose__chip--model compose__model-pill" id="composeModelTrigger" aria-expanded="false" aria-controls="composeSettingsSheet" title="模型栈设置">
+                  <span class="compose__chip-leading" aria-hidden="true">
+                    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="2.2"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/></svg>
+                  </span>
+                  <span class="compose__chip-label compose__model-pill-label" id="composeModelPillLabel">默认模型</span>
+                  <span class="compose__chip-badge compose__model-pill-pin" id="composeModelPillPin" hidden aria-hidden="true" title="本会话已自定义模型"></span>
+                  <svg class="compose__chip-chevron compose__model-pill-chevron" viewBox="0 0 16 16" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6l4 4 4-4"/></svg>
+                </button>
+              </div>
+              <div class="compose__dock-actions">
                 <span id="tokenUsage" class="token-usage token-usage--seg token-usage--compact" role="meter" aria-label="上下文占用" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" title="上下文占用" style="display:none">
                   <svg class="token-usage__icon" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <path d="M8 2L2 5.5v5L8 14l6-3.5v-5L8 2z"/>
@@ -197,29 +220,13 @@
                   </span>
                   <span class="token-usage__pct">0%</span>
                 </span>
-                <button type="button" class="btn btn--primary btn--icon btn--send compose__send-inline" id="send" title="发送 (Enter)">
+                <button type="button" class="btn btn--primary btn--icon btn--send" id="send" title="发送 (Enter)">
                   <svg class="compose__send-icon" viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg>
                   <svg class="compose__stop-icon" viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true" style="display:none"><rect x="2" y="2" width="12" height="12" rx="2"/></svg>
                   <span class="btn__send-label">发送</span>
                 </button>
-                <button type="button" class="btn btn--ghost btn--icon compose__more-inline" id="moreBtn" title="更多选项">⋮</button>
               </div>
-              <div class="compose__more-popup" id="morePopup" style="display:none" role="menu">
-                <button type="button" class="compose__more-option" id="composeModelTrigger" aria-expanded="false" aria-controls="composeSettingsSheet" title="模型栈设置">
-                  <span class="compose__more-option-icon">
-                    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 2v12M2 8h12"/></svg>
-                  </span>
-                  <span class="compose__more-option-label" id="composeModelPillLabel">默认模型</span>
-                  <svg class="compose__more-option-chevron" viewBox="0 0 16 16" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6l4 4 4-4"/></svg>
-                </button>
-                <div class="compose__more-divider"></div>
-                <button type="button" class="compose__more-option" id="thinkToggle" aria-pressed="true" title="思考：开启时先推理再回答">
-                  <span class="compose__more-option-icon">
-                    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 1.8a4.5 4.5 0 0 0-3 7.9V11h6V9.7a4.5 4.5 0 0 0-3-7.9z"/><path d="M6.5 13.5h3M7 15h2"/></svg>
-                  </span>
-                  <span class="compose__more-option-label">思考</span>
-                </button>
-              </div>
+            </div>
             <div class="compose__sheet" id="composeSettingsSheet" hidden>
               <div class="compose__sheet-head">
                 <span class="compose__sheet-title">模型栈</span>
@@ -328,6 +335,7 @@
                     </div>
                     <canvas id="cameraCanvas" style="display:none" aria-hidden="true"></canvas>
                     <p id="cameraStatus" class="camera-modal__status"></p>
+                    <button type="button" class="btn btn--ghost btn--sm camera-modal__fallback" id="cameraFallbackBtn" hidden>从文件选择</button>
                   </div>
                 </div>
                 <div class="modal-dialog__footer camera-modal__footer" id="cameraFooterPhoto">
@@ -446,8 +454,8 @@
                 启用后，当满足任一触发条件时，用 LLM 对早期对话进行摘要压缩，释放上下文空间。
               </p>
               <div class="form-row sub-row">
-                <label class="form-label" for="inpCompactMinBytes">上下文字节触发阈值</label>
-                <input type="number" id="inpCompactMinBytes" class="form-input-sm" min="0" max="500000" value="90000"/>
+                <label class="form-label" for="inpCompactMinBytes">上下文 token 触发阈值</label>
+                <input type="number" id="inpCompactMinBytes" class="form-input-sm" min="0" max="500000" value="30000"/>
                 <span class="form-hint">消息长度超过此字节数时触发（0=禁用）</span>
               </div>
               <div class="form-row sub-row">

@@ -202,6 +202,12 @@
   background: #000;
   display: block;
 }
+.camera-modal__video--mirror {
+  transform: scaleX(-1);
+}
+.camera-modal__footer[hidden] {
+  display: none !important;
+}
 .camera-modal__status {
   position: absolute;
   left: 0; right: 0; bottom: 0;
@@ -211,6 +217,13 @@
   color: #fff;
   font-size: 12px;
   text-align: center;
+}
+.camera-modal__fallback {
+  position: absolute;
+  left: 50%;
+  bottom: 36px;
+  transform: translateX(-50%);
+  z-index: 2;
 }
 .camera-modal__rec-indicator {
   position: absolute;
@@ -236,4 +249,47 @@
 @keyframes camera-rec-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.35; }
+}
+
+/* ==============================
+ * 上下文历史面板 (ctx-history)
+ * ============================== */
+.ctx-history {
+  margin: 10px 16px;
+  border: 1px solid var(--border, #ddd);
+  border-radius: 6px;
+  background: var(--bg-secondary, #fafafa);
+  font-size: 12px;
+  overflow: hidden;
+}
+.ctx-history__header {
+  padding: 6px 10px;
+  cursor: pointer;
+  user-select: none;
+  font-weight: 500;
+  color: var(--text-primary, #333);
+}
+.ctx-history__header:hover {
+  background: var(--bg-hover, #f0f0f0);
+}
+.ctx-history__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+.ctx-history__table th,
+.ctx-history__table td {
+  padding: 4px 8px;
+  text-align: right;
+  border-top: 1px solid var(--border, #eee);
+}
+.ctx-history__table th {
+  background: var(--bg-tertiary, #f0f0f0);
+  font-weight: 600;
+  color: var(--text-secondary, #666);
+  text-align: right;
+}
+.ctx-history__table th:first-child,
+.ctx-history__table td:first-child {
+  text-align: center;
 }

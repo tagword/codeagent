@@ -12,7 +12,6 @@
 const log = document.getElementById('log');
 const msg = document.getElementById('msg');
 const sendBtn = document.getElementById('send');
-const stopBtn = document.getElementById('stop');
 const thinkToggle = document.getElementById('thinkToggle');
 const reasoningEffortSelect = document.getElementById('reasoningEffortSelect');
 const modelSelect = document.getElementById('modelSelect');

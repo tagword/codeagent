@@ -43,6 +43,24 @@
 // ---------------- Send / stop ----------------
 
 sendBtn.onclick = async () => {
+  // 正在运行中 → 点击停止
+  if (sendBtn.classList.contains('is-stop')) {
+    const requestSid = sessionId;
+    if ((chatInflightBySid[requestSid] || 0) <= 0) return;
+    try {
+      sendBtn.classList.remove('is-stop');
+      const r = await fetch('/api/chat/stop', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: requestSid, agent_id: agentId })
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.detail || r.statusText);
+      if (sessionId === requestSid) systemMsg('info', j.active ? '已请求停止当前执行；当前工具若支持中断，会尽快停止。' : '当前会话没有正在运行的 agent。');
+    } catch (e) { if (sessionId === requestSid) systemMsg('err', '停止失败：' + String(e)); }
+    finally { updateComposerButtons(); }
+    return;
+  }
+  // 正常发送
   const text = msg.value.trim();
   const hasPending = typeof pendingAttachments !== 'undefined' && pendingAttachments.length > 0;
   if (!text && !hasPending) return;
@@ -178,22 +196,6 @@ sendBtn.onclick = async () => {
       window._lastAccumulatedUsage = null;
     }
   }
-};
-
-stopBtn.onclick = async () => {
-  const requestSid = sessionId;
-  if ((chatInflightBySid[requestSid] || 0) <= 0) return;
-  try {
-    stopBtn.disabled = true;
-    const r = await fetch('/api/chat/stop', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ session_id: requestSid, agent_id: agentId })
-    });
-    const j = await r.json();
-    if (!r.ok) throw new Error(j.detail || r.statusText);
-    if (sessionId === requestSid) systemMsg('info', j.active ? '已请求停止当前执行；当前工具若支持中断，会尽快停止。' : '当前会话没有正在运行的 agent。');
-  } catch (e) { if (sessionId === requestSid) systemMsg('err', '停止失败：' + String(e)); }
-  finally { updateComposerButtons(); }
 };
 
 updateComposerButtons();
