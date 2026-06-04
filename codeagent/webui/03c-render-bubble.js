@@ -204,7 +204,16 @@ function renderMarkdown(raw) {
     marked.setOptions({ breaks: true, gfm: true });
     const html = marked.parse(t);
     const clean = DOMPurify.sanitize(html);
-    return '<div class="md-content">' + clean + '</div>';
+    // 给代码块添加复制按钮（浮动右上角）
+    var enhanced = clean;
+    enhanced = enhanced.replace(
+      /<pre><code(?:\s+class="language-(\w+)")?>/g,
+      function(match, lang) {
+        return '<div class="code-block-wrap"><button class="code-copy-btn" type="button" title="复制代码" aria-label="复制代码"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg></button><pre><code' + (lang ? ' class="language-' + lang + '"' : '') + '>';
+      }
+    );
+    enhanced = enhanced.replace(/<\/code><\/pre>/g, '</code></pre></div>');
+    return '<div class="md-content">' + enhanced + '</div>';
   } catch (_) { return plain; }
 }
 

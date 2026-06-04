@@ -240,3 +240,46 @@ function appendBubbleTtsBar(col, rawText, opts) {
   bar.appendChild(btn);
   col.appendChild(bar);
 }
+
+// ── 代码块复制（全局事件委托） ──
+document.addEventListener('click', function(e) {
+  var btn = e.target.closest('.code-copy-btn');
+  if (!btn) return;
+  var wrap = btn.closest('.code-block-wrap');
+  if (!wrap) return;
+  var code = wrap.querySelector('code');
+  if (!code) return;
+  var text = code.textContent || '';
+  if (!text) return;
+
+  var copied = false;
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function() { copied = true; }).catch(function() {});
+    }
+  } catch (_) {}
+
+  if (!copied) {
+    try {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      copied = true;
+    } catch (_) {}
+  }
+
+  if (!copied || !btn) return;
+
+  var orig = btn.innerHTML;
+  btn.innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
+  btn.classList.add('is-copied');
+  setTimeout(function() {
+    btn.classList.remove('is-copied');
+    btn.innerHTML = orig;
+  }, 1500);
+});

@@ -939,3 +939,62 @@ body.chat-img-lightbox-open {
   color: var(--accent);
   border-color: var(--accent);
 }
+
+/* ============ Code block copy button ============ */
+.code-block-wrap {
+  position: relative;
+  margin: var(--sp-3) 0;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  overflow: hidden;
+  background: var(--bg-subtle);
+}
+.code-copy-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--r-xs);
+  background: var(--bg-panel);
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.18s, color 0.12s, background 0.12s;
+}
+.code-block-wrap:hover .code-copy-btn,
+.code-copy-btn:focus-visible {
+  opacity: 0.85;
+}
+.code-copy-btn:hover {
+  opacity: 1 !important;
+  color: var(--text);
+  background: var(--bg-hover);
+}
+.code-copy-btn.is-copied {
+  opacity: 1 !important;
+  color: var(--success, #16a34a);
+  border-color: var(--success, #16a34a);
+  background: var(--bg-panel);
+}
+.code-block-wrap pre {
+  margin: 0;
+  padding: 14px 16px;
+  border: none;
+  border-radius: 0;
+  overflow-x: auto;
+  font-size: 12.5px;
+  line-height: 1.55;
+  background: transparent;
+}
+.code-block-wrap code {
+  background: none;
+  padding: 0;
+  font-family: var(--font-mono);
+}
