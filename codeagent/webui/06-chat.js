@@ -233,39 +233,8 @@ function switchToPage(id) {
   WORKSPACE_PAGE_IDS.forEach((suffix) => {
     const p = document.getElementById('page-' + suffix);
     if (!p) return;
-    const on = p.id === targetId;
-    p.classList.toggle('active', on);
-    p.style.setProperty('display', on ? 'flex' : 'none', 'important');
-    if (on) {
-      p.style.setProperty('position', 'absolute', 'important');
-      p.style.setProperty('left', '0', 'important');
-      p.style.setProperty('right', '0', 'important');
-      p.style.setProperty('top', 'var(--topbar-h, 48px)', 'important');
-      p.style.setProperty('bottom', '0', 'important');
-      p.style.setProperty('width', '100%', 'important');
-      p.style.setProperty('box-sizing', 'border-box', 'important');
-      p.style.setProperty('flex', 'none', 'important');
-      p.style.setProperty('min-height', '0', 'important');
-      p.style.setProperty('flex-direction', 'column', 'important');
-      p.style.setProperty('opacity', '1', 'important');
-      p.style.setProperty('transform', 'none', 'important');
-      p.style.setProperty('z-index', '1', 'important');
-      p.scrollTop = 0;
-    } else {
-      p.style.setProperty('z-index', '0', 'important');
-      p.style.removeProperty('position');
-      p.style.removeProperty('left');
-      p.style.removeProperty('right');
-      p.style.removeProperty('top');
-      p.style.removeProperty('bottom');
-      p.style.removeProperty('width');
-      p.style.removeProperty('box-sizing');
-      p.style.removeProperty('flex');
-      p.style.removeProperty('min-height');
-      p.style.removeProperty('flex-direction');
-      p.style.removeProperty('opacity');
-      p.style.removeProperty('transform');
-    }
+    p.classList.toggle('active', p.id === targetId);
+    p.scrollTop = 0;
   });
   var ws = document.querySelector('.workspace');
   if (ws) ws.scrollTop = 0;
