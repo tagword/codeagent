@@ -12,6 +12,10 @@
         var st = document.getElementById('sidebarStats');
         if (st) st.style.display = 'flex';
         if (typeof loadStats === 'function') loadStats();
+      } else if (actMode === 'config' || actMode === 'tasks' || actMode === 'agent') {
+        sidebar.style.display = 'none';
+      } else if (actMode === 'files') {
+        sidebar.style.display = 'none';
       } else {
         sidebar.style.display = 'flex';
       }

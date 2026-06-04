@@ -47,3 +47,75 @@
   content: ''; position: absolute; left: -6px; top: 50%; transform: translateY(-50%);
   width: 3px; height: 20px; border-radius: 0 3px 3px 0; background: var(--accent);
 }
+
+/* App shell grid: explicit columns so workspace stays in the main column when sidebar collapses */
+.activity-bar {
+  grid-column: 1;
+  grid-row: 1;
+}
+.app > aside.sidebar {
+  grid-column: 2;
+  grid-row: 1;
+}
+.workspace {
+  grid-column: 3;
+  grid-row: 1;
+  position: relative;
+}
+
+/* workspace 内各 page 叠在同一区域，避免 flex 列里多页同时占位把配置挤到视口外 */
+.workspace > .page {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: var(--topbar-h, 48px);
+  bottom: 0;
+  flex: none !important;
+  width: 100%;
+  box-sizing: border-box;
+  z-index: 0;
+}
+.workspace > .page.active {
+  z-index: 1;
+}
+
+/* 配置 / 计划 / Agent：全宽主内容，隐藏项目侧栏 */
+body[data-activity-mode="config"] .app,
+body[data-activity-mode="tasks"] .app,
+body[data-activity-mode="agent"] .app {
+  grid-template-columns: var(--activity-bar-w, 48px) 1fr;
+}
+
+body[data-activity-mode="config"] .workspace,
+body[data-activity-mode="tasks"] .workspace,
+body[data-activity-mode="agent"] .workspace {
+  grid-column: 2;
+}
+
+body[data-activity-mode="config"] .app > aside.sidebar,
+body[data-activity-mode="tasks"] .app > aside.sidebar,
+body[data-activity-mode="agent"] .app > aside.sidebar {
+  display: none !important;
+}
+
+/* 按活动模式强制显示对应 workspace 页面（避免多个 .page.active 叠在一起） */
+body[data-activity-mode="chat"] .workspace > .page:not(#page-chat),
+body[data-activity-mode="config"] .workspace > .page:not(#page-config),
+body[data-activity-mode="tasks"] .workspace > .page:not(#page-tasks),
+body[data-activity-mode="agent"] .workspace > .page:not(#page-agent),
+body[data-activity-mode="files"] .workspace > .page:not(#page-files) {
+  display: none !important;
+  flex: 0 0 0 !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+body[data-activity-mode="chat"] .workspace > #page-chat,
+body[data-activity-mode="config"] .workspace > #page-config,
+body[data-activity-mode="tasks"] .workspace > #page-tasks,
+body[data-activity-mode="agent"] .workspace > #page-agent,
+body[data-activity-mode="files"] .workspace > #page-files {
+  display: flex !important;
+  flex-direction: column;
+  min-height: 0 !important;
+}
