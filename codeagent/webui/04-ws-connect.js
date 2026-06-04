@@ -43,6 +43,7 @@ function updateTokenUsage(curOrUsage, compactMinTokens) {
     el.setAttribute('aria-valuenow', '0');
     el.setAttribute('aria-valuetext', '0 / 5 档，0%');
     el.title = '上下文占用';
+    el.classList.remove('is-warm', 'is-hot');
     return;
   }
   el.style.display = 'inline-flex';

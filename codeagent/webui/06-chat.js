@@ -212,6 +212,8 @@ if (msg) {
   // macOS IME (中文输入法) 在候选词确认时也会触发 Enter keydown，
   // isComposing 为 true 表示处于输入法组合状态，此时不应发送消息。
   if (e.isComposing || e.keyCode === 229) return;
+  // 手机端：Enter 换行，不发送（用键盘上的「发送」按钮代替）
+  if (window.matchMedia('(max-width: 768px)').matches) return;
   e.preventDefault();
   sendBtn.click();
   });
