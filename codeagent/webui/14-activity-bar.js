@@ -1,4 +1,31 @@
 var _activeMode = null;
+var _FULL_WIDTH_MODES = ['config', 'tasks', 'agent'];
+
+function _applySidebarForMode(mode) {
+  var chatSidebar = document.getElementById('chatSidebar');
+  var outerSidebar = document.querySelector('.app > aside.sidebar');
+  if (outerSidebar) outerSidebar.style.removeProperty('display');
+
+  if (mode === 'stats' || mode === 'files') {
+    if (chatSidebar) chatSidebar.style.display = 'none';
+    return;
+  }
+  if (_FULL_WIDTH_MODES.indexOf(mode) >= 0) {
+    if (chatSidebar) chatSidebar.style.display = 'none';
+    return;
+  }
+  if (chatSidebar) {
+    if (typeof webuiSessionsEnabled !== 'undefined' && webuiSessionsEnabled) {
+      chatSidebar.style.display = 'flex';
+    } else {
+      chatSidebar.style.display = 'none';
+    }
+  }
+}
+
+function _syncWorkspacePages(pageId) {
+  if (typeof switchToPage === 'function') switchToPage(pageId);
+}
 
 function _syncFileBtnState() {
   var fileBtn = document.getElementById('btnToggleFiles');
@@ -14,30 +41,20 @@ function switchActivityMode(mode) {
   // git 模式不走页面切换，由 09-git.js 的点击拦截处理
   if (mode === 'git') return;
 
-  if (!mode || mode === _activeMode) return;
-  _activeMode = mode;
-
-  // 切换到非 files/stats 页面时关闭滑出面板
-  if (mode !== 'stats' && mode !== 'files') {
-    ['planPanel','todoPanel','gitPanel'].forEach(function(id) {
-      var p = document.getElementById(id);
-      if (p && p.style.display !== 'none') {
-        p.style.display = 'none';
-        try { localStorage.setItem('oa_' + id.replace('Panel','').toLowerCase() + '_panel_open', '0'); } catch (_) {}
-      }
-    });
-    ['btnTogglePlans','btnToggleTodos','btnToggleGit'].forEach(function(id) {
-      var b = document.getElementById(id);
-      if (b) b.classList.remove('is-active');
-    });
+  if (!mode) return;
+  if (mode === _activeMode) {
+    try { document.body.setAttribute('data-activity-mode', mode); } catch (_) {}
+    _syncWorkspacePages(mode);
+    return;
   }
+  _activeMode = mode;
+  try { document.body.setAttribute('data-activity-mode', mode); } catch (_) {}
 
   document.querySelectorAll('.activity-btn').forEach(function(b) {
     if (b.id === 'btnLogout') return;
     b.classList.toggle('active', b.getAttribute('data-mode') === mode);
   });
 
-  var chatSidebar = document.getElementById('chatSidebar');
   var statsSection = document.getElementById('sidebarStats');
   var filesSection = document.getElementById('sidebarFiles');
   var gitSidebarSection = document.getElementById('sidebarGit');
@@ -50,14 +67,18 @@ function switchActivityMode(mode) {
 
   if (mode === 'stats') {
     hideSidebarModes();
-    if (chatSidebar) chatSidebar.style.display = 'none';
     if (statsSection) statsSection.style.display = 'flex';
+    _applySidebarForMode(mode);
+    if (typeof switchToPage === 'function') switchToPage('chat');
+    else _syncWorkspacePages('chat');
     if (typeof activatePage === 'function') activatePage('chat');
     if (typeof loadStats === 'function') loadStats();
   } else if (mode === 'files') {
     hideSidebarModes();
-    if (chatSidebar) chatSidebar.style.display = 'none';
     if (filesSection) filesSection.style.display = 'flex';
+    _applySidebarForMode(mode);
+    if (typeof switchToPage === 'function') switchToPage('files');
+    else _syncWorkspacePages('files');
     if (typeof activatePage === 'function') activatePage('files');
     setTimeout(function() {
       if (typeof window.webuiRefreshFileTreeIfVisible === 'function') {
@@ -66,14 +87,11 @@ function switchActivityMode(mode) {
     }, 0);
   } else {
     hideSidebarModes();
-    if (chatSidebar) {
-      if (typeof webuiSessionsEnabled !== 'undefined' && webuiSessionsEnabled) {
-        chatSidebar.style.display = 'flex';
-      } else {
-        chatSidebar.style.display = 'none';
-      }
-    }
-    if (typeof activatePage === 'function') activatePage(mode);
+    _applySidebarForMode(mode);
+    var pageId = mode;
+    _syncWorkspacePages(pageId);
+    if (typeof switchToPage === 'function') switchToPage(pageId);
+    if (typeof activatePage === 'function') activatePage(pageId);
   }
 
   if (mode === 'chat') {
