@@ -562,6 +562,12 @@
     min-height: 44px;
   }
 
+  /* 手机端：项目名右侧的「新建会话」和「⋮」按钮始终显示（桌面版 hover 才显示） */
+  .tree-project__add-session,
+  .tree-project__menu {
+    display: flex;
+  }
+
   .tree-footer-btn,
   .search-bar__input {
     min-height: 40px;
