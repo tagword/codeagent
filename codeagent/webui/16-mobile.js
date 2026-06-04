@@ -109,20 +109,23 @@
   }
 
   // 手机视图 + 键盘弹出时：compose dock 按钮（思考/加号/发送等）在 touchstart 阶段
-  // 立即 blur 输入框，避免键盘收起 → viewport resize → 按钮位移 → click 事件丢失
+  // 立即 blur 输入框 + 主动触发对应操作，避免键盘收起 → viewport resize → 按钮位移 → 事件丢失
   function initComposeDockTouchFix() {
     if (!isMobile()) return;
     var dock = document.querySelector('.compose__dock');
     if (!dock) return;
     dock.addEventListener('touchstart', function(e) {
-      var btn = e.target.closest('.compose__tool-btn, .compose__chip, .btn--send, .compose__attach-option');
-      if (!btn) return;
-      if (document.activeElement && document.activeElement.id === 'msg') {
-        document.activeElement.blur();
-        // blur 后键盘开始收起 → visualViewport.resize → compose transform 重置
-        // 用 passive:true 让 click 在键盘收起、位置稳定后正常触发
-      }
-    }, { passive: true });
+      var targetBtn = e.target.closest('.compose__tool-btn, .compose__chip, .btn--send, .compose__attach-option');
+      if (!targetBtn) return;
+      if (!(document.activeElement && document.activeElement.id === 'msg')) return;
+      // 键盘弹出时：先 blur 让键盘收起
+      // blur 是同步操作，此时 compose 的 transform 还没被 visualViewport.resize 重置，
+      // 按钮坐标没变。同步触发 click 能命中正确位置。
+      document.activeElement.blur();
+      e.preventDefault();
+      // 同步触发 click（blur 在同一 task 中，resize 事件尚未触发）
+      targetBtn.click();
+    }, { passive: false });
   }
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initComposeDockTouchFix);
