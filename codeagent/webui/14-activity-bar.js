@@ -130,6 +130,19 @@ function restoreActivityMode() {
 
 ;(function initActivityBar() {
   document.querySelectorAll('.activity-btn').forEach(function(btn) {
+    // 手机视图下用 touchstart 捕获，避免键盘收起时 viewport 变化吞掉 click
+    btn.addEventListener('touchstart', function(e) {
+      var isMobile = window.matchMedia('(max-width: 768px)').matches;
+      if (!isMobile) return;
+      var mode = this.getAttribute('data-mode');
+      if (!mode) return;
+      // 键盘弹出时：在 touchstart 阶段 blur 并切换，不等 click
+      if (document.activeElement && document.activeElement.id === 'msg') {
+        document.activeElement.blur();
+        switchActivityMode(mode);
+        e.preventDefault();
+      }
+    }, { passive: false });
     btn.addEventListener('click', function() {
       var mode = this.getAttribute('data-mode');
       if (mode) switchActivityMode(mode);
