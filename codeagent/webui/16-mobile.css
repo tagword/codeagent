@@ -453,26 +453,19 @@
     min-height: 48px;
   }
 
-  /* ---- Slide panels → full-screen overlay ---- */
-  .todo-panel {
+  /* ---- Slide panels → below the topbar (topbar remains accessible) ---- */
+  .todo-panel,
+  .git-slide-panel,
+  .plan-panel {
     position: fixed;
-    top: 0;
+    top: var(--topbar-h);
+    left: 0;
     right: 0;
     bottom: var(--mobile-nav-h);
-    left: 0;
     width: 100% !important;
     max-width: none;
     z-index: 150;
     border-left: none;
-  }
-
-  .git-slide-panel,
-  .plan-panel {
-    top: 0;
-    bottom: var(--mobile-nav-h);
-    width: 100% !important;
-    max-width: none;
-    z-index: 150;
   }
 
   /* ---- Forms & config pages ---- */

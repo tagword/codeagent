@@ -142,4 +142,37 @@
     document.body.setAttribute('data-activity-mode', 'chat');
     if (typeof switchToPage === 'function') switchToPage('chat');
   }
+
+  // ======== 面板关闭按钮（所有尺寸通用）：点击 ✕ 关闭 Plan/Todo/Git 面板 ========
+  document.addEventListener('click', function(e) {
+    var closeBtn = e.target.closest('.panel-close-btn');
+    if (!closeBtn) return;
+    var panelId = closeBtn.getAttribute('data-panel');
+    if (!panelId) return;
+    var panel = document.getElementById(panelId);
+    if (!panel) return;
+    // 隐藏面板
+    panel.style.display = 'none';
+    // 清除对应 toggle 按钮的 is-active
+    var btnMap = {
+      todoPanel: 'btnToggleTodos',
+      planPanel: 'btnTogglePlans',
+      gitPanel: 'btnToggleGit'
+    };
+    var btnId = btnMap[panelId];
+    if (btnId) {
+      var btn = document.getElementById(btnId);
+      if (btn) btn.classList.remove('is-active');
+    }
+    // 清除 localStorage 标志
+    var lsMap = {
+      todoPanel: 'oa_todo_panel_open',
+      planPanel: 'oa_plan_panel_open',
+      gitPanel: 'oa_git_panel_open'
+    };
+    var lsKey = lsMap[panelId];
+    if (lsKey) {
+      try { localStorage.setItem(lsKey, '0'); } catch (_) {}
+    }
+  });
 })();
