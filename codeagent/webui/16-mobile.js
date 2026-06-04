@@ -96,24 +96,13 @@
     }
   }
 
-  // Initial mode attribute
+  // Initial mode attribute + page visibility (after activity bar init in 14-*.js)
   try {
     var saved = localStorage.getItem('oa_activity_mode') || 'chat';
     document.body.setAttribute('data-activity-mode', saved);
+    if (typeof switchToPage === 'function') switchToPage(saved);
   } catch (_) {
     document.body.setAttribute('data-activity-mode', 'chat');
+    if (typeof switchToPage === 'function') switchToPage('chat');
   }
-
-  // ---- Compose compact mode on mobile ----
-  function toggleComposeCompact() {
-    var box = document.querySelector('.compose__box');
-    if (!box) return;
-    if (isMobile()) {
-      box.classList.add('compose--compact');
-    } else {
-      box.classList.remove('compose--compact');
-    }
-  }
-  toggleComposeCompact();
-  MQ.addEventListener('change', toggleComposeCompact);
 })();
