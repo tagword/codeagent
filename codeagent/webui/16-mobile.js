@@ -70,6 +70,8 @@
   // iOS keyboard: keep compose visible
   if (window.visualViewport) {
     var composeEl = null;
+    var pageEl = null;
+    var activityBarEl = null;
     function onViewportResize() {
       if (!isMobile()) {
         document.documentElement.style.removeProperty('--vv-offset');
@@ -79,10 +81,19 @@
       var offset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
       document.documentElement.style.setProperty('--vv-offset', offset + 'px');
       if (!composeEl) composeEl = document.querySelector('.compose');
+      if (!pageEl) pageEl = document.getElementById('page-chat');
+      if (!activityBarEl) activityBarEl = document.getElementById('activityBar');
+      var keyboardOpen = offset > 0;
       if (composeEl && document.activeElement && document.activeElement.id === 'msg') {
-        composeEl.style.transform = offset > 0 ? 'translateY(-' + offset + 'px)' : '';
+        composeEl.style.transform = keyboardOpen ? 'translateY(-' + offset + 'px)' : '';
       } else if (composeEl) {
         composeEl.style.transform = '';
+      }
+      // 键盘弹出时：iOS 上 fixed 和 absolute 坐标系统不一致，
+      // activity-bar（fixed, z-index:120）会拦截 compose dock 的触摸事件。
+      // 临时降低 activity-bar 层级到 page（z-index:1）之下。
+      if (activityBarEl) {
+        activityBarEl.style.zIndex = keyboardOpen ? '0' : '';
       }
     }
     window.visualViewport.addEventListener('resize', onViewportResize);
@@ -91,9 +102,32 @@
     if (msgInput) {
       msgInput.addEventListener('blur', function() {
         if (composeEl) composeEl.style.transform = '';
+        if (activityBarEl) activityBarEl.style.zIndex = '';
         document.documentElement.style.removeProperty('--vv-offset');
       });
     }
+  }
+
+  // 手机视图 + 键盘弹出时：compose dock 按钮（思考/加号/发送等）在 touchstart 阶段
+  // 立即 blur 输入框，避免键盘收起 → viewport resize → 按钮位移 → click 事件丢失
+  function initComposeDockTouchFix() {
+    if (!isMobile()) return;
+    var dock = document.querySelector('.compose__dock');
+    if (!dock) return;
+    dock.addEventListener('touchstart', function(e) {
+      var btn = e.target.closest('.compose__tool-btn, .compose__chip, .btn--send, .compose__attach-option');
+      if (!btn) return;
+      if (document.activeElement && document.activeElement.id === 'msg') {
+        document.activeElement.blur();
+        // blur 后键盘开始收起 → visualViewport.resize → compose transform 重置
+        // 用 passive:true 让 click 在键盘收起、位置稳定后正常触发
+      }
+    }, { passive: true });
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initComposeDockTouchFix);
+  } else {
+    initComposeDockTouchFix();
   }
 
   // Initial mode attribute + page visibility (after activity bar init in 14-*.js)
