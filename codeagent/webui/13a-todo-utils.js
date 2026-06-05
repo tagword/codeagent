@@ -22,7 +22,7 @@ function todoIsVisible() {
 }
 
 try {
-  if (localStorage.getItem('oa_todo_panel_open') === '1') {
+  if (tryGetLS(STORAGE_KEYS.TODO_PANEL_OPEN) === '1') {
     // 初始化互斥：如果 Plan 已打开，不覆盖
     var planP = document.getElementById('planPanel');
     if (planP && planP.style.display === 'flex') {
@@ -36,7 +36,7 @@ try {
 } catch (_) {}
 
 try {
-  const saved = localStorage.getItem('oa_todo_scope');
+  const saved = tryGetLS(STORAGE_KEYS.TODO_SCOPE);
   if (saved === 'project' || saved === 'session') todoScope = saved;
 } catch (_) {}
 
@@ -44,7 +44,7 @@ btnToggleTodos.addEventListener('click', () => {
   var opening = !todoIsVisible();
   todoPanel.style.display = opening ? 'flex' : 'none';
   btnToggleTodos.classList.toggle('is-active', opening);
-  try { localStorage.setItem('oa_todo_panel_open', opening ? '1' : '0'); } catch (_) {}
+  trySetLS(STORAGE_KEYS.TODO_PANEL_OPEN, opening ? '1' : '0');
   // 互斥：打开待办时自动关闭计划面板
   if (opening) {
     var planPanel = document.getElementById('planPanel');
@@ -52,7 +52,7 @@ btnToggleTodos.addEventListener('click', () => {
     if (planPanel && planPanel.style.display !== 'none') {
       planPanel.style.display = 'none';
       if (planBtn) planBtn.classList.remove('is-active');
-      try { localStorage.setItem('oa_plan_panel_open', '0'); } catch (_) {}
+      trySetLS(STORAGE_KEYS.PLAN_PANEL_OPEN, '0');
     }
     refreshTodos();
   }
@@ -77,7 +77,7 @@ if (todoScopeToggle) {
     const scope = btn.dataset.scope;
     if (scope === todoScope) return;
     todoScope = scope;
-    try { localStorage.setItem('oa_todo_scope', todoScope); } catch (_) {}
+    trySetLS(STORAGE_KEYS.TODO_SCOPE, todoScope);
     applyScopeUI();
     refreshTodos();
   });

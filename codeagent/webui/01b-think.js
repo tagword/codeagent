@@ -4,7 +4,7 @@
 function getSelectedModel() {
   // 1) session override, 2) global default, 3) empty
   if (window.ModelStackState) return window.ModelStackState.getEffectiveModel('llm');
-  try { return localStorage.getItem('oa_llm_preset_id') || ''; } catch (_) { return ''; }
+  return tryGetLS(STORAGE_KEYS.LLM_PRESET_ID, '');
 }
 function setSelectedModel(val) {
   if (window.ModelStackState) {
@@ -17,7 +17,7 @@ function setSelectedModel(val) {
     }
     return;
   }
-  try { localStorage.setItem('oa_llm_preset_id', String(val || '').trim()); } catch (_) {}
+  trySetLS(STORAGE_KEYS.LLM_PRESET_ID, String(val || '').trim());
 }
 async function refreshModelSelect() {
   if (!modelSelect) return;

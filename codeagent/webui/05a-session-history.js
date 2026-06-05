@@ -13,7 +13,7 @@
   if (!btn) return;
   btn.addEventListener('click', async () => {
     try { await fetch('/api/ui/auth/logout', { method: 'POST', credentials: 'same-origin' }); } catch (_) {}
-    try { sessionStorage.removeItem('oa_webui_ws_token'); } catch (_) {}
+    tryRemoveSS(STORAGE_KEYS.WS_TOKEN);
     location.href = '/';
   });
 })();

@@ -97,7 +97,7 @@ function switchActivityMode(mode) {
   if (mode === 'chat') {
     if (typeof refreshProjects === 'function') setTimeout(function() { refreshProjects(false); }, 100);
   }
-  try { localStorage.setItem('oa_activity_mode', mode); } catch (_) {}
+  trySetLS(STORAGE_KEYS.SESS_ACTIVITY_MODE, mode);
   if (typeof window.webuiMobileSyncMode === 'function') window.webuiMobileSyncMode(mode);
   syncTopbarChatShortcutUi();
   _syncFileBtnState();
@@ -117,7 +117,7 @@ function syncTopbarChatShortcutUi() {
 
 function restoreActivityMode() {
   try {
-    var saved = localStorage.getItem('oa_activity_mode');
+    var saved = tryGetLS(STORAGE_KEYS.SESS_ACTIVITY_MODE);
     if (saved && ['chat', 'tasks', 'agent', 'config', 'stats', 'files'].indexOf(saved) >= 0) {
       _activeMode = null;
       switchActivityMode(saved);

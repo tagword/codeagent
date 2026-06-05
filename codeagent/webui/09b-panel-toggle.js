@@ -11,7 +11,7 @@
 
     panel.style.display = opening ? 'flex' : 'none';
     if (btn) btn.classList.toggle('is-active', opening);
-    try { localStorage.setItem('oa_git_panel_open', opening ? '1' : '0'); } catch (_) {}
+    trySetLS(STORAGE_KEYS.GIT_PANEL_OPEN, opening ? '1' : '0');
 
     // 互斥：打开 Git 时关闭 Plan 和 Todo
     if (opening) {
@@ -26,14 +26,14 @@
     if (planP && planP.style.display !== 'none') {
       planP.style.display = 'none';
       if (planB) planB.classList.remove('is-active');
-      try { localStorage.setItem('oa_plan_panel_open', '0'); } catch (_) {}
+      trySetLS(STORAGE_KEYS.PLAN_PANEL_OPEN, '0');
     }
     var todoP = $('todoPanel');
     var todoB = $('btnToggleTodos');
     if (todoP && todoP.style.display !== 'none') {
       todoP.style.display = 'none';
       if (todoB) todoB.classList.remove('is-active');
-      try { localStorage.setItem('oa_todo_panel_open', '0'); } catch (_) {}
+      trySetLS(STORAGE_KEYS.TODO_PANEL_OPEN, '0');
     }
   }
 
@@ -47,14 +47,14 @@
       if (panel && panel.style.display === 'flex') {
         panel.style.display = 'none';
         if (btn) btn.classList.remove('is-active');
-        try { localStorage.setItem('oa_git_panel_open', '0'); } catch (_) {}
+        trySetLS(STORAGE_KEYS.GIT_PANEL_OPEN, '0');
       }
     }
   }, true);
 
   // 恢复上次打开状态
   try {
-    if (localStorage.getItem('oa_git_panel_open') === '1') {
+    if (tryGetLS(STORAGE_KEYS.GIT_PANEL_OPEN) === '1') {
       var planP = $('planPanel');
       var todoP = $('todoPanel');
       if ((planP && planP.style.display === 'flex') || (todoP && todoP.style.display === 'flex')) {
