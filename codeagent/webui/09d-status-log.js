@@ -58,7 +58,7 @@
       sec.files.forEach(function(f) {
         var icon = _statusIcon(f.status);
         var cls = _statusClass(f.status);
-        html += '<div class="git-panel__file" data-file="' + escapeHtmlAttr(f.path) + '">'
+        html += '<div class="git-panel__file" data-file="' + escAttr(f.path) + '">'
           + '<span class="git-panel__file-icon ' + cls + '">' + icon + '</span>'
           + '<span class="git-panel__file-name">' + escapeHtml(f.path) + '</span></div>';
       });
