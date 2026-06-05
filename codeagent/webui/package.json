@@ -8,9 +8,12 @@
     "lint": "npx @biomejs/biome lint *.js --max-diagnostics=50",
     "format": "npx @biomejs/biome format --write *.js",
     "verify:js": "npx @biomejs/biome ci *.js",
-    "verify:syntax": "node scripts/verify-combined.mjs",
+    "verify:syntax": "node scripts/verify-combined.cjs",
     "verify": "npm run verify:js && npm run verify:syntax",
-    "verify:combined": "node scripts/verify-combined.mjs"
+    "verify:combined": "node scripts/verify-combined.cjs"
+  },
+  "engines": {
+    "node": ">=14"
   },
   "keywords": [],
   "author": "",
