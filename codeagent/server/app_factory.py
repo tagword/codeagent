@@ -744,12 +744,6 @@ def create_app():
                             "updated_at": chat_sess.updated_at or "",
                         }
                         chat_sess.metadata["context_usage"] = _snap
-                        # 维护每轮 context_usage 历史
-                        _history = chat_sess.metadata.get("context_usage_history")
-                        if not isinstance(_history, list):
-                            _history = []
-                        _history.append(_snap)
-                        chat_sess.metadata["context_usage_history"] = _history
                         from seed.core.llm_sess import persist_chat_session
                         persist_chat_session(chat_sess, agent_id)
                 except Exception:
