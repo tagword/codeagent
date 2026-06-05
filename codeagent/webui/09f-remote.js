@@ -33,7 +33,7 @@
           if (m && m[3] === 'fetch') remotes.push({ name: m[1], url: m[2] });
         });
         if (remotes.length > 0) {
-          display.innerHTML = '🔗 <span title="' + escHtmlAttr(remotes[0].url) + '">' + escHtml(remotes[0].name) + ' → ' + escHtml(_shortUrl(remotes[0].url)) + '</span>';
+          display.innerHTML = '🔗 <span title="' + escAttr(remotes[0].url) + '">' + escapeHtml(remotes[0].name) + ' → ' + escapeHtml(_shortUrl(remotes[0].url)) + '</span>';
           infoBar.style.display = 'flex';
           emptyBar.style.display = 'none';
           return;
@@ -69,13 +69,7 @@
     var classes = { 'M': 'git-status--M', 'A': 'git-status--A', 'D': 'git-status--D', 'R': 'git-status--R', '?': 'git-status--U' };
     return classes[c] || '';
   }
-  function escapeHtml(str) {
-    if (!str) return '';
-    var div = document.createElement('div'); div.textContent = str; return div.innerHTML;
-  }
-  function escapeHtmlAttr(str) {
-    return (str || '').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-  }
+  // escapeHtml/escAttr 已统一在 00-utils.js（顶层声明）
 
   /* =============================================
    * 对外暴露

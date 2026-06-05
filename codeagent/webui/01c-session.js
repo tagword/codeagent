@@ -798,13 +798,8 @@ function deleteSession(sid, pid) {
 let sessionId = loadSessionIdForAgent(agentId, projectId);
 
 // ---------------- Core utility functions ----------------
+// escapeHtml/escAttr 已统一在 00-utils.js（顶层声明）。
 
-function escapeHtml(s) {
-  return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-function escAttr(s) {
-  return String(s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
 function normReply(s) {
   return String(s || '').replace(/\r\n/g, '\n').trim();
 }

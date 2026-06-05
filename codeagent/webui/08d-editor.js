@@ -70,11 +70,7 @@
   // =============================================
   // 工具函数
   // =============================================
-  function escapeHtml(str) {
-    var div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
-  }
+  // escapeHtml 已统一在 00-utils.js（顶层声明）
 
   function _getFileIcon(name) {
     var ext = name.split('.').pop().toLowerCase();
