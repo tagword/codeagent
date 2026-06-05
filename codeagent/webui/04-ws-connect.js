@@ -146,115 +146,131 @@ function connectWs() {
   sock.onmessage = (ev) => {
     try {
       const j = JSON.parse(ev.data);
-      if (j.type === 'tool_start' || j.type === 'tool_output' || j.type === 'tool_end') {
-        handleProgressEvent(j); return;
-      }
-      if (j.type === 'chat_stop_requested') {
-        if (j.session_id === sessionId) systemMsg('info', '已请求停止当前执行。');
-        return;
-      }
-      if (j.type === 'chat_cancelled') {
-        if (j.session_id === sessionId) systemMsg('info', '当前执行已停止。');
-        return;
-      }
-      if (j.type === 'context_compact') {
-        if (j.session_id === sessionId) {
-          systemMsg('info', '上下文已压缩（compact）：丢弃 ' + (j.dropped_messages || 0) + ' 条历史消息，保留最近 ' + (j.kept_user_rounds || 0) + ' 轮。');
-          if (typeof j.body_bytes_after === 'number') {
-            updateTokenUsage({
-              body_bytes: j.body_bytes_after,
-              context_limit: j.context_limit,
-              compact_min_tokens: j.compact_min_tokens,
-            });
-          } else if (j.prompt_tokens_after != null && Number(j.prompt_tokens_after) > 0) {
-            updateTokenUsage({
-              prompt_tokens: j.prompt_tokens_after,
-              context_limit: j.context_limit,
-              compact_min_tokens: j.compact_min_tokens,
-            });
-          }
-        }
-        return;
-      }
-      if (j.type === 'context_usage') {
-        if (!j.session_id || j.session_id === sessionId) {
-          var _cu = {
-            context_limit: j.context_limit,
-            compact_min_tokens: j.compact_min_tokens,
-          };
-          if (j.prompt_tokens != null && Number(j.prompt_tokens) > 0) {
-            _cu.prompt_tokens = Number(j.prompt_tokens);
-            updateTokenUsage(_cu);
-          } else if (j.body_bytes != null && Number(j.body_bytes) > 0) {
-            _cu.body_bytes = Number(j.body_bytes);
-            updateTokenUsage(_cu);
-          } else if (j.estimated_tokens != null && Number(j.estimated_tokens) > 0) {
-            _cu.estimated_tokens = Number(j.estimated_tokens);
-            updateTokenUsage(_cu);
-          } else if (j.token_usage) {
-            updateTokenUsage(j.token_usage, j.compact_min_tokens);
-          } else {
-            updateTokenUsage(Number(j.body_bytes || 0), Number(j.compact_min_tokens || 0));
-          }
-          if (j.accumulated_usage && typeof updateSidebarCost === 'function') {
-            updateSidebarCost(j.accumulated_usage);
-          }
-        }
-        return;
-      }
-      // Streaming text tokens for the current session
-      if (j.type === 'text_delta' && j.session_id === sessionId) {
-        updateStreamBubbleText(j.text || '');
-        markLiveProgressSeen(sessionId);
-        return;
-      }
-
-      if (j.type === 'text_done' && j.session_id === sessionId) {
-        var finalized = finalizeStreamBubble(j.text || '', []);
-        if (!finalized) {
-          var remainingText = '';
-          if (typeof _streamUnconsumedSuffix === 'function') {
-            remainingText = _streamUnconsumedSuffix(j.text || '');
-          } else if (typeof _streamDeltaText === 'function') {
-            remainingText = _streamDeltaText(j.text || '');
-          }
-          if (remainingText && typeof bubbleAgentWithSplitToolTrace === 'function') {
-            bubbleAgentWithSplitToolTrace(remainingText, [], null, { at: Date.now(), skipScroll: true });
-          }
-        }
-        if (typeof _advanceStreamConsumedLen === 'function') {
-          _advanceStreamConsumedLen(j.text || '');
-        }
-        if (typeof syncLiveToolsFromToolTrace === 'function') {
-          syncLiveToolsFromToolTrace(j.tool_trace || []);
-        }
-        // Remember this reply so the subsequent WS 'reply' event is deduped.
-        if (typeof rememberLocalAgentReply === 'function') {
-          rememberLocalAgentReply(j.text || '');
-        }
-        markWsTextDone(sessionId);
-        markLiveProgressSeen(sessionId);
-        if (webuiSessionsEnabled) refreshSessionList().catch(function() {});
-        return;
-      }
-      if (j.type !== 'reply') return;
-      if ((chatInflightBySid[sessionId] || 0) > 0) return;
-      const t = normReply(j.text);
-      if (!t) return;
-      if (t === lastLocalAgentReplyNorm && (Date.now() - lastLocalAgentReplyAt) < 15000) return;
-      if (typeof bubbleAgentWithSplitToolTrace === 'function') {
-        bubbleAgentWithSplitToolTrace(j.text || '', j.tool_trace || [], null, { at: Date.now() });
-      } else {
-        bubble('agent', j.text || '', { at: Date.now(), toolTrace: j.tool_trace || [] });
-      }
-      if (typeof recalcTokenUsageFromDom === 'function') recalcTokenUsageFromDom();
-      if (webuiSessionsEnabled) refreshSessionList().catch(() => {});
+      const handler = WS_HANDLERS[j.type];
+      if (handler) { handler(j); return; }
+      if (j.type === 'reply') handleWsReply(j);
     } catch (_) {}
   };
   sock.onclose = () => {
     if (pauseWsReconnect) return;
     wsReconnectTimer = setTimeout(connectWs, 2000);
   };
+}
+
+// ---- WS message dispatcher (data-driven) -------------------------------
+
+/** 派发表：j.type → handler。handler 必须容忍字段缺失；sessionId 匹配在主循环中已确认。 */
+const WS_HANDLERS = {
+  tool_start:   handleProgressEvent,
+  tool_output:  handleProgressEvent,
+  tool_end:     handleProgressEvent,
+  chat_stop_requested: function (j) {
+    if (j.session_id === sessionId) systemMsg('info', '已请求停止当前执行。');
+  },
+  chat_cancelled: function (j) {
+    if (j.session_id === sessionId) systemMsg('info', '当前执行已停止。');
+  },
+  context_compact: handleWsContextCompact,
+  context_usage:  handleWsContextUsage,
+  text_delta:     handleWsTextDelta,
+  text_done:      handleWsTextDone,
+};
+
+function handleWsContextCompact(j) {
+  if (j.session_id !== sessionId) return;
+  systemMsg('info', '上下文已压缩（compact）：丢弃 ' + (j.dropped_messages || 0)
+    + ' 条历史消息，保留最近 ' + (j.kept_user_rounds || 0) + ' 轮。');
+  // token 计数：优先 prompt_tokens_after，否则 body_bytes_after
+  if (j.prompt_tokens_after != null && Number(j.prompt_tokens_after) > 0) {
+    updateTokenUsage({
+      prompt_tokens: Number(j.prompt_tokens_after),
+      context_limit: j.context_limit,
+      compact_min_tokens: j.compact_min_tokens,
+    });
+  } else if (typeof j.body_bytes_after === 'number') {
+    updateTokenUsage({
+      body_bytes: j.body_bytes_after,
+      context_limit: j.context_limit,
+      compact_min_tokens: j.compact_min_tokens,
+    });
+  }
+}
+
+/** context_usage：多种 token 计数来源的优先级收敛（统一入口） */
+function handleWsContextUsage(j) {
+  if (j.session_id && j.session_id !== sessionId) return;
+  var cu = {
+    context_limit: j.context_limit,
+    compact_min_tokens: j.compact_min_tokens,
+  };
+  // 优先级：prompt_tokens > body_bytes > estimated_tokens > token_usage 对象 > 兜底 0
+  if (j.prompt_tokens != null && Number(j.prompt_tokens) > 0) {
+    cu.prompt_tokens = Number(j.prompt_tokens);
+  } else if (j.body_bytes != null && Number(j.body_bytes) > 0) {
+    cu.body_bytes = Number(j.body_bytes);
+  } else if (j.estimated_tokens != null && Number(j.estimated_tokens) > 0) {
+    cu.estimated_tokens = Number(j.estimated_tokens);
+  } else if (j.token_usage) {
+    updateTokenUsage(j.token_usage, j.compact_min_tokens);
+    if (j.accumulated_usage && typeof updateSidebarCost === 'function') {
+      updateSidebarCost(j.accumulated_usage);
+    }
+    return;
+  } else {
+    updateTokenUsage(Number(j.body_bytes || 0), Number(j.compact_min_tokens || 0));
+    if (j.accumulated_usage && typeof updateSidebarCost === 'function') {
+      updateSidebarCost(j.accumulated_usage);
+    }
+    return;
+  }
+  updateTokenUsage(cu);
+  if (j.accumulated_usage && typeof updateSidebarCost === 'function') {
+    updateSidebarCost(j.accumulated_usage);
+  }
+}
+
+function handleWsTextDelta(j) {
+  if (j.session_id !== sessionId) return;
+  updateStreamBubbleText(j.text || '');
+  if (typeof markLiveProgressSeen === 'function') markLiveProgressSeen(sessionId);
+}
+
+function handleWsTextDone(j) {
+  if (j.session_id !== sessionId) return;
+  var finalized = finalizeStreamBubble(j.text || '', []);
+  if (!finalized) {
+    var remainingText = '';
+    if (typeof _streamUnconsumedSuffix === 'function') {
+      remainingText = _streamUnconsumedSuffix(j.text || '');
+    } else if (typeof _streamDeltaText === 'function') {
+      remainingText = _streamDeltaText(j.text || '');
+    }
+    if (remainingText && typeof bubbleAgentWithSplitToolTrace === 'function') {
+      bubbleAgentWithSplitToolTrace(remainingText, [], null, { at: Date.now(), skipScroll: true });
+    }
+  }
+  if (typeof _advanceStreamConsumedLen === 'function') _advanceStreamConsumedLen(j.text || '');
+  if (typeof syncLiveToolsFromToolTrace === 'function') syncLiveToolsFromToolTrace(j.tool_trace || []);
+  // Remember this reply so the subsequent WS 'reply' event is deduped.
+  if (typeof rememberLocalAgentReply === 'function') rememberLocalAgentReply(j.text || '');
+  if (typeof markWsTextDone === 'function') markWsTextDone(sessionId);
+  if (typeof markLiveProgressSeen === 'function') markLiveProgressSeen(sessionId);
+  if (webuiSessionsEnabled) refreshSessionList().catch(function() {});
+}
+
+function handleWsReply(j) {
+  if ((chatInflightBySid[sessionId] || 0) > 0) return;
+  const t = normReply(j.text);
+  if (!t) return;
+  // 15s 内已收到相同正文（streaming 'text_done' 已写过）→ 去重
+  if (t === lastLocalAgentReplyNorm && (Date.now() - lastLocalAgentReplyAt) < 15000) return;
+  if (typeof bubbleAgentWithSplitToolTrace === 'function') {
+    bubbleAgentWithSplitToolTrace(j.text || '', j.tool_trace || [], null, { at: Date.now() });
+  } else {
+    bubble('agent', j.text || '', { at: Date.now(), toolTrace: j.tool_trace || [] });
+  }
+  if (typeof recalcTokenUsageFromDom === 'function') recalcTokenUsageFromDom();
+  if (webuiSessionsEnabled) refreshSessionList().catch(function() {});
 }
 
 function reconnectWsForSession() {
