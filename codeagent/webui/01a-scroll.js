@@ -59,13 +59,19 @@ function _hideNewMsgBtn() {
 }
 
 // Wire scroll detection to update button
+let _scrollDetectTimer = null;
 function _initScrollDetection() {
   if (!log || log.dataset.scrollDetect === '1') return;
   log.dataset.scrollDetect = '1';
   log.addEventListener('scroll', () => {
-    const dist = log.scrollHeight - log.scrollTop - log.clientHeight;
-    _userNearBottom = dist <= _SCROLL_THRESHOLD;
-    _updateNewMsgBtn();
+    // 节流到 ~80ms：scroll 事件可能每帧多次触发，没必要每次都重算
+    if (_scrollDetectTimer) return;
+    _scrollDetectTimer = setTimeout(() => {
+      _scrollDetectTimer = null;
+      const dist = log.scrollHeight - log.scrollTop - log.clientHeight;
+      _userNearBottom = dist <= _SCROLL_THRESHOLD;
+      _updateNewMsgBtn();
+    }, 80);
   }, { passive: true });
 }
 _initScrollDetection();
