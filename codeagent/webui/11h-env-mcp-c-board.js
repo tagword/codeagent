@@ -5,7 +5,13 @@
  *        b-form.js (mcpGenericFormHtml / mcpMinimaxFormHtml / collectServerFromWrap
  *                   / collectAllMcpServersFromBoard)
  *   上游依赖：00-utils.js (escapeHtml)。
+ *
+ *   DOM 缓存：mcpDom = { board, status, chkOn, chkReg, pathEl, uvxEl,
+ *                        btn, ref, addBtn, tplSel } 在 initMcpBoard IIFE
+ *   中一次性 getElementById 填充，避免在 17 处散落调用。
  * ================================================================ */
+
+const mcpDom = {};
 
 function buildMcpServerCard(serverId, cfg, status, meta) {
   meta = meta || {};
@@ -56,7 +62,7 @@ function buildMcpServerCard(serverId, cfg, status, meta) {
     wrap.remove();
     updateMcpBoardEmptyState();
     // 删除后自动保存
-    var statusEl = document.getElementById('mcpEnvStatus');
+    var statusEl = mcpDom.status;
     if (statusEl) statusEl.textContent = '已删除，正在保存…';
     saveMcpEnvAndConfig().catch(function(e) {
       if (statusEl) {
@@ -101,7 +107,7 @@ function buildMcpServerCard(serverId, cfg, status, meta) {
 }
 
 function renderMcpServerBoard(servers, statusRows, meta) {
-  const board = document.getElementById('mcpServerBoard');
+  const board = mcpDom.board;
   if (!board) return;
   board.innerHTML = '';
   const ids = Object.keys(servers || {}).sort();
@@ -116,7 +122,7 @@ function renderMcpServerBoard(servers, statusRows, meta) {
 }
 
 function updateMcpBoardEmptyState() {
-  const board = document.getElementById('mcpServerBoard');
+  const board = mcpDom.board;
   if (!board) return;
   if (board.querySelector('.mcp-card-wrap')) {
     const empty = board.querySelector('.mcp-board-empty');
@@ -144,7 +150,7 @@ async function testMcpServerPayload(payload) {
 }
 
 async function testMcpCard(wrap, meta) {
-  const statusEl = wrap.querySelector('.mcp-edit-wrap .status-line') || document.getElementById('mcpEnvStatus');
+  const statusEl = wrap.querySelector('.mcp-edit-wrap .status-line') || mcpDom.status;
   if (statusEl) {
     statusEl.textContent = '测试中…';
     statusEl.classList.remove('is-err');
@@ -166,7 +172,7 @@ async function testMcpCard(wrap, meta) {
 }
 
 function showNewMcpServerForm(templateId) {
-  const board = document.getElementById('mcpServerBoard');
+  const board = mcpDom.board;
   if (!board) return;
   const existing = board.querySelector('.mcp-card-wrap.is-new');
   if (existing) existing.remove();
@@ -241,7 +247,7 @@ function showNewMcpServerForm(templateId) {
 }
 
 async function loadMcpEnvConfig() {
-  const status = document.getElementById('mcpEnvStatus');
+  const status = mcpDom.status;
   if (!status) return;
   status.textContent = '加载中…';
   status.classList.remove('is-err');
@@ -255,15 +261,12 @@ async function loadMcpEnvConfig() {
     const envJ = await envR.json();
     const mcpJ = await mcpR.json();
 
-    const chkOn = document.getElementById('chkMcpEnabled');
-    if (chkOn) chkOn.checked = _mcpEnvVal(envJ, 'SEED_MCP_ENABLED', '1') === '1';
-    const chkReg = document.getElementById('chkMcpRegisterTools');
-    if (chkReg) chkReg.checked = _mcpEnvVal(envJ, 'SEED_MCP_REGISTER_TOOLS', '1') === '1';
+    if (mcpDom.chkOn) mcpDom.chkOn.checked = _mcpEnvVal(envJ, 'SEED_MCP_ENABLED', '1') === '1';
+    if (mcpDom.chkReg) mcpDom.chkReg.checked = _mcpEnvVal(envJ, 'SEED_MCP_REGISTER_TOOLS', '1') === '1';
 
-    const pathEl = document.getElementById('mcpConfigPath');
-    if (pathEl) pathEl.textContent = mcpJ.path || '';
+    if (mcpDom.pathEl) mcpDom.pathEl.textContent = mcpJ.path || '';
 
-    const uvxEl = document.getElementById('mcpUvxHint');
+    const uvxEl = mcpDom.uvxEl;
     if (uvxEl) {
       uvxEl.textContent = mcpJ.uvx_path
         ? ('已检测到 uvx：' + mcpJ.uvx_path)
@@ -289,14 +292,14 @@ async function loadMcpEnvConfig() {
 }
 
 async function saveMcpEnvAndConfig() {
-  const status = document.getElementById('mcpEnvStatus');
+  const status = mcpDom.status;
   if (!status) return;
   status.textContent = '保存中…';
   status.classList.remove('is-err');
   try {
     const envBody = {
-      SEED_MCP_ENABLED: (document.getElementById('chkMcpEnabled') || {}).checked ? '1' : '0',
-      SEED_MCP_REGISTER_TOOLS: (document.getElementById('chkMcpRegisterTools') || {}).checked ? '1' : '0',
+      SEED_MCP_ENABLED: ((mcpDom.chkOn || {}).checked) ? '1' : '0',
+      SEED_MCP_REGISTER_TOOLS: ((mcpDom.chkReg || {}).checked) ? '1' : '0',
     };
     const envR = await fetch('/api/ui/env/mcp', {
       method: 'POST',
@@ -331,26 +334,37 @@ async function saveMcpEnvAndConfig() {
 }
 
 (function initMcpBoard() {
-  const btn = document.getElementById('btnMcpEnvSave');
-  if (btn) btn.addEventListener('click', function() { saveMcpEnvAndConfig(); });
-  const ref = document.getElementById('btnMcpEnvRefresh');
-  if (ref) ref.addEventListener('click', function() { loadMcpEnvConfig(); });
+  // 一次性填充 DOM 缓存（避免 17 处散落 getElementById）
+  [
+    ['board',   'mcpServerBoard'],
+    ['status',  'mcpEnvStatus'],
+    ['chkOn',   'chkMcpEnabled'],
+    ['chkReg',  'chkMcpRegisterTools'],
+    ['pathEl',  'mcpConfigPath'],
+    ['uvxEl',   'mcpUvxHint'],
+    ['btn',     'btnMcpEnvSave'],
+    ['ref',     'btnMcpEnvRefresh'],
+    ['addBtn',  'btnMcpAdd'],
+    ['tplSel',  'selMcpTemplate'],
+  ].forEach(function(pair) {
+    mcpDom[pair[0]] = document.getElementById(pair[1]);
+  });
+  if (mcpDom.btn) mcpDom.btn.addEventListener('click', function() { saveMcpEnvAndConfig(); });
+  if (mcpDom.ref) mcpDom.ref.addEventListener('click', function() { loadMcpEnvConfig(); });
 
-  const addBtn = document.getElementById('btnMcpAdd');
-  const tplSel = document.getElementById('selMcpTemplate');
-  if (addBtn) {
-    addBtn.addEventListener('click', function() {
-      showNewMcpServerForm((tplSel && tplSel.value) || 'custom');
+  if (mcpDom.addBtn) {
+    mcpDom.addBtn.addEventListener('click', function() {
+      showNewMcpServerForm((mcpDom.tplSel && mcpDom.tplSel.value) || 'custom');
     });
   }
 
-  if (tplSel) {
-    tplSel.innerHTML = '';
+  if (mcpDom.tplSel) {
+    mcpDom.tplSel.innerHTML = '';
     MCP_TEMPLATES.forEach(function(t) {
       const o = document.createElement('option');
       o.value = t.id;
       o.textContent = t.label;
-      tplSel.appendChild(o);
+      mcpDom.tplSel.appendChild(o);
     });
   }
 
