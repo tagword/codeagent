@@ -15,10 +15,15 @@
  *     syncPresetFormFromProvider / refreshPresetCopyFromOptions /
  *     updatePresetCapabilityHint / presetCardTitle)
  *   上游依赖：00-utils.js (escapeHtml)。
+ *
+ *   DOM 缓存：llmDom = { list, status, btnAdd, btnRefresh } 在 init IIFE
+ *   中一次性 getElementById 填充，避免 8 处散落调用。
  * ================================================================ */
 
+const llmDom = {};
+
 function renderPresetBoard(presets) {
-  const list = document.getElementById('llmPresetList');
+  const list = llmDom.list;
   if (!list) return;
   list.innerHTML = '';
   list.className = 'preset-board';
@@ -72,8 +77,8 @@ function renderPresetBoard(presets) {
 }
 
 async function loadLlmPresets() {
-  const list = document.getElementById('llmPresetList');
-  const status = document.getElementById('llmPresetStatus');
+  const list = llmDom.list;
+  const status = llmDom.status;
   if (!list) return;
   if (status) status.classList.remove('is-err');
   try {
@@ -167,7 +172,7 @@ function buildPresetCard(p) {
           refreshChatModelSelect();
         }
       } catch (e) {
-        const st = document.getElementById('llmPresetStatus');
+        const st = llmDom.status;
         if (st) { st.classList.add('is-err'); st.textContent = String(e); }
       }
     });
@@ -198,7 +203,7 @@ function buildPresetCard(p) {
         if (typeof refreshTtsOptions === 'function') refreshTtsOptions().catch(function() {});
       }
     } catch (e) {
-      const st = document.getElementById('llmPresetStatus');
+      const st = llmDom.status;
       if (st) { st.classList.add('is-err'); st.textContent = String(e); }
     }
   });
@@ -251,7 +256,7 @@ function buildPresetCard(p) {
 }
 
 function showNewPresetForm(preferredUseType, targetSection) {
-  const list = document.getElementById('llmPresetList');
+  const list = llmDom.list;
   if (!list) return;
 
   const existing = list.querySelector('.preset-card-wrap.is-new');
@@ -302,9 +307,16 @@ function showNewPresetForm(preferredUseType, targetSection) {
 }
 
 (function () {
-  var a = document.getElementById('btnLlmPresetAdd');
-  var r = document.getElementById('btnLlmPresetRefresh');
-  if (a) a.addEventListener('click', function() { showNewPresetForm('chat'); });
-  if (r) r.addEventListener('click', function () { loadLlmPresets(); });
+  // 一次性填充 DOM 缓存（避免 8 处散落 getElementById）
+  [
+    ['list',       'llmPresetList'],
+    ['status',     'llmPresetStatus'],
+    ['btnAdd',     'btnLlmPresetAdd'],
+    ['btnRefresh', 'btnLlmPresetRefresh'],
+  ].forEach(function(pair) {
+    llmDom[pair[0]] = document.getElementById(pair[1]);
+  });
+  if (llmDom.btnAdd) llmDom.btnAdd.addEventListener('click', function() { showNewPresetForm('chat'); });
+  if (llmDom.btnRefresh) llmDom.btnRefresh.addEventListener('click', function () { loadLlmPresets(); });
   loadLlmPresets();
 })();
