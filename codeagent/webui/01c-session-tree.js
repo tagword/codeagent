@@ -349,6 +349,8 @@ async function refreshProjects(forceFetch) {
   var treeEl = document.getElementById('projectTree');
   if (!treeEl) return;
   var renderGen = ++treeProjectRenderGen;
+  // 保留滚动位置：重建 DOM 期间子树会被销毁，渲染后恢复
+  var savedScrollTop = treeEl.scrollTop;
   try {
     var projects;
     var cacheOk = !forceFetch && treeProjectsCache && treeProjectsCache.aid === agentId &&
@@ -377,6 +379,8 @@ async function refreshProjects(forceFetch) {
     projects.forEach(function(pr) {
       treeEl.appendChild(createProjectNode(pr));
     });
+    // 渲染完成后恢复滚动位置（避免全量重建跳到顶部）
+    if (savedScrollTop > 0) treeEl.scrollTop = savedScrollTop;
   } catch (_) {}
 }
 
