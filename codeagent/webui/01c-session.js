@@ -1,6 +1,6 @@
 
-const THINK_KEY = 'oa_enable_thinking';
-const REASONING_EFFORT_KEY = 'oa_reasoning_effort';
+const THINK_KEY = STORAGE_KEYS.ENABLE_THINKING;
+const REASONING_EFFORT_KEY = STORAGE_KEYS.REASONING_EFFORT;
 
 function getThinkState() {
   try {
@@ -56,7 +56,7 @@ if (reasoningEffortSelect) {
 
 // ---------------- Session/agent identity ----------------
 
-const READ_KEY = 'oa_sess_last_read_v2';
+const READ_KEY = STORAGE_KEYS.SESS_LAST_READ;
 let lastSessionsCache = [];
 let webuiSessionsEnabled = false;
 let agentId = 'default';

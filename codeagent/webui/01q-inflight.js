@@ -7,7 +7,7 @@ const chatInflightBySid = {};
  * 通过 localStorage 持久化，刷新页面后仍可恢复。
  */
 const chatCompletedBySid = {};
-var _COMPLETED_STORAGE_KEY = 'oaSessionCompletedMap';
+var _COMPLETED_STORAGE_KEY = STORAGE_KEYS.SESS_COMPLETED;
 
 /** 从 localStorage 恢复会话已完成状态 */
 function restoreCompletedSessions() {

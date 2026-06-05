@@ -12,8 +12,8 @@
   try {
     const qs = new URLSearchParams(location.search || '');
     if (qs.get('setup_done') !== '1') return;
-    if (localStorage.getItem('oa_setup_greeted') === '1') return;
-    localStorage.setItem('oa_setup_greeted', '1');
+    if (tryGetLS(STORAGE_KEYS.SETUP_GREETED) === '1') return;
+    trySetLS(STORAGE_KEYS.SETUP_GREETED, '1');
     const greetSid = sessionId;
     bumpChatInflight(greetSid, 1);
     try {
@@ -226,7 +226,7 @@ if (msg) {
 
 // ---------------- Active page persistence (localStorage) ----------------
 
-const TAB_KEY = 'oa_active_page';
+const TAB_KEY = STORAGE_KEYS.SESS_ACTIVE_PAGE;
 const WORKSPACE_PAGE_IDS = ['chat', 'config', 'tasks', 'agent', 'files'];
 
 function switchToPage(id) {

@@ -135,7 +135,7 @@
 
   // Initial mode attribute + page visibility (after activity bar init in 14-*.js)
   try {
-    var saved = localStorage.getItem('oa_activity_mode') || 'chat';
+    var saved = tryGetLS(STORAGE_KEYS.SESS_ACTIVITY_MODE) || 'chat';
     document.body.setAttribute('data-activity-mode', saved);
     if (typeof switchToPage === 'function') switchToPage(saved);
   } catch (_) {

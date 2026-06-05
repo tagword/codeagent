@@ -27,7 +27,7 @@ function planIsVisible() {
 }
 
 try {
-  if (localStorage.getItem('oa_plan_panel_open') === '1') {
+  if (tryGetLS(STORAGE_KEYS.PLAN_PANEL_OPEN) === '1') {
     // 初始化互斥：如果待办已打开，不覆盖
     var todoPanel = document.getElementById('todoPanel');
     if (todoPanel && todoPanel.style.display === 'flex') {
@@ -46,7 +46,7 @@ btnToggle.addEventListener('click', function() {
   var opening = !planIsVisible();
   planPanel.style.display = opening ? 'flex' : 'none';
   btnToggle.classList.toggle('is-active', opening);
-  try { localStorage.setItem('oa_plan_panel_open', opening ? '1' : '0'); } catch (_) {}
+  trySetLS(STORAGE_KEYS.PLAN_PANEL_OPEN, opening ? '1' : '0');
 
   // 互斥：打开 Plan 时自动关闭 Todo
   if (opening) {
@@ -55,7 +55,7 @@ btnToggle.addEventListener('click', function() {
     if (todoP && todoP.style.display !== 'none') {
       todoP.style.display = 'none';
       if (todoB) todoB.classList.remove('is-active');
-      try { localStorage.setItem('oa_todo_panel_open', '0'); } catch (_) {}
+      trySetLS(STORAGE_KEYS.TODO_PANEL_OPEN, '0');
     }
     refreshPlans();
   }
