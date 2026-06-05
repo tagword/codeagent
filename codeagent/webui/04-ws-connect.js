@@ -133,7 +133,7 @@ function connectWs() {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   var wsTokQs = '';
   try {
-    var wst = sessionStorage.getItem('oa_webui_ws_token');
+    var wst = tryGetSS(STORAGE_KEYS.WS_TOKEN);
     if (wst) wsTokQs = '&webui_token=' + encodeURIComponent(wst);
   } catch (_) {}
   const sock = new WebSocket(

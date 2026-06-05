@@ -6,7 +6,7 @@
     if (fs) fs.style.display = 'block';
     if (sidebar) {
       var actMode = '';
-      try { actMode = localStorage.getItem('oa_activity_mode') || ''; } catch (_) {}
+      actMode = tryGetLS(STORAGE_KEYS.SESS_ACTIVITY_MODE, '');
       if (actMode === 'stats') {
         sidebar.style.display = 'none';
         var st = document.getElementById('sidebarStats');
