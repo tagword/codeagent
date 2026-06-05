@@ -1,3 +1,6 @@
+/* Compose UI: multimodal model select refresh, attachment thumbnail rendering
+   for chat & activity bar compose surfaces. */
+
 async function refreshMultimodalModelSelects() {
   if (typeof refreshModelSelect === 'function') {
     await refreshModelSelect();
