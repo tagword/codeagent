@@ -15,6 +15,10 @@ node_modules/
 dist/
 build/
 .build/
+
+# webui verify 脚本的临时产物（拼接中间文件）
+**/webui/.scripts/.tmp/
+**/webui/scripts/.tmp/
 *.egg-info/
 .pytest_cache/
 .tmp/
