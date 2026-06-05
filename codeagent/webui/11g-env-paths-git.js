@@ -1,9 +1,5 @@
 // ---------------- Config paths & allowlist ----------------
-
-function escHtml(s) {
-  if (!s) return '';
-  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
+// escapeHtml/escAttr 已统一在 00-utils.js（顶层声明）。
 
 async function loadConfigPaths() {
   const display = document.getElementById('configPathsDisplay');
