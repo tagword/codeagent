@@ -276,44 +276,33 @@
   }
 
   // --- Stream acquisition ---
+  // 4 级降级配置：requested facing → 切换 facing → 不带 facing → video:true
+  // 任一成功立即返回；全部失败时抛出第一次的错误（保留原行为）。
+  function _streamConstraintCandidates(facing) {
+    const alt = facing === 'user' ? 'environment' : 'user';
+    const audio = currentMode === 'video';
+    return [
+      { video: { facingMode: { ideal: facing }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio },
+      { video: { facingMode: { ideal: alt    }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio },
+      { video: { width: { ideal: 1280 }, height: { ideal: 720 } }, audio },
+      { video: true, audio },
+    ];
+  }
+
   async function tryGetStream(facing) {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       throw new Error('浏览器不支持 getUserMedia');
     }
-    // 1st try: requested facing (default user / front)
-    try {
-      return await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: facing }, width: { ideal: 1280 }, height: { ideal: 720 } },
-        audio: currentMode === 'video',
-      });
-    } catch (e1) {
-      // 2nd try: alternate facing (mobile back camera)
-      const alt = facing === 'user' ? 'environment' : 'user';
+    const candidates = _streamConstraintCandidates(facing);
+    let firstErr = null;
+    for (const c of candidates) {
       try {
-        return await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: alt }, width: { ideal: 1280 }, height: { ideal: 720 } },
-          audio: currentMode === 'video',
-        });
-      } catch (e2) {
-      // 3rd try: any camera (no facing constraint)
-      try {
-        return await navigator.mediaDevices.getUserMedia({
-          video: { width: { ideal: 1280 }, height: { ideal: 720 } },
-          audio: currentMode === 'video',
-        });
-      } catch (e3) {
-        // 4th try: minimal constraints
-        try {
-          return await navigator.mediaDevices.getUserMedia({
-            video: true,
-            audio: currentMode === 'video',
-          });
-        } catch (e4) {
-          throw e1;
-        }
-      }
+        return await navigator.mediaDevices.getUserMedia(c);
+      } catch (e) {
+        if (!firstErr) firstErr = e;
       }
     }
+    throw firstErr;
   }
 
   function hasMediaDevices() {
