@@ -122,6 +122,7 @@ function fillSessionsList(childrenEl, pid, sessions) {
 
     sRow.addEventListener('click', function() {
       if (s.session_id === sessionId) return;
+      if (typeof saveMsgDraft === 'function') saveMsgDraft();
       if (k !== treePid(projectId)) {
         projectId = k; treeProjectActiveId = k; window.dispatchEvent(new CustomEvent('project-changed', {detail: {projectId: k}}));
         saveProjectIdForAgent(agentId, projectId);
@@ -130,6 +131,7 @@ function fillSessionsList(childrenEl, pid, sessions) {
       saveSessionIdForAgent(agentId, projectId, sessionId);
       window.dispatchEvent(new CustomEvent('session-changed', {detail: {sessionId: sessionId, projectId: projectId}}));
       updateComposerButtons();
+      if (typeof restoreMsgDraft === 'function') restoreMsgDraft(sessionId);
       log.innerHTML = '';
       try { reconnectWsForSession(); } catch (_) {}
       loadSessionHistoryIntoLog(true);
@@ -201,6 +203,7 @@ function handleProjectRowClick(pid) {
   }
   treeProjectActiveId = k;
   projectId = k;
+  if (typeof saveMsgDraft === 'function') saveMsgDraft();
   window.dispatchEvent(new CustomEvent('project-changed', {detail: {projectId: k}}));
   treeExpanded[k] = true;
   saveProjectIdForAgent(agentId, projectId);
@@ -208,6 +211,7 @@ function handleProjectRowClick(pid) {
   function finishProjectSwitch(targetSid) {
     sessionId = targetSid;
     saveSessionIdForAgent(agentId, projectId, sessionId);
+    if (typeof restoreMsgDraft === 'function') restoreMsgDraft(sessionId);
     try {
       window.dispatchEvent(new CustomEvent('session-changed', {detail: {sessionId: sessionId, projectId: k}}));
     } catch (_) {}

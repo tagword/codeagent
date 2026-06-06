@@ -64,10 +64,13 @@ function bindSessListOnce() {
         }
       } catch (e) { alert(String(e)); return; }
       removeSessionReadBaseline(sid);
+      // 存档/删除旧会话时：保存当前草稿，新建会话后清空输入
       if (sessionId === sid) {
+        if (typeof saveMsgDraft === 'function') saveMsgDraft();
         sessionId = oaRandomUUID();
         localStorage.setItem(_sidStorageKey(agentId, projectId), sessionId);
         updateComposerButtons(); log.innerHTML = ''; resetAgentReplyDedupe(); reconnectWsForSession();
+        if (typeof msg !== 'undefined' && msg) msg.value = '';
       }
       await refreshSessionList();
       highlightSessList(sessionId);
@@ -80,9 +83,12 @@ function bindSessListOnce() {
     if (!btn) return;
     const sid = btn.getAttribute('data-session-id');
     if (!sid) return;
+    // 切换会话：保存当前草稿，恢复目标会话草稿
+    if (typeof saveMsgDraft === 'function') saveMsgDraft();
     sessionId = sid;
     localStorage.setItem(_sidStorageKey(agentId, projectId), sessionId);
     updateComposerButtons();
+    if (typeof restoreMsgDraft === 'function') restoreMsgDraft(sid);
     const row = lastSessionsCache.find((r) => r.session_id === sid);
     markSessionReadByCount(sid, row ? (row.message_count || 0) : 0);
     reconnectWsForSession(); resetAgentReplyDedupe();

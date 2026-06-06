@@ -48,7 +48,9 @@
         }
         if (j.project && j.project.id) {
           projectId = j.project.id; saveProjectIdForAgent(agentId, projectId);
+          if (typeof saveMsgDraft === 'function') saveMsgDraft();
           sessionId = loadSessionIdForAgent(agentId, projectId);
+          if (typeof restoreMsgDraft === 'function') restoreMsgDraft(sessionId);
           if (treeProjectsCache && treeProjectsCache.aid === agentId) {
             treeProjectsCache.projects.push(j.project);
           }
@@ -119,8 +121,10 @@
     if (btnSessNew && btnSessNew.dataset.bound !== '1') {
       btnSessNew.dataset.bound = '1';
       btnSessNew.addEventListener('click', async () => {
+      if (typeof saveMsgDraft === 'function') saveMsgDraft();
       sessionId = oaRandomUUID();
       localStorage.setItem(_sidStorageKey(agentId, projectId), sessionId);
+      if (typeof msg !== 'undefined' && msg) msg.value = '';
       updateComposerButtons(); updateMainHeaderForSession(sessionId);
       await refreshSessionList(); reconnectWsForSession(); resetAgentReplyDedupe(); log.innerHTML = '';
       await loadSessionHistoryIntoLog(true);

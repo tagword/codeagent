@@ -279,7 +279,7 @@ function renameProject(pid, currentName) {
 
 function deleteProject(pid) {
   if (!confirm('确定删除项目及其下所有会话？此操作不可恢复。')) return;
-  fetch('/api/ui/project/delete', {
+  fetch('/api/ui/projects/delete', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'same-origin',
@@ -316,8 +316,10 @@ function deleteSession(sid, pid) {
   }).then(function(r) {
     if (r.ok) {
       if (sessionId === sid) {
+        if (typeof saveMsgDraft === 'function') saveMsgDraft();
         sessionId = oaRandomUUID();
         localStorage.setItem(_sidStorageKey(agentId, pid || projectId), sessionId);
+        if (typeof msg !== 'undefined' && msg) msg.value = '';
         log.innerHTML = '';
         try { reconnectWsForSession(); } catch (_) {}
       }

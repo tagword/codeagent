@@ -779,7 +779,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
             from codeagent.core.paths import ensure_agent_scaffold
 
             ensure_agent_scaffold(aid)
-            rows = list_projects(aid)
+            rows = list_projects(aid, include_virtual=False)
             # 检查默认目录是否有未分类会话，有则添加虚拟项目
             from seed.core.llm_sess import list_stored_sessions_meta
 
