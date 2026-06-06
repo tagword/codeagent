@@ -22,7 +22,7 @@ function closeProjectDirectoryDialog() {
   if (el) el.remove();
 }
 
-/** 侧栏项目 ⋮ 菜单：设置/查看关联的源代码目录 */
+/** 侧栏项目 ⋮ 菜单：设置/查看工作目录 */
 function showProjectDirectoryDialog(pid) {
   closeProjectDirectoryDialog();
   var k = treePid(pid);
@@ -75,7 +75,7 @@ function showProjectDirectoryDialog(pid) {
   row.appendChild(btnBrowse);
   var hint = document.createElement('p');
   hint.className = 'modal-field__hint';
-  hint.textContent = '关联源代码目录后，文件树和 Git 面板可直接操作项目文件';
+  hint.textContent = '设置工作目录后，文件树和 Git 面板可直接操作项目文件';
   field.appendChild(lab);
   field.appendChild(row);
   field.appendChild(hint);
@@ -110,7 +110,7 @@ function showProjectDirectoryDialog(pid) {
     var newPath = inp.value.trim();
     btnSave.disabled = true;
     try {
-      var r = await fetch('/api/ui/projects/update', {
+      var r = await fetch('/api/ui/projects/path', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
@@ -146,7 +146,7 @@ function showProjectContextMenu(e, pid, name) {
   menu.className = 'tree-context-menu';
   menu.setAttribute('data-menu', 'project');
   var items = [
-    { label: '关联源代码目录', act: 'dir' },
+    { label: '工作目录', act: 'dir' },
     { label: '重命名', act: 'rename' },
     { label: '删除项目', act: 'delete', danger: true },
   ];
@@ -253,7 +253,7 @@ function renameProject(pid, currentName) {
   if (newName == null) return;
   newName = String(newName).trim();
   if (!newName || newName === currentName) return;
-  fetch('/api/ui/projects/update', {
+  fetch('/api/ui/projects/rename', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'same-origin',
