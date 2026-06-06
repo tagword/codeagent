@@ -30,7 +30,12 @@ function updateStreamBubbleText(fullText) {
   } catch (_) {
     b.textContent = roundText;
   }
-  scrollLog();
+  // ── 新增一行才触发滚动，避免同一行内逐字下拉 ──
+  const lnCount = (roundText.match(/\n/g) || []).length;
+  if (lnCount > _streamLastScrollLnCount) {
+    scrollLog();
+    _streamLastScrollLnCount = lnCount;
+  }
 }
 
 /**
