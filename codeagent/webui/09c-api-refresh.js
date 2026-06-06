@@ -17,14 +17,14 @@
           '<div style="padding:24px;text-align:center;color:var(--text-muted,#888);">' +
           '<div style="font-size:32px;margin-bottom:10px;">📂</div>' +
           '<div style="font-weight:600;margin-bottom:6px;color:var(--text,#1a1a2e);">未设置项目目录</div>' +
-          '<div style="font-size:13px;margin-bottom:16px;line-height:1.5;">关联源代码目录后，Git 和文件树才能操作项目文件</div>' +
+          '<div style="font-size:13px;margin-bottom:16px;line-height:1.5;">设置工作目录后，Git 和文件树才能操作项目文件</div>' +
           '<button class="btn btn--primary btn--sm" id="btnSetProjectPath">设置目录</button>' +
           '</div></div>';
         // 绑定设置目录按钮
         var setBtn = document.getElementById('btnSetProjectPath');
         if (setBtn) {
           setBtn.addEventListener('click', function() {
-            var p = prompt('请输入项目源代码目录路径：');
+            var p = prompt('请输入工作目录路径：');
             if (!p || !p.trim()) return;
             fetch('/api/ui/projects/path', {
               method: 'POST',
