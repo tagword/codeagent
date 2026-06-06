@@ -36,6 +36,8 @@ const STORAGE_KEYS = Object.freeze({
   TODO_SCOPE: 'oa_todo_scope',
   // ── WS 凭据（sessionStorage） ──
   WS_TOKEN: 'oa_webui_ws_token',
+  // ── 输入草稿 ──
+  SESS_DRAFT_PREFIX: 'oa_sess_draft_',
 });
 
 /** 动态 key 构造器（agent/session 作用域）。 */

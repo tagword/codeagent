@@ -26,5 +26,58 @@ function formatBubbleTime(at) {
   });
 }
 
+// ---------------- Per-session input draft ----------------
+
+const DRAFT_KEY_PREFIX = STORAGE_KEYS.SESS_DRAFT_PREFIX || 'oa_sess_draft_';
+
+function _draftKey(sid) {
+  return DRAFT_KEY_PREFIX + String(sid || '');
+}
+
+/** 保存当前会话的输入框内容到 localStorage */
+function saveMsgDraft() {
+  if (typeof msg === 'undefined' || !msg) return;
+  const sid = typeof sessionId !== 'undefined' ? sessionId : '';
+  if (!sid) return;
+  const text = msg.value || '';
+  if (text) {
+    trySetLS(_draftKey(sid), text);
+  } else {
+    tryRemoveLS(_draftKey(sid));
+  }
+}
+
+/** 恢复指定会话的输入框内容，不清空则不清除 localStorage 记录 */
+function restoreMsgDraft(sid, clearAfter) {
+  if (typeof msg === 'undefined' || !msg) return;
+  if (!sid) { msg.value = ''; return; }
+  const saved = tryGetLS(_draftKey(sid), '');
+  msg.value = saved;
+  if (clearAfter && saved) {
+    tryRemoveLS(_draftKey(sid));
+  }
+  // 触发 auto-resize
+  if (typeof msg.style !== 'undefined') {
+    msg.style.height = 'auto';
+    msg.style.height = Math.min(msg.scrollHeight, 220) + 'px';
+  }
+}
+
+// ---------------- Auto-save draft on blur ----------------
+// 用户点击侧边栏/切换标签页等场景也会丢失焦点，借此兜底保存。
+if (typeof msg !== 'undefined' && msg) {
+  msg.addEventListener('blur', function () {
+    if (typeof saveMsgDraft === 'function') saveMsgDraft();
+  });
+}
+
+// ---------------- Restore draft on page load ----------------
+(function restoreDraftOnLoad() {
+  var sid = typeof sessionId !== 'undefined' ? sessionId : '';
+  if (sid && typeof restoreMsgDraft === 'function') {
+    restoreMsgDraft(sid);
+  }
+})();
+
 // ---------------- Chat inflight tracking ----------------
 // 主体实现在 01q-inflight.js（chatInflightBySid / bumpChatInflight / restoreRunningSessions）。
