@@ -29,6 +29,7 @@ function ensureLinksOpenNewTab(el) {
 let _streamBubbleWrap = null; // holds the current streaming agent bubble
 let _streamConsumedLen = 0;   // text offset — advanced ONLY at tool-start boundaries
 let _streamLatestFullLen = 0; // length of the most recent full text seen (for split point)
+let _streamLastScrollLnCount = -1; // \n count at last scroll trigger — 新增一行才滚动，避免逐字下拉
 
 function getOrCreateStreamBubble(at) {
   if (_streamBubbleWrap && _streamBubbleWrap.parentNode) {
@@ -51,6 +52,7 @@ function getOrCreateStreamBubble(at) {
   log.appendChild(wrap);
   scrollLog();
   _streamBubbleWrap = wrap;
+  _streamLastScrollLnCount = -1; // 新气泡开始，重置行计数器
   return wrap;
 }
 
