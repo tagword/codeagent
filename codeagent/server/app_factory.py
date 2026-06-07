@@ -726,7 +726,6 @@ def create_app():
                             "context_limit": int(_ctx.get("context_limit") or 0),
                             "message_count": int(_ctx.get("message_count") or 0),
                             "estimated_tokens": int(_ctx.get("estimated_tokens") or 0),
-                            "compact_min_tokens": int(_get_cmt()),
                             "updated_at": chat_sess.updated_at or "",
                         }
                         chat_sess.metadata["context_usage"] = _snap

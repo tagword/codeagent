@@ -286,11 +286,15 @@ function initCompactMinInput() {
   if (!inp) return;
   // 加载当前值
   fetch('/api/ui/compact-config').then(r => r.json()).then(d => {
-    if (d.compact_min_tokens > 0) inp.value = d.compact_min_tokens;
+    if (d.compact_min_tokens > 0) {
+      inp.value = d.compact_min_tokens;
+      setTokenContextMax(d.compact_min_tokens);
+    }
   }).catch(_ => {});
   // 变更时保存
   inp.addEventListener('change', function() {
     var val = parseInt(this.value, 10) || 0;
+    setTokenContextMax(val);
     fetch('/api/ui/compact-config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -305,3 +309,7 @@ if (document.readyState === 'complete' || document.readyState === 'interactive')
 } else {
   document.addEventListener('DOMContentLoaded', function() { setTimeout(initCompactMinInput, 500); });
 }
+// 立即初始化 _tokenContextMax（不等 DOM，避免 restore 时用 200000 默认值）
+fetch('/api/ui/compact-config').then(r => r.json()).then(d => {
+  if (d.compact_min_tokens > 0) setTokenContextMax(d.compact_min_tokens);
+}).catch(_ => {});

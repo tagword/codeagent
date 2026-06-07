@@ -330,6 +330,11 @@ def _session_history_json_for_session(
                 if isinstance(sess.metadata, dict)
                 else None
             ),
+            "context_usage": (
+                sess.metadata.get("context_usage")
+                if isinstance(sess.metadata, dict)
+                else None
+            ),
         }
     )
 
@@ -1156,6 +1161,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
                     "has_any": bool(present),
                     "keys": present,
                 }
+                r["context_usage"] = md.get("context_usage")
             except Exception:
                 r["model_stack_overrides"] = {"count": 0, "has_any": False}
 
