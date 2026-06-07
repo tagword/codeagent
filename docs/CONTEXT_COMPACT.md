@@ -105,3 +105,40 @@ WS 事件到达后
 | `codeagent/webui/05a-session-history.js` | 页面加载后恢复指示器（不含 `compact_min_tokens`） |
 | `codeagent/webui/06-chat.js` | 紧凑完成后的视图刷新 |
 | `seed/core/agent_runtime.py` | `_get_compact_min_tokens()` / `set_compact_min_tokens()` |
+
+## 开发注意事项
+
+### denominator 覆盖路径（三路，易遗漏）
+
+`updateTokenUsage()` 中分母的计算优先级（由高到低）：
+
+```
+① curOrUsage.compact_min_tokens  ← 来自 WS 事件实时值
+② curOrUsage.context_limit        ← 来自模型上下文限制（陷阱！）
+③ compactMinTokens 参数           ← 兼容旧格式
+④ _tokenContextMax（兜底）       ← 唯一的长期分母
+```
+
+**陷阱**：restore 调用时如果传了 `context_limit`（模型的上下文窗口，如 128k），会在第②步覆盖 `_tokenContextMax`。这是本机制历史上分母乱掉的常见根因。
+
+**规则**：restore 调用 `updateTokenUsage` 时**只传分子**（`prompt_tokens` 或 `estimated_tokens`），不传任何可能触发 denominator 覆盖的字段。
+
+### 初始化竞态窗口
+
+页面加载时 `_tokenContextMax` 从硬编码 200000 开始，必须在用户切会话之前被真实值覆盖。
+
+- `initCompactMinInput()` 依赖 DOM 加载，有 500ms 延迟 → 不够早
+- **修复**：页面加载立即（inline script，不等 DOM）发起 `GET /api/ui/compact-config` → `setTokenContextMax()`
+
+### 快照只存分子
+
+session 元数据的 `context_usage` 快照中不应包含 `compact_min_tokens`，原因：
+
+- **分子是事实数据**（不可变，需持久化恢复）
+- **分母是运行时配置**（可変，env / 覆写 / 默认值）
+
+两者放同一个快照会导致分母被旧值污染。WS 事件中仍然携带 `compact_min_tokens`（实时值），用于运行时更新前端 `_tokenContextMax`。
+
+### 修改阈值后前端必须同步
+
+WebUI 修改阈值时，除了 `POST /api/ui/compact-config` 设置后台覆写，还必须**同步更新前端 `_tokenContextMax`**（`setTokenContextMax(val)`），否则在下一个 WS 事件到达前指示器仍使用旧分母。
