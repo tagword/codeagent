@@ -74,6 +74,8 @@ async function loadChatEnvConfig() {
       );
       sel.value = matched || _summarizerDefaultId || '';
     }
+    const inpSumMax = document.getElementById('inpCompactSummarizerMaxTokens');
+    if (inpSumMax) inpSumMax.value = _envVal(j, 'CODEAGENT_CONTEXT_COMPACT_SUMMARIZER_MAX_TOKENS', 'SEED_CONTEXT_COMPACT_SUMMARIZER_MAX_TOKENS', '4096');
     toggleCompactSubRows();
     status.textContent = '';
     status.classList.remove('is-err');
@@ -124,6 +126,7 @@ document.addEventListener('change', function(ev) {
       var chkCompact = document.getElementById('chkContextCompact');
       var inpMinB = document.getElementById('inpCompactMinBytes');
       var inpMinR = document.getElementById('inpCompactMinRounds');
+      var inpSumMax = document.getElementById('inpCompactSummarizerMaxTokens');
       var body = {
         CODEAGENT_CHAT_AUTO_CONTINUE_ON_LIMIT: chkAuto && chkAuto.checked ? '1' : '0',
         CODEAGENT_CHAT_AUTO_CONTINUE_MAX_SEGMENTS: String(parseInt(inpSeg && inpSeg.value, 10) || 0),
@@ -133,6 +136,7 @@ document.addEventListener('change', function(ev) {
         CODEAGENT_CONTEXT_COMPACT_MIN_ROUNDS: String(parseInt(inpMinR && inpMinR.value, 10) || 0),
         CODEAGENT_CONTEXT_COMPACT_SUMMARIZER_BASEURL: sumBaseUrl,
         CODEAGENT_CONTEXT_COMPACT_SUMMARIZER_MODEL: sumModel,
+        CODEAGENT_CONTEXT_COMPACT_SUMMARIZER_MAX_TOKENS: String(parseInt(inpSumMax && inpSumMax.value, 10) || 4096),
       };
       var r = await fetch('/api/ui/env/chat', {
         method: 'POST',
