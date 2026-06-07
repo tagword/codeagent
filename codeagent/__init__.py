@@ -6,7 +6,7 @@ Architecture:
   - codeagent/ : Personality layer (CLI, server, web UI, skills, per-agent config)
 """
 
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 
 # Compat: bind ``generate`` / ``generate_stream`` onto ``seed``'s LLMAPIExecutor when missing.
 import codeagent.llm.executor  # noqa: F401
