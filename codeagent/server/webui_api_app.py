@@ -1332,6 +1332,10 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         from codeagent.core.seed_bridge import bridge_codeagent_env_to_seed
 
         bridge_codeagent_env_to_seed()
+        # bridge 只设 SEED_* 未定义的情况；显式保存时强制覆盖
+        for k, v in updates.items():
+            if k.startswith("CODEAGENT_"):
+                os.environ["SEED_" + k[len("CODEAGENT_") :]] = v
         return JSONResponse({"ok": True, "hint": "已写入 config/seed.env；内核项已同步 SEED_*。"})
 
     async def api_tts_options(_: Request) -> JSONResponse:
