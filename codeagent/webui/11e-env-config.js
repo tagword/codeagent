@@ -143,6 +143,9 @@ document.addEventListener('change', function(ev) {
       if (!r.ok) throw new Error(j.detail || r.statusText);
       status.textContent = j.hint || '已保存';
       status.classList.remove('is-err');
+      // 同步更新 compact 指示器分母
+      var cmt = parseInt(inpMinB && inpMinB.value, 10) || 30000;
+      if (typeof setTokenContextMax === 'function') setTokenContextMax(cmt);
     } catch (e) {
       status.classList.add('is-err');
       status.textContent = '保存失败：' + String(e);
