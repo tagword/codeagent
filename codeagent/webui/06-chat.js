@@ -184,7 +184,7 @@ if (sendBtn) sendBtn.onclick = async () => {
   } catch (e) { if (sessionId === requestSid) systemMsg('err', String(e)); }
   finally {
     bumpChatInflight(requestSid, -1);
-    // 消息交换完成后更新上下文占用（context.body_bytes，非计费 total_tokens）
+    // 消息交换完成后更新上下文占用（context.prompt_tokens）
     var ctx = window._lastContextUsage;
     if (ctx && typeof updateTokenUsage === 'function') {
       updateTokenUsage(ctx);

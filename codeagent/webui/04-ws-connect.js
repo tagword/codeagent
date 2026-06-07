@@ -6,7 +6,7 @@ function setTokenContextMax(maxTokens) {
 }
 
 /** 更新 token 用量指示器（仅 token 用量，不含费用）
- *  @param {number|Object} curOrUsage - bodyBytes 或 {total_tokens, content_tokens}
+ *  @param {number|Object} curOrUsage - {prompt_tokens, ...} 或 {total_tokens, ...}
  *  @param {number} [compactMinTokens] - 兼容旧格式的 min_tokens
  */
 function updateTokenUsage(curOrUsage, compactMinTokens) {
@@ -17,11 +17,9 @@ function updateTokenUsage(curOrUsage, compactMinTokens) {
   var curTokens = 0;
   var maxTokens = _tokenContextMax;
   if (typeof curOrUsage === 'object' && curOrUsage !== null) {
-    // API prompt_tokens / legacy body_bytes (tokens) beat local estimate
+    // prompt_tokens (API 精确) > estimated_tokens (服务端估算) > total_tokens (DOM 回退)
     if (curOrUsage.prompt_tokens != null && Number(curOrUsage.prompt_tokens) > 0) {
       curTokens = Number(curOrUsage.prompt_tokens);
-    } else if (curOrUsage.body_bytes != null && curOrUsage.body_bytes !== '' && Number(curOrUsage.body_bytes) > 0) {
-      curTokens = Number(curOrUsage.body_bytes);
     } else if (curOrUsage.estimated_tokens != null && Number(curOrUsage.estimated_tokens) > 0) {
       curTokens = Number(curOrUsage.estimated_tokens);
     } else {
@@ -34,7 +32,7 @@ function updateTokenUsage(curOrUsage, compactMinTokens) {
     if (compactMinTokens > 0) maxTokens = compactMinTokens;
   }
   if (curTokens <= 0) {
-    // 不隐藏 — 工具执行期间 body_bytes 可能短暂为 0，保持可见
+    // 不隐藏 — 工具执行期间可能短暂为 0，保持可见
     el.style.display = 'inline-flex';
     for (var si = 0; si < segEls.length; si++) {
       segEls[si].classList.toggle('is-on', false);
@@ -180,34 +178,24 @@ function handleWsContextCompact(j) {
   if (j.session_id !== sessionId) return;
   systemMsg('info', '上下文已压缩（compact）：丢弃 ' + (j.dropped_messages || 0)
     + ' 条历史消息，保留最近 ' + (j.kept_user_rounds || 0) + ' 轮。');
-  // token 计数：优先 prompt_tokens_after，否则 body_bytes_after
   if (j.prompt_tokens_after != null && Number(j.prompt_tokens_after) > 0) {
     updateTokenUsage({
       prompt_tokens: Number(j.prompt_tokens_after),
       context_limit: j.context_limit,
       compact_min_tokens: j.compact_min_tokens,
     });
-  } else if (typeof j.body_bytes_after === 'number') {
-    updateTokenUsage({
-      body_bytes: j.body_bytes_after,
-      context_limit: j.context_limit,
-      compact_min_tokens: j.compact_min_tokens,
-    });
   }
 }
 
-/** context_usage：多种 token 计数来源的优先级收敛（统一入口） */
+/** context_usage：统一入口（prompt_tokens 来自 LLM API，最精确） */
 function handleWsContextUsage(j) {
   if (j.session_id && j.session_id !== sessionId) return;
   var cu = {
     context_limit: j.context_limit,
     compact_min_tokens: j.compact_min_tokens,
   };
-  // 优先级：prompt_tokens > body_bytes > estimated_tokens > token_usage 对象 > 兜底 0
   if (j.prompt_tokens != null && Number(j.prompt_tokens) > 0) {
     cu.prompt_tokens = Number(j.prompt_tokens);
-  } else if (j.body_bytes != null && Number(j.body_bytes) > 0) {
-    cu.body_bytes = Number(j.body_bytes);
   } else if (j.estimated_tokens != null && Number(j.estimated_tokens) > 0) {
     cu.estimated_tokens = Number(j.estimated_tokens);
   } else if (j.token_usage) {
@@ -217,7 +205,7 @@ function handleWsContextUsage(j) {
     }
     return;
   } else {
-    updateTokenUsage(Number(j.body_bytes || 0), Number(j.compact_min_tokens || 0));
+    updateTokenUsage(0, Number(j.compact_min_tokens || 0));
     if (j.accumulated_usage && typeof updateSidebarCost === 'function') {
       updateSidebarCost(j.accumulated_usage);
     }
