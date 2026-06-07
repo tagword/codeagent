@@ -96,8 +96,6 @@ async function loadSessionHistoryIntoLog(skipTreeRefresh) {
           updateTokenUsage({
             prompt_tokens: cu.prompt_tokens,
             context_limit: cu.context_limit,
-            body_bytes: cu.body_bytes,
-            estimated_tokens: cu.estimated_tokens,
             compact_min_tokens: cu.compact_min_tokens,
           });
         } else if (Number(cu.estimated_tokens) > 0) {
@@ -147,8 +145,6 @@ async function loadSessionHistoryIntoLog(skipTreeRefresh) {
           updateTokenUsage({
             prompt_tokens: cu.prompt_tokens,
             context_limit: cu.context_limit,
-            body_bytes: cu.body_bytes,
-            estimated_tokens: cu.estimated_tokens,
             compact_min_tokens: cu.compact_min_tokens,
           });
         } else if (Number(cu.estimated_tokens) > 0) {

@@ -689,27 +689,17 @@ def create_app():
                         _last_meta if isinstance(_last_meta, dict) else None,
                         model_name=_model_name,
                     )
-                    with contextlib.suppress(Exception):
-                        from codeagent.core.token_counter import estimate_context_tokens
-
-                        _tok = estimate_context_tokens(_proj_ctx)
-                        _ctx["estimated_tokens"] = int(_tok.get("total_tokens") or 0)
-
-                    # 5. 构造 WS 事件（body_bytes = 下次请求上下文体积，非计费 token）
-                    # NOTE: _ctx 来自 build_context_usage_snapshot，不包含 body_bytes 键，
-                    #       所以用 prompt_tokens（或 estimated_tokens 兜底）作为上下文占用值。
+                    # 5. 构造 WS 事件（prompt_tokens = LLM API 精确值或服务端估算）
+                    # NOTE: _ctx 来自 build_context_usage_snapshot，prompt_tokens
+                    #       优先使用 API usage.prompt_tokens，无 API 时 fallback 估算。
                     from seed.core.agent_runtime import _get_compact_min_tokens as _get_cmt
                     _ctx_pt = int(_ctx.get("prompt_tokens") or 0)
                     _ctx_est = int(_ctx.get("estimated_tokens") or 0)
-                    _ctx_body = _ctx.get("body_bytes")
-                    if _ctx_body is None:
-                        _ctx_body = _ctx_pt or _ctx_est
                     _ws_evt = {
                         "type": "context_usage",
                         "session_id": session_id,
                         "agent_id": agent_id,
                         "prompt_tokens": _ctx_pt,
-                        "body_bytes": _ctx_body,
                         "context_limit": _ctx.get("context_limit", 0),
                         "estimated_tokens": _ctx_est if _ctx_pt <= 0 else 0,
                         "compact_min_tokens": _get_cmt(),
@@ -731,14 +721,10 @@ def create_app():
                     if isinstance(_ctx, dict) and _ctx:
                         if not isinstance(chat_sess.metadata, dict):
                             chat_sess.metadata = {}
-                        _snap_body = _ctx.get("body_bytes")
-                        if _snap_body is None:
-                            _snap_body = _ctx.get("prompt_tokens", _ctx.get("estimated_tokens", 0))
                         _snap = {
                             "prompt_tokens": int(_ctx.get("prompt_tokens") or 0),
                             "context_limit": int(_ctx.get("context_limit") or 0),
                             "message_count": int(_ctx.get("message_count") or 0),
-                            "body_bytes": int(_snap_body or 0),
                             "estimated_tokens": int(_ctx.get("estimated_tokens") or 0),
                             "compact_min_tokens": int(_get_cmt()),
                             "updated_at": chat_sess.updated_at or "",
