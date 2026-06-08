@@ -54,7 +54,7 @@ async function stopActiveChat() {
     });
     const j = await r.json();
     if (!r.ok) throw new Error(j.detail || r.statusText);
-    if (sessionId === requestSid) systemMsg('info', j.active ? '已请求停止当前执行；当前工具若支持中断，会尽快停止。' : '当前会话没有正在运行的 agent。');
+    if (sessionId === requestSid) systemMsg('info', j.cancelled ? '已请求停止当前执行；当前工具若支持中断，会尽快停止。' : '当前会话没有正在运行的 agent。');
   } catch (e) { if (sessionId === requestSid) systemMsg('err', '停止失败：' + String(e)); }
   finally { updateComposerButtons(); }
 }

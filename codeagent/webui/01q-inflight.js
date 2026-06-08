@@ -118,10 +118,8 @@ async function restoreRunningSessions() {
       j.running.forEach(function(sid) {
         if (sid) {
           const k = String(sid);
-          if (!chatInflightBySid[k]) chatInflightBySid[k] = 1;
-          // 运行中的会话不应同时标记为「已完成」
-          delete chatCompletedBySid[k];
-          persistCompletedSessions();
+          // 通过 bumpChatInflight 统一变更状态，确保 UI 同步
+          bumpChatInflight(k, 1);
         }
       });
     }
