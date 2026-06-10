@@ -2330,34 +2330,27 @@ def build_webui_api_app(project_root: Path) -> Starlette:
             "process_id": os.getpid(),
         })
 
-    # ── Health / Watchdog ──────────────────────────────────────
+    async def api_health_diagnose(_: Request) -> JSONResponse:
+        """GET /api/health/diagnose — run diagnostic checks."""
+        from codeagent.server.self_healing import diagnose
+        return JSONResponse(diagnose())
 
-    async def api_health_heartbeat(_: Request) -> JSONResponse:
-        """POST /api/health/heartbeat — update agent heartbeat."""
-        ts = time.time()
-        hb_file = Path(codeagent_home()) / "heartbeat"
-        hb_file.parent.mkdir(parents=True, exist_ok=True)
-        hb_file.write_text(str(ts), encoding="utf-8")
-        return JSONResponse({"ts": ts})
+    async def api_health_heal(_: Request) -> JSONResponse:
+        """POST /api/health/heal — attempt self-healing."""
+        from codeagent.server.self_healing import heal
+        return JSONResponse(heal())
 
-    async def api_health_status(_: Request) -> JSONResponse:
-        """GET /api/health/status — return heartbeat + process status."""
-        hb_file = Path(codeagent_home()) / "heartbeat"
-        now = time.time()
-        last_hb = 0.0
-        if hb_file.is_file():
-            try:
-                last_hb = float(hb_file.read_text(encoding="utf-8").strip())
-            except (ValueError, OSError):
-                pass
-        elapsed = now - last_hb if last_hb > 0 else -1
-        status = "alive" if 0 < elapsed < 180 else ("stuck" if elapsed >= 180 else "unknown")
-        return JSONResponse({
-            "status": status,
-            "last_heartbeat": last_hb,
-            "elapsed_seconds": round(elapsed, 1) if elapsed >= 0 else None,
-            "process_id": os.getpid(),
-        })
+    async def api_runs_recover(request: Request) -> JSONResponse:
+        """POST /api/ui/runs/{run_id}/recover — mark a failed run for recovery."""
+        run_id = request.path_params.get("run_id", "")
+        from codeagent.server.team_engine import get_run, update_run
+        run = get_run(run_id)
+        if run is None:
+            return JSONResponse({"detail": "run not found"}, status_code=404)
+        if run.get("status") not in ("failed", "timeout"):
+            return JSONResponse({"detail": "only failed/timeout runs can be recovered"}, status_code=400)
+        update_run(run_id, {"status": "pending", "error": None})
+        return JSONResponse({"detail": f"run {run_id} marked for recovery", "run": update_run(run_id, {})})
 
     # ── Routes ─────────────────────────────────────────────────
 
@@ -2444,6 +2437,9 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         # Health / Watchdog
         Route("/health/heartbeat", api_health_heartbeat, methods=["POST"]),
         Route("/health/status", api_health_status, methods=["GET"]),
+        Route("/health/diagnose", api_health_diagnose, methods=["GET"]),
+        Route("/health/heal", api_health_heal, methods=["POST"]),
+        Route("/runs/{run_id}/recover", api_runs_recover, methods=["POST"]),
     ]
 
     return Starlette(debug=False, routes=routes)
