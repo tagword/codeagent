@@ -35,7 +35,21 @@ function bubble(role, text, opts) {
   meta.className = 'msg-meta';
   const label = role === 'user' ? '你' : '助手';
   const ts = formatBubbleTime(at);
+  // ── Agent 标识 ──
+  var agentName = null;
+  if (role === 'agent' && typeof _currentSwitcherAgentId !== 'undefined' && _currentSwitcherAgentId && _currentSwitcherAgentId !== 'default') {
+    agentName = _currentSwitcherAgentId;
+    // 从缓存的 agent 列表中找名称
+    if (typeof _agentSwitcherAgents !== 'undefined') {
+      var found = _agentSwitcherAgents.find(function(a){ return a.id === _currentSwitcherAgentId; });
+      if (found) agentName = found.name || found.id;
+    }
+  }
   meta.textContent = ts ? label + ' · ' + ts : label;
+  if (agentName) {
+    meta.textContent = agentName + ' · ' + (ts || '助手');
+    wrap.classList.add('msg-agent--' + _colorForAgent(_currentSwitcherAgentId));
+  }
 
   // ── 存储原始消息索引（来自 session/history API 的 idx 字段）用于回滚 ──
   var msgIdx = (opts && opts.idx != null) ? opts.idx : null;
@@ -121,4 +135,21 @@ function bubble(role, text, opts) {
       });
     }
   }
+}
+
+// ── Agent 气泡配色 ──
+var _agentColorMap = {};
+var _agentColorPalette = ['indigo', 'teal', 'pink', 'amber', 'cyan', 'lime', 'rose', 'sky', 'violet', 'emerald'];
+
+function _colorForAgent(agentId) {
+  if (!agentId) return 'indigo';
+  if (_agentColorMap[agentId]) return _agentColorMap[agentId];
+  var hash = 0;
+  for (var i = 0; i < agentId.length; i++) {
+    hash = ((hash << 5) - hash) + agentId.charCodeAt(i);
+    hash |= 0;
+  }
+  var idx = Math.abs(hash) % _agentColorPalette.length;
+  _agentColorMap[agentId] = _agentColorPalette[idx];
+  return _agentColorPalette[idx];
 }

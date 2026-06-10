@@ -216,6 +216,45 @@
   box-shadow: var(--shadow-focus);
 }
 
+/* ── Agent 气泡配色 ── */
+.msg-agent--indigo { --agent-accent: #6366f1; }
+.msg-agent--teal   { --agent-accent: #14b8a6; }
+.msg-agent--pink   { --agent-accent: #ec4899; }
+.msg-agent--amber  { --agent-accent: #f59e0b; }
+.msg-agent--cyan   { --agent-accent: #06b6d4; }
+.msg-agent--lime   { --agent-accent: #84cc16; }
+.msg-agent--rose   { --agent-accent: #f43f5e; }
+.msg-agent--sky    { --agent-accent: #0ea5e9; }
+.msg-agent--violet { --agent-accent: #8b5cf6; }
+.msg-agent--emerald { --agent-accent: #10b981; }
+
+.msg-agent--indigo .msg-meta,
+.msg-agent--teal .msg-meta,
+.msg-agent--pink .msg-meta,
+.msg-agent--amber .msg-meta,
+.msg-agent--cyan .msg-meta,
+.msg-agent--lime .msg-meta,
+.msg-agent--rose .msg-meta,
+.msg-agent--sky .msg-meta,
+.msg-agent--violet .msg-meta,
+.msg-agent--emerald .msg-meta {
+  color: var(--agent-accent);
+}
+
+.msg-agent--indigo .msg-col,
+.msg-agent--teal .msg-col,
+.msg-agent--pink .msg-col,
+.msg-agent--amber .msg-col,
+.msg-agent--cyan .msg-col,
+.msg-agent--lime .msg-col,
+.msg-agent--rose .msg-col,
+.msg-agent--sky .msg-col,
+.msg-agent--violet .msg-col,
+.msg-agent--emerald .msg-col {
+  border-left: 3px solid var(--agent-accent);
+  padding-left: var(--sp-3);
+}
+
 /* ── Modal override ── */
 .modal--medium {
   max-width: 520px;
