@@ -2302,6 +2302,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
 
     async def api_health_heartbeat(_: Request) -> JSONResponse:
         """POST /api/health/heartbeat — update agent heartbeat."""
+        import time
         ts = time.time()
         from codeagent.core.paths import codeagent_home
         hb_file = Path(codeagent_home()) / "heartbeat"
@@ -2311,24 +2312,28 @@ def build_webui_api_app(project_root: Path) -> Starlette:
 
     async def api_health_status(_: Request) -> JSONResponse:
         """GET /api/health/status — return heartbeat + process status."""
-        from codeagent.core.paths import codeagent_home
-        hb_file = Path(codeagent_home()) / "heartbeat"
-        now = time.time()
-        last_hb = 0.0
-        if hb_file.is_file():
-            try:
-                last_hb = float(hb_file.read_text(encoding="utf-8").strip())
-            except (ValueError, OSError):
-                pass
-        import os
-        elapsed = now - last_hb if last_hb > 0 else -1
-        status = "alive" if 0 < elapsed < 180 else ("stuck" if elapsed >= 180 else "unknown")
-        return JSONResponse({
-            "status": status,
-            "last_heartbeat": last_hb,
-            "elapsed_seconds": round(elapsed, 1) if elapsed >= 0 else None,
-            "process_id": os.getpid(),
-        })
+        try:
+            import time
+            from codeagent.core.paths import codeagent_home
+            hb_file = Path(codeagent_home()) / "heartbeat"
+            now = time.time()
+            last_hb = 0.0
+            if hb_file.is_file():
+                try:
+                    last_hb = float(hb_file.read_text(encoding="utf-8").strip())
+                except (ValueError, OSError):
+                    pass
+            elapsed = now - last_hb if last_hb > 0 else -1
+            status = "alive" if 0 < elapsed < 180 else ("stuck" if elapsed >= 180 else "unknown")
+            return JSONResponse({
+                "status": status,
+                "last_heartbeat": last_hb,
+                "elapsed_seconds": round(elapsed, 1) if elapsed >= 0 else None,
+                "process_id": os.getpid(),
+            })
+        except Exception as e:
+            logger.exception("health/status error")
+            return JSONResponse({"error": str(e), "type": type(e).__name__}, status_code=500)
 
     async def api_health_diagnose(_: Request) -> JSONResponse:
         """GET /api/health/diagnose — run diagnostic checks."""
