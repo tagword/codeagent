@@ -177,6 +177,45 @@
   padding: var(--sp-2) 0;
 }
 
+/* ── 聊天顶部 Agent 切换器 ── */
+.chat-topbar {
+  display: flex;
+  align-items: center;
+  padding: var(--sp-1) var(--sp-3);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0;
+}
+
+.chat-topbar__agent {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.chat-topbar__label {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.chat-topbar__select {
+  font-size: var(--fs-sm);
+  padding: 2px var(--sp-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  max-width: 200px;
+}
+
+.chat-topbar__select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--shadow-focus);
+}
+
 /* ── Modal override ── */
 .modal--medium {
   max-width: 520px;
