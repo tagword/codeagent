@@ -1,0 +1,125 @@
+/* Agent 管理面板样式 */
+
+/* ── Agent 卡片网格 ── */
+.agent-list__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--sp-3);
+}
+
+.agent-card {
+  display: flex;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.agent-card:hover {
+  border-color: var(--accent);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+}
+
+.agent-card__icon {
+  font-size: 1.5rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.agent-card__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.agent-card__name {
+  font-weight: 600;
+  font-size: var(--fs-base);
+  color: var(--text);
+  margin-bottom: 2px;
+}
+
+.agent-card__desc {
+  font-size: var(--fs-sm);
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: var(--sp-1);
+}
+
+.agent-card__meta {
+  display: flex;
+  gap: var(--sp-2);
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+}
+
+.agent-card__tools {
+  color: var(--accent);
+}
+
+.agent-card__id {
+  color: var(--text-muted);
+}
+
+.agent-list__empty {
+  padding: var(--sp-6);
+  text-align: center;
+  color: var(--text-dim);
+  font-size: var(--fs-sm);
+}
+
+/* ── Agent 详情 ── */
+.agent-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.agent-detail__row {
+  font-size: var(--fs-sm);
+  color: var(--text);
+}
+
+.agent-detail__pre {
+  margin: 0;
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--code-bg, #f5f5f5);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-sm);
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 200px;
+  overflow-y: auto;
+  color: var(--text);
+}
+
+.agent-detail__tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1);
+}
+
+.agent-detail__tool-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  background: var(--accent-bg, #e8f0fe);
+  color: var(--accent, #1a73e8);
+  border-radius: 999px;
+  font-size: var(--fs-xs);
+  font-weight: 500;
+}
+
+.agent-detail__tool-none {
+  font-size: var(--fs-sm);
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+/* ── Modal override ── */
+.modal--medium {
+  max-width: 520px;
+}
