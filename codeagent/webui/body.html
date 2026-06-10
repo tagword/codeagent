@@ -506,8 +506,8 @@
             </div>
           </div>
           <p class="section__desc">
-            管理 Model Context Protocol（stdio）服务。Agent 通过 <code>mcp__服务ID__工具名</code> 调用（需开启「注册给 Agent」）。
-            可添加多个 MCP：MiniMax Token Plan、uvx/npx 包、自建可执行文件等。配置写入 <code>mcp.json</code>。
+            管理 Model Context Protocol 服务。支持 <strong>stdio</strong>（本地子进程）和 <strong>SSE</strong>（远程 HTTP）两种传输协议。
+            Agent 通过 <code>mcp__服务ID__工具名</code> 调用（需开启「注册给 Agent」）。
           </p>
           <label class="checkbox-row">
             <input type="checkbox" id="chkMcpEnabled" checked/>
