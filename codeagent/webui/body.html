@@ -931,7 +931,88 @@
       </div>
     </div>
 
-
+    <section id="page-team" class="page page--scroll" style="display:none;">
+      <div class="content-max">
+        <fieldset class="section" id="fieldsetTeams">
+          <div class="section__header">
+            <h3 class="section__title">Team 管理</h3>
+            <div class="row-actions" style="display:flex;gap:var(--sp-2);margin:0;">
+              <button class="btn btn--primary btn--sm" id="btnTeamCreate">+ 新建</button>
+              <button class="btn btn--ghost btn--sm" id="btnTeamRefresh">刷新</button>
+            </div>
+          </div>
+          <p class="section__desc">将多个 Agent 组成团队，按顺序/并行/管家模式协同工作。</p>
+          <div id="teamList" class="team-list"></div>
+          <div id="teamStatus" class="status-line"></div>
+        </fieldset>
+        <div id="teamModal" class="modal-overlay" style="display:none;">
+          <div class="modal modal--medium">
+            <div class="modal__header">
+              <h3 id="teamModalTitle">新建 Team</h3>
+              <button class="modal__close" id="btnTeamModalClose">&times;</button>
+            </div>
+            <div class="modal__body">
+              <div class="modal-field">
+                <label class="modal-field__label" for="inpTeamId">Team ID <span class="required">*</span></label>
+                <input type="text" id="inpTeamId" class="input" placeholder="content-pipeline" />
+              </div>
+              <div class="modal-field">
+                <label class="modal-field__label" for="inpTeamName">名称</label>
+                <input type="text" id="inpTeamName" class="input" />
+              </div>
+              <div class="modal-field">
+                <label class="modal-field__label" for="inpTeamDesc">描述</label>
+                <textarea id="inpTeamDesc" class="input textarea" rows="3"></textarea>
+              </div>
+              <div class="modal-field">
+                <label class="modal-field__label">工作模式</label>
+                <select id="selTeamMode" class="input">
+                  <option value="sequential">顺序模式</option>
+                  <option value="parallel">并行模式</option>
+                  <option value="manager">管家模式</option>
+                </select>
+              </div>
+              <div class="modal-field">
+                <label class="modal-field__label">超时（秒）</label>
+                <input type="number" id="inpTeamTimeout" class="input" value="300" min="30" />
+              </div>
+              <div class="modal-field">
+                <label class="modal-field__label">错误策略</label>
+                <select id="selTeamErrorPolicy" class="input">
+                  <option value="stop">出错即停</option>
+                  <option value="skip">跳过继续</option>
+                </select>
+              </div>
+              <div class="modal-field">
+                <label class="modal-field__label">团队成员</label>
+                <div id="teamMemberCheckboxList" class="checkbox-group"></div>
+              </div>
+            </div>
+            <div class="modal__footer">
+              <button class="btn btn--ghost" id="btnTeamModalCancel">取消</button>
+              <button class="btn btn--primary" id="btnTeamModalSave">保存</button>
+            </div>
+          </div>
+        </div>
+        <fieldset class="section" id="fieldsetTeamDetail" style="display:none;">
+          <div class="section__header">
+            <h3 class="section__title" id="teamDetailTitle">Team 详情</h3>
+            <div class="row-actions" style="display:flex;gap:var(--sp-2);margin:0;">
+              <button class="btn btn--primary btn--sm" id="btnTeamRun">运行</button>
+              <button class="btn btn--ghost btn--sm" id="btnTeamEditDetail">编辑</button>
+              <button class="btn btn--danger btn--sm" id="btnTeamDeleteDetail">删除</button>
+            </div>
+          </div>
+          <div id="teamDetailContent"></div>
+        </fieldset>
+        <fieldset class="section" id="fieldsetTeamRuns" style="display:none;">
+          <div class="section__header">
+            <h3 class="section__title">运行历史</h3>
+          </div>
+          <div id="teamRunsList"></div>
+        </fieldset>
+      </div>
+    </section>
 
 </main>
 </div>
