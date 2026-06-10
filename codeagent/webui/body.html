@@ -931,7 +931,7 @@
       </div>
     </div>
 
-    <section id="page-team" class="page page--scroll" style="display:none;">
+        <section id="page-team" class="page page--scroll" style="display:none;">
       <div class="content-max">
         <fieldset class="section" id="fieldsetTeams">
           <div class="section__header">
@@ -1010,6 +1010,40 @@
             <h3 class="section__title">运行历史</h3>
           </div>
           <div id="teamRunsList"></div>
+        </fieldset>
+      </div>
+    </section>
+
+
+<section id="page-hub" class="page page--scroll" style="display:none;">
+      <div class="content-max">
+        <fieldset class="section">
+          <div class="section__header">
+            <h3 class="section__title">Hub 消息总线</h3>
+            <div class="row-actions" style="display:flex;gap:var(--sp-2);margin:0;">
+              <button class="btn btn--ghost btn--sm" id="btnHubClear">清空</button>
+            </div>
+          </div>
+          <p class="section__desc">Agent 之间的实时消息流。可通过 SSE 订阅，支持按 Agent 过滤。</p>
+          <div id="hubMessageList" class="hub-message-list"></div>
+        </fieldset>
+        <fieldset class="section">
+          <div class="section__header">
+            <h3 class="section__title">发送消息</h3>
+          </div>
+          <div class="hub-send">
+            <div class="hub-send__row">
+              <input type="text" id="hubSendFrom" class="input" placeholder="发送者" style="width:150px;" />
+              <span style="padding:0 var(--sp-1);color:var(--text-muted);">→</span>
+              <input type="text" id="hubSendTo" class="input" placeholder="目标 (留空=全部)" style="width:150px;" />
+            </div>
+            <div class="hub-send__row" style="margin-top:var(--sp-2);">
+              <textarea id="hubSendContent" class="input textarea" rows="3" placeholder="输入消息..."></textarea>
+            </div>
+            <div style="margin-top:var(--sp-2);">
+              <button class="btn btn--primary" id="btnHubSend">发送</button>
+            </div>
+          </div>
         </fieldset>
       </div>
     </section>

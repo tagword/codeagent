@@ -151,3 +151,76 @@
 .checkbox-label:hover {
   border-color: var(--accent);
 }
+
+/* ── Hub 消息流 ── */
+.hub-message-list {
+  max-height: 400px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--sp-2) 0;
+}
+
+.hub__empty {
+  text-align: center;
+  color: var(--text-dim);
+  font-size: var(--fs-sm);
+  padding: var(--sp-4);
+}
+
+.hub-msg {
+  padding: var(--sp-1) var(--sp-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-sm);
+}
+
+.hub-msg:hover {
+  background: var(--accent-soft);
+}
+
+.hub-msg__head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  margin-bottom: 2px;
+}
+
+.hub-msg__from {
+  font-weight: 600;
+  font-size: var(--fs-xs);
+}
+
+.hub-msg__arrow {
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+}
+
+.hub-msg__to {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+}
+
+.hub-msg__time {
+  margin-left: auto;
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+}
+
+.hub-msg__body {
+  font-size: var(--fs-sm);
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.hub-send {
+  display: flex;
+  flex-direction: column;
+}
+
+.hub-send__row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+}
