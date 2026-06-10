@@ -567,10 +567,10 @@ def build_webui_api_app(project_root: Path) -> Starlette:
             cfg = server_config_from_dict(sid, body)
         except ValueError as e:
             return JSONResponse({"detail": str(e)}, status_code=400)
-        if cfg.transport != "stdio":
-            return JSONResponse({"detail": "only stdio transport supported"}, status_code=400)
-        if not cfg.command:
+        if cfg.transport == "stdio" and not cfg.command:
             return JSONResponse({"detail": "command required"}, status_code=400)
+        if cfg.transport == "sse" and not cfg.url:
+            return JSONResponse({"detail": "url required"}, status_code=400)
         result = probe_mcp_server_config(cfg)
         if not result.get("ok"):
             return JSONResponse(

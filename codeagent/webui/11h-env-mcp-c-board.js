@@ -35,7 +35,11 @@ function buildMcpServerCard(serverId, cfg, status, meta) {
 
   const detail = document.createElement('div');
   detail.className = 'mcp-card__detail';
-  detail.textContent = (cfg.command || '') + (cfg.args && cfg.args.length ? ' ' + formatArgsList(cfg.args) : '');
+  if (cfg.transport === 'sse') {
+    detail.textContent = 'SSE · ' + (cfg.url || '');
+  } else {
+    detail.textContent = (cfg.command || '') + (cfg.args && cfg.args.length ? ' ' + formatArgsList(cfg.args) : '');
+  }
 
   info.appendChild(title);
   info.appendChild(detail);
