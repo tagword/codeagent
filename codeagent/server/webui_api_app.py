@@ -2212,6 +2212,45 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         team_file.unlink()
         return JSONResponse({"detail": "deleted"})
 
+    # ── Team Run ────────────────────────────────────────────────
+
+    async def api_teams_run(request: Request) -> JSONResponse:
+        """Execute a team workflow asynchronously."""
+        team_id = request.path_params.get("team_id", "")
+        tf = _teams_dir() / f"{team_id}.json"
+        if not tf.is_file():
+            return JSONResponse({"detail": "team not found"}, status_code=404)
+        try:
+            body = await request.json()
+        except Exception:
+            return JSONResponse({"detail": "invalid json"}, status_code=400)
+        user_input = (body.get("input") or body.get("user_input") or "").strip()
+        if not user_input:
+            return JSONResponse({"detail": "input is required"}, status_code=400)
+        try:
+            from codeagent.server.team_engine import run_team
+            run = run_team(team_id, user_input)
+            return JSONResponse({"run": run})
+        except ValueError as e:
+            return JSONResponse({"detail": str(e)}, status_code=400)
+        except Exception as e:
+            logger.exception("team run failed")
+            return JSONResponse({"detail": f"run failed: {e}"}, status_code=500)
+
+    async def api_runs_list(request: Request) -> JSONResponse:
+        team_id = request.query_params.get("team_id", "")
+        from codeagent.server.team_engine import list_runs
+        runs = list_runs(team_id=team_id or None)
+        return JSONResponse({"runs": runs})
+
+    async def api_runs_get(request: Request) -> JSONResponse:
+        run_id = request.path_params.get("run_id", "")
+        from codeagent.server.team_engine import get_run
+        run = get_run(run_id)
+        if run is None:
+            return JSONResponse({"detail": "run not found"}, status_code=404)
+        return JSONResponse({"run": run})
+
     # ── Routes ─────────────────────────────────────────────────
 
     routes = [
@@ -2286,6 +2325,10 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         Route("/teams/{team_id}", api_teams_get, methods=["GET"]),
         Route("/teams/{team_id}", api_teams_update, methods=["PUT"]),
         Route("/teams/{team_id}", api_teams_delete, methods=["DELETE"]),
+        # Team Run
+        Route("/teams/{team_id}/run", api_teams_run, methods=["POST"]),
+        Route("/runs", api_runs_list, methods=["GET"]),
+        Route("/runs/{run_id}", api_runs_get, methods=["GET"]),
     ]
 
     return Starlette(debug=False, routes=routes)
