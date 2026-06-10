@@ -379,6 +379,30 @@ def _list_agent_metas() -> list[dict]:
     return agents
 
 
+def _teams_dir() -> Path:
+    """Return the teams root directory (~/.codeagent/teams)."""
+    from codeagent.core.paths import codeagent_home
+    return codeagent_home() / "teams"
+
+
+def _list_team_metas() -> list[dict]:
+    """Scan all teams and return metadata list."""
+    td = _teams_dir()
+    if not td.is_dir():
+        return []
+    teams: list[dict] = []
+    for entry in sorted(td.iterdir()):
+        if entry.suffix != ".json":
+            continue
+        try:
+            data = json.loads(entry.read_text(encoding="utf-8"))
+            data["id"] = entry.stem
+            teams.append(data)
+        except (json.JSONDecodeError, OSError):
+            pass
+    return teams
+
+
 def _read_agent_file(agent_id: str, *rel_parts: str) -> str | None:
     """Read a file inside an agent's directory if it exists."""
     p = _agents_dir() / agent_id
@@ -2117,6 +2141,77 @@ def build_webui_api_app(project_root: Path) -> Starlette:
             "sessions": rows,
         })
 
+    # ── Team CRUD ───────────────────────────────────────────────
+
+    async def api_teams_list(_: Request) -> JSONResponse:
+        teams = _list_team_metas()
+        return JSONResponse({"teams": teams})
+
+    async def api_teams_create(request: Request) -> JSONResponse:
+        try:
+            body = await request.json()
+        except Exception:
+            return JSONResponse({"detail": "invalid json"}, status_code=400)
+        team_id = (body.get("id") or "").strip()
+        if not team_id:
+            return JSONResponse({"detail": "team id is required"}, status_code=400)
+        td = _teams_dir()
+        team_file = td / f"{team_id}.json"
+        if team_file.exists():
+            return JSONResponse({"detail": f"team '{team_id}' already exists"}, status_code=409)
+        team_data = {
+            "name": body.get("name", team_id),
+            "description": body.get("description", ""),
+            "members": body.get("members", []),
+            "mode": body.get("mode", "sequential"),
+            "error_policy": body.get("error_policy", "stop"),
+            "timeout_seconds": body.get("timeout_seconds", 300),
+        }
+        td.mkdir(parents=True, exist_ok=True)
+        team_file.write_text(json.dumps(team_data, indent=2, ensure_ascii=False), encoding="utf-8")
+        team_data["id"] = team_id
+        return JSONResponse({"team": team_data}, status_code=201)
+
+    async def api_teams_get(request: Request) -> JSONResponse:
+        team_id = request.path_params.get("team_id", "")
+        team_file = _teams_dir() / f"{team_id}.json"
+        if not team_file.is_file():
+            return JSONResponse({"detail": "team not found"}, status_code=404)
+        try:
+            data = json.loads(team_file.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            return JSONResponse({"detail": "invalid team data"}, status_code=500)
+        data["id"] = team_id
+        return JSONResponse({"team": data})
+
+    async def api_teams_update(request: Request) -> JSONResponse:
+        team_id = request.path_params.get("team_id", "")
+        team_file = _teams_dir() / f"{team_id}.json"
+        if not team_file.is_file():
+            return JSONResponse({"detail": "team not found"}, status_code=404)
+        try:
+            body = await request.json()
+        except Exception:
+            return JSONResponse({"detail": "invalid json"}, status_code=400)
+        try:
+            data = json.loads(team_file.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            data = {}
+        for k in ("name", "description", "members", "mode", "error_policy", "timeout_seconds"):
+            if k in body:
+                data[k] = body[k]
+        team_file.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+        data["id"] = team_id
+        return JSONResponse({"team": data})
+
+    async def api_teams_delete(request: Request) -> JSONResponse:
+        team_id = request.path_params.get("team_id", "")
+        team_file = _teams_dir() / f"{team_id}.json"
+        if not team_file.is_file():
+            return JSONResponse({"detail": "team not found"}, status_code=404)
+        team_file.unlink()
+        return JSONResponse({"detail": "deleted"})
+
     # ── Routes ─────────────────────────────────────────────────
 
     routes = [
@@ -2185,6 +2280,12 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         Route("/agents/{agent_id}", api_agents_delete, methods=["DELETE"]),
         Route("/agents/{agent_id}/sessions", api_agents_sessions, methods=["GET"]),
         Route("/session/switch-agent", api_agents_switch, methods=["POST"]),
+        # Team CRUD
+        Route("/teams", api_teams_list, methods=["GET"]),
+        Route("/teams", api_teams_create, methods=["POST"]),
+        Route("/teams/{team_id}", api_teams_get, methods=["GET"]),
+        Route("/teams/{team_id}", api_teams_update, methods=["PUT"]),
+        Route("/teams/{team_id}", api_teams_delete, methods=["DELETE"]),
     ]
 
     return Starlette(debug=False, routes=routes)
