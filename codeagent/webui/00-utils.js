@@ -34,3 +34,18 @@ function escapeHtml(s) {
 function escAttr(s) {
   return escapeHtml(s);
 }
+
+/**
+ * API 路径包装。目前直接返回原路径，未来可在此追加 base URL 或前缀。
+ * 新模块统一用此函数而非裸 fetch(path)，避免后续改 base URL 时到处改。
+ */
+function apiUrl(path) {
+  return path;
+}
+
+/**
+ * escHtml — escapeHtml 的简短别名。多模块使用，与 escapeHtml 完全等价。
+ */
+function escHtml(s) {
+  return escapeHtml(s);
+}
