@@ -1942,6 +1942,54 @@ def build_webui_api_app(project_root: Path) -> Starlette:
 
     # ── Agent CRUD ──────────────────────────────────────────────
 
+    async def api_agent_presets(_: Request) -> JSONResponse:
+        """Return predefined agent template presets."""
+        presets = [
+            {
+                "id": "translator",
+                "name": "译员",
+                "description": "中英翻译，只输出翻译结果",
+                "system_prompt": "翻译中文到英文，只输出翻译",
+                "tools": {"acquired": {"allow": []}},
+            },
+            {
+                "id": "summarizer",
+                "name": "总结师",
+                "description": "总结长文本，提取关键信息",
+                "system_prompt": "请总结以下内容，提取关键信息，输出简洁的总结。",
+                "tools": {"acquired": {"allow": []}},
+            },
+            {
+                "id": "polisher",
+                "name": "润色师",
+                "description": "润色文本，优化表达",
+                "system_prompt": "请润色以下文本，优化表达，保持原意。",
+                "tools": {"acquired": {"allow": []}},
+            },
+            {
+                "id": "code-reviewer",
+                "name": "代码审查专家",
+                "description": "审查代码安全性、性能、正确性",
+                "system_prompt": "你是严格的代码审查专家。检查安全性（SQL注入/XSS/路径遍历）、性能（N+1查询/内存泄漏）、命名一致性、错误处理完整性。只输出需要修改的具体点。",
+                "tools": {"acquired": {"allow": ["file_read", "code_check"]}},
+            },
+            {
+                "id": "data-analyst",
+                "name": "数据分析师",
+                "description": "分析数据并生成报告",
+                "system_prompt": "你是一名数据分析师。分析用户提供的数据，发现规律和异常，生成结构化报告。",
+                "tools": {"acquired": {"allow": ["db", "file_read", "code_check"]}},
+            },
+            {
+                "id": "debugger",
+                "name": "调试专家",
+                "description": "诊断代码问题，定位根因",
+                "system_prompt": "你是调试专家。分析错误信息、日志和代码上下文，定位根因并给出修复方案。",
+                "tools": {"acquired": {"allow": ["file_read", "bash_exec", "grep_tool"]}},
+            },
+        ]
+        return JSONResponse({"presets": presets})
+
     async def api_agents_list(request: Request) -> JSONResponse:
         agents = _list_agent_metas()
         return JSONResponse({"agents": agents})
@@ -2090,6 +2138,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         Route("/setup/finish", api_setup_finish, methods=["POST"]),
         Route("/setup/test-llm", api_setup_test_llm, methods=["POST"]),
         # Agent CRUD
+        Route("/agent-presets", api_agent_presets, methods=["GET"]),
         Route("/agents", api_agents_list, methods=["GET"]),
         Route("/agents", api_agents_create, methods=["POST"]),
         Route("/agents/{agent_id}", api_agents_get, methods=["GET"]),
