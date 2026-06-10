@@ -19,7 +19,7 @@ from typing import Any, Dict
 
 from starlette.applications import Starlette
 from starlette.requests import Request
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, StreamingResponse
 from starlette.routing import Route
 
 logger = logging.getLogger(__name__)
@@ -2141,6 +2141,53 @@ def build_webui_api_app(project_root: Path) -> Starlette:
             "sessions": rows,
         })
 
+    # ── Hub SSE ─────────────────────────────────────────────────
+
+    async def api_hub_send(request: Request) -> JSONResponse:
+        """POST /api/hub/send — send a message to the hub."""
+        try:
+            body = await request.json()
+        except Exception:
+            return JSONResponse({"detail": "invalid json"}, status_code=400)
+        frm = (body.get("frm") or body.get("from") or "").strip()
+        to = (body.get("to") or "").strip()
+        content = (body.get("content") or body.get("message") or "").strip()
+        if not frm or not content:
+            return JSONResponse({"detail": "frm and content are required"}, status_code=400)
+        from codeagent.server.hub import send_message
+        msg = send_message(frm, to or "all", content)
+        return JSONResponse({"message": msg})
+
+    async def api_hub_events(request: Request) -> JSONResponse:
+        """GET /api/hub/events — SSE stream of hub messages."""
+        last_event_id = (request.headers.get("last-event-id") or
+                         request.query_params.get("lastEventId") or
+                         request.query_params.get("last_id") or None)
+        from codeagent.server.hub import subscribe, sse_generator
+        sid, q = subscribe()
+        logger.info("hub SSE subscriber %s connected (last_id=%s)", sid, last_event_id)
+        return StreamingResponse(
+            sse_generator(sid, q, last_event_id=last_event_id),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
+
+    async def api_hub_messages(request: Request) -> JSONResponse:
+        """GET /api/hub/messages — list recent hub messages."""
+        limit_s = request.query_params.get("limit", "50")
+        try:
+            limit = int(limit_s)
+        except ValueError:
+            limit = 50
+        filter_agent = request.query_params.get("agent_id") or None
+        from codeagent.server.hub import load_messages
+        msgs = load_messages(limit=limit, filter_agent=filter_agent)
+        return JSONResponse({"messages": msgs})
+
     # ── Team CRUD ───────────────────────────────────────────────
 
     async def api_teams_list(_: Request) -> JSONResponse:
@@ -2329,6 +2376,10 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         Route("/teams/{team_id}/run", api_teams_run, methods=["POST"]),
         Route("/runs", api_runs_list, methods=["GET"]),
         Route("/runs/{run_id}", api_runs_get, methods=["GET"]),
+        # Hub SSE
+        Route("/hub/send", api_hub_send, methods=["POST"]),
+        Route("/hub/events", api_hub_events, methods=["GET"]),
+        Route("/hub/messages", api_hub_messages, methods=["GET"]),
     ]
 
     return Starlette(debug=False, routes=routes)
