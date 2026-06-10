@@ -119,6 +119,64 @@
   font-style: italic;
 }
 
+/* ── Agent 详情 - 会话列表 ── */
+.agent-detail__section {
+  margin-top: var(--sp-4);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--border);
+}
+
+.agent-detail__section-title {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--text);
+  margin: 0 0 var(--sp-2);
+}
+
+.agent-detail__session-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.agent-detail__session-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--sp-1) var(--sp-2);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.agent-detail__session-item:hover {
+  background: var(--accent-soft, rgba(79,70,229,0.06));
+}
+
+.agent-detail__session-title {
+  font-size: var(--fs-sm);
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.agent-detail__session-time {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  flex-shrink: 0;
+  margin-left: var(--sp-2);
+}
+
+.agent-detail__empty {
+  font-size: var(--fs-sm);
+  color: var(--text-dim);
+  font-style: italic;
+  padding: var(--sp-2) 0;
+}
+
 /* ── Modal override ── */
 .modal--medium {
   max-width: 520px;
