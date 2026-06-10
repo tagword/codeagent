@@ -2078,6 +2078,45 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         shutil.rmtree(ad, ignore_errors=True)
         return JSONResponse({"detail": "deleted"})
 
+    async def api_agents_sessions(request: Request) -> JSONResponse:
+        """Return sessions for a specific agent."""
+        agent_id = request.path_params.get("agent_id", "")
+        ad = _agents_dir() / agent_id
+        if not ad.is_dir() or not (ad / "persona").is_dir():
+            return JSONResponse({"detail": "agent not found"}, status_code=404)
+        try:
+            lim = int(request.query_params.get("limit") or "40")
+        except ValueError:
+            lim = 40
+        rows = list_stored_sessions_meta(limit=lim, agent_id=agent_id, filter_by_project=False)
+        return JSONResponse({"sessions": rows, "agent_id": agent_id})
+
+    async def api_agents_switch(request: Request) -> JSONResponse:
+        """Switch active agent. Validates the agent exists, returns its info + sessions."""
+        try:
+            body = await request.json()
+        except Exception:
+            return JSONResponse({"detail": "invalid json"}, status_code=400)
+        target = (body.get("agent_id") or "").strip()
+        if not target:
+            return JSONResponse({"detail": "agent_id is required"}, status_code=400)
+        ad = _agents_dir() / target
+        if not ad.is_dir() or not (ad / "persona").is_dir():
+            return JSONResponse({"detail": f"agent '{target}' not found"}, status_code=404)
+        system_prompt = _read_agent_file(target, "persona", "system.md") or ""
+        tools_raw = _read_agent_file(target, "tools.json")
+        tools = {}
+        if tools_raw:
+            try:
+                tools = json.loads(tools_raw)
+            except json.JSONDecodeError:
+                tools = {}
+        rows = list_stored_sessions_meta(limit=20, agent_id=target, filter_by_project=False)
+        return JSONResponse({
+            "agent": {"id": target, "name": target, "system_prompt": system_prompt, "tools": tools},
+            "sessions": rows,
+        })
+
     # ── Routes ─────────────────────────────────────────────────
 
     routes = [
@@ -2144,6 +2183,8 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         Route("/agents/{agent_id}", api_agents_get, methods=["GET"]),
         Route("/agents/{agent_id}", api_agents_update, methods=["PUT"]),
         Route("/agents/{agent_id}", api_agents_delete, methods=["DELETE"]),
+        Route("/agents/{agent_id}/sessions", api_agents_sessions, methods=["GET"]),
+        Route("/session/switch-agent", api_agents_switch, methods=["POST"]),
     ]
 
     return Starlette(debug=False, routes=routes)
