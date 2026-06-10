@@ -8,10 +8,12 @@
  *
  *   DOM 缓存：mcpDom = { board, status, chkOn, chkReg, pathEl, uvxEl,
  *                        btn, ref, addBtn, tplSel } 在 initMcpBoard IIFE
- *   中一次性 getElementById 填充，避免在 17 处散落调用。
+ *   中一次性 getElementById 填充。
  * ================================================================ */
 
 const mcpDom = {};
+
+/* ---- 卡片构建 ---- */
 
 function buildMcpServerCard(serverId, cfg, status, meta) {
   meta = meta || {};
@@ -20,30 +22,61 @@ function buildMcpServerCard(serverId, cfg, status, meta) {
   wrap.setAttribute('data-server-id', serverId);
 
   const minimax = isMinimaxMcpServer(serverId, cfg);
+  const transport = cfg.transport || 'stdio';
+
+  // ---- Header（始终可见） ----
   const header = document.createElement('div');
   header.className = 'mcp-card';
 
   const info = document.createElement('div');
   info.className = 'mcp-card__info';
-  const title = document.createElement('div');
+
+  // 第一行：服务名 + 传输标签 + 状态
+  const titleRow = document.createElement('div');
+  titleRow.style.cssText = 'display:flex;align-items:center;gap:var(--sp-1);flex-wrap:wrap;';
+
+  const title = document.createElement('span');
   title.className = 'mcp-card__name';
   title.textContent = serverId + (minimax ? ' · MiniMax' : '');
+
+  const tTag = document.createElement('span');
+  tTag.className = 'mcp-card__transport';
+  tTag.textContent = transport === 'sse' ? 'SSE' : 'stdio';
+  tTag.style.cssText = transport === 'sse'
+    ? 'font-size:11px;padding:1px 6px;border-radius:var(--r-sm);background:var(--accent-dim, #e8f0fe);color:var(--accent,#1a73e8);font-weight:500;'
+    : 'font-size:11px;padding:1px 6px;border-radius:var(--r-sm);background:var(--bg-2,#eee);color:var(--fg-2,#666);font-weight:500;';
+
   const badge = document.createElement('span');
   badge.className = 'mcp-card__badge' + (status && status.connected ? ' mcp-card__badge--ok' : '');
   badge.textContent = mcpStatusLine(status);
-  title.appendChild(badge);
 
+  titleRow.appendChild(title);
+  titleRow.appendChild(tTag);
+  titleRow.appendChild(badge);
+
+  // 第二行：详情（command / url）
   const detail = document.createElement('div');
   detail.className = 'mcp-card__detail';
-  if (cfg.transport === 'sse') {
-    detail.textContent = 'SSE · ' + (cfg.url || '');
+  if (transport === 'sse') {
+    detail.textContent = '→ ' + (cfg.url || '未配置 URL');
   } else {
-    detail.textContent = (cfg.command || '') + (cfg.args && cfg.args.length ? ' ' + formatArgsList(cfg.args) : '');
+    detail.textContent = '$ ' + (cfg.command || '') + (cfg.args && cfg.args.length ? ' ' + formatArgsList(cfg.args) : '');
   }
 
-  info.appendChild(title);
-  info.appendChild(detail);
+  // 错误信息（未连接时显示）
+  if (status && !status.connected && status.last_error) {
+    const errLine = document.createElement('div');
+    errLine.className = 'mcp-card__error';
+    errLine.textContent = '⚠ ' + status.last_error;
+    info.appendChild(titleRow);
+    info.appendChild(detail);
+    info.appendChild(errLine);
+  } else {
+    info.appendChild(titleRow);
+    info.appendChild(detail);
+  }
 
+  // ---- 操作按钮 ----
   const actions = document.createElement('div');
   actions.className = 'mcp-card__actions';
 
@@ -65,7 +98,6 @@ function buildMcpServerCard(serverId, cfg, status, meta) {
     if (!confirm('确定删除 MCP 服务「' + serverId + '」？')) return;
     wrap.remove();
     updateMcpBoardEmptyState();
-    // 删除后自动保存
     var statusEl = mcpDom.status;
     if (statusEl) statusEl.textContent = '已删除，正在保存…';
     saveMcpEnvAndConfig().catch(function(e) {
@@ -82,6 +114,7 @@ function buildMcpServerCard(serverId, cfg, status, meta) {
   header.appendChild(info);
   header.appendChild(actions);
 
+  // ---- 编辑区（可展开） ----
   const editWrap = document.createElement('div');
   editWrap.className = 'mcp-edit-wrap';
   editWrap.style.display = 'none';
@@ -94,12 +127,48 @@ function buildMcpServerCard(serverId, cfg, status, meta) {
     editWrap.innerHTML = '<input type="hidden" class="mcp-fld-kind" value="generic"/>' +
       mcpGenericFormHtml(cfg, { serverId: serverId, idReadonly: true });
   }
+
+  // 内联操作栏：保存 + 测试 + 删除
+  const editActions = document.createElement('div');
+  editActions.className = 'row-actions mcp-edit-actions';
+  editActions.style.cssText = 'margin:var(--sp-2) 0 0;display:flex;gap:var(--sp-1);';
+  editActions.innerHTML =
+    '<button type="button" class="btn btn--primary btn--sm mcp-apply-btn">应用</button>' +
+    '<button type="button" class="btn btn--ghost btn--sm mcp-test-btn">测试</button>' +
+    '<button type="button" class="btn btn--subtle btn--sm mcp-edit-del-btn" style="margin-left:auto;color:var(--danger);">删除</button>';
+  editWrap.appendChild(editActions);
   editWrap.appendChild(editStatus);
 
+  // 编辑窗「应用」按钮
+  editActions.querySelector('.mcp-apply-btn').addEventListener('click', function() {
+    applyMcpCard(wrap, meta);
+  });
+
+  // 编辑窗「测试」按钮
+  editActions.querySelector('.mcp-test-btn').addEventListener('click', function() {
+    testMcpCard(wrap, meta);
+  });
+
+  // 编辑窗「删除」按钮
+  editActions.querySelector('.mcp-edit-del-btn').addEventListener('click', function() {
+    if (!confirm('确定删除 MCP 服务「' + serverId + '」？')) return;
+    wrap.remove();
+    updateMcpBoardEmptyState();
+    var statusEl = mcpDom.status;
+    if (statusEl) statusEl.textContent = '已删除，正在保存…';
+    saveMcpEnvAndConfig().catch(function(e) {
+      if (statusEl) {
+        statusEl.classList.add('is-err');
+        statusEl.textContent = '删除失败：' + String(e.message || e);
+      }
+    });
+  });
+
+  // Header 点击展开/收起编辑区
   header.style.cursor = 'pointer';
   header.addEventListener('click', function(ev) {
     if (ev.target.closest('.btn')) return;
-    const open = editWrap.style.display !== 'block';
+    var open = editWrap.style.display !== 'block';
     editWrap.style.display = open ? 'block' : 'none';
     editStatus.textContent = '';
     editStatus.classList.remove('is-err');
@@ -109,6 +178,36 @@ function buildMcpServerCard(serverId, cfg, status, meta) {
   wrap.appendChild(editWrap);
   return wrap;
 }
+
+/** 应用单个卡片的修改到 board + 触发全局保存 */
+function applyMcpCard(wrap, meta) {
+  var editStatus = wrap.querySelector('.mcp-edit-wrap .status-line');
+  if (editStatus) {
+    editStatus.textContent = '保存中…';
+    editStatus.classList.remove('is-err');
+  }
+  try {
+    var row = collectServerFromWrap(wrap, meta || {});
+    if (!row) throw new Error('请填写完整配置');
+
+    // 更新卡片 DOM 中的 data-server-id（如果 ID 变了）
+    wrap.setAttribute('data-server-id', row.id);
+
+    // 刷新卡片 header 显示
+    var board = mcpDom.board;
+    if (board) {
+      // 重建卡片（保留原有的 expand/close 状态比较麻烦，走全量 reload）
+      saveMcpEnvAndConfig();
+    }
+  } catch (e) {
+    if (editStatus) {
+      editStatus.classList.add('is-err');
+      editStatus.textContent = String(e.message || e);
+    }
+  }
+}
+
+/* ---- 渲染 ---- */
 
 function renderMcpServerBoard(servers, statusRows, meta) {
   const board = mcpDom.board;
@@ -136,10 +235,12 @@ function updateMcpBoardEmptyState() {
   if (!board.querySelector('.mcp-board-empty')) {
     const p = document.createElement('p');
     p.className = 'mcp-board-empty';
-    p.textContent = '尚未添加 MCP 服务。可从下方模板快速添加 MiniMax、uvx/npx 包或自定义 stdio 服务。';
+    p.textContent = '尚未添加 MCP 服务。可从上方的模板选择器添加 MiniMax、uvx/npx 包、自建 stdio 或 SSE 远程服务。';
     board.appendChild(p);
   }
 }
+
+/* ---- 网络层 ---- */
 
 async function testMcpServerPayload(payload) {
   const r = await fetch('/api/ui/mcp/test', {
@@ -165,15 +266,17 @@ async function testMcpCard(wrap, meta) {
     const payload = Object.assign({ id: row.id }, row.config);
     const j = await testMcpServerPayload(payload);
     const tools = (j.tools || []).join('、');
-    if (statusEl) statusEl.textContent = tools ? ('测试通过：' + tools) : '测试通过';
+    if (statusEl) statusEl.textContent = tools ? ('✅ 测试通过：' + tools) : '✅ 测试通过';
     await loadMcpEnvConfig();
   } catch (e) {
     if (statusEl) {
       statusEl.classList.add('is-err');
-      statusEl.textContent = String(e.message || e);
+      statusEl.textContent = '❌ ' + String(e.message || e);
     }
   }
 }
+
+/* ---- 添加新服务 ---- */
 
 function showNewMcpServerForm(templateId) {
   const board = mcpDom.board;
@@ -188,6 +291,12 @@ function showNewMcpServerForm(templateId) {
   const editWrap = document.createElement('div');
   editWrap.className = 'mcp-edit-wrap';
   editWrap.style.display = 'block';
+
+  // 新表单自带一个较大的 header 说明
+  const hintBar = document.createElement('div');
+  hintBar.style.cssText = 'padding:var(--sp-1) var(--sp-2);background:var(--accent-dim,#e8f0fe);border-radius:var(--r-md) var(--r-md) 0 0;font-size:var(--fs-sm);color:var(--accent,#1a73e8);';
+  hintBar.textContent = '添加新 MCP 服务：' + tpl.label;
+
   const editStatus = document.createElement('div');
   editStatus.className = 'status-line';
 
@@ -230,25 +339,27 @@ function showNewMcpServerForm(templateId) {
       board.appendChild(card);
       wrap.remove();
       editStatus.textContent = '已添加，正在保存…';
-      // 自动保存全部到 mcp.json
       saveMcpEnvAndConfig().then(function() {
-        editStatus.textContent = '已添加并保存。';
+        editStatus.textContent = '✅ 已添加并保存。';
       }).catch(function(e) {
         editStatus.classList.add('is-err');
-        editStatus.textContent = '添加成功但保存失败：' + String(e.message || e) + '，请点击「保存全部」重试。';
+        editStatus.textContent = '❌ 添加成功但保存失败：' + String(e.message || e) + '，请点击「保存全部」重试。';
       });
     } catch (e) {
       editStatus.classList.add('is-err');
-      editStatus.textContent = String(e.message || e);
+      editStatus.textContent = '❌ ' + String(e.message || e);
     }
   });
 
+  wrap.appendChild(hintBar);
   wrap.appendChild(editWrap);
   board.insertBefore(wrap, board.firstChild);
   const empty = board.querySelector('.mcp-board-empty');
   if (empty) empty.remove();
   wrap.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
+
+/* ---- 数据加载与保存 ---- */
 
 async function loadMcpEnvConfig() {
   const status = mcpDom.status;
@@ -324,7 +435,7 @@ async function saveMcpEnvAndConfig() {
     const mcpSave = await mcpR.json().catch(function() { return {}; });
     if (!mcpR.ok) throw new Error(mcpSave.detail || mcpR.statusText);
 
-    status.textContent = '已保存 ' + Object.keys(servers).length + ' 个 MCP 服务。';
+    status.textContent = '✅ 已保存 ' + Object.keys(servers).length + ' 个 MCP 服务。';
     await loadMcpEnvConfig();
     if (typeof refreshMultimodalModelSelects === 'function') {
       refreshMultimodalModelSelects().catch(function() {});
@@ -333,12 +444,13 @@ async function saveMcpEnvAndConfig() {
     }
   } catch (e) {
     status.classList.add('is-err');
-    status.textContent = String(e.message || e);
+    status.textContent = '❌ ' + String(e.message || e);
   }
 }
 
+/* ---- Init ---- */
+
 (function initMcpBoard() {
-  // 一次性填充 DOM 缓存（避免 17 处散落 getElementById）
   [
     ['board',   'mcpServerBoard'],
     ['status',  'mcpEnvStatus'],
@@ -353,8 +465,13 @@ async function saveMcpEnvAndConfig() {
   ].forEach(function(pair) {
     mcpDom[pair[0]] = document.getElementById(pair[1]);
   });
-  if (mcpDom.btn) mcpDom.btn.addEventListener('click', function() { saveMcpEnvAndConfig(); });
-  if (mcpDom.ref) mcpDom.ref.addEventListener('click', function() { loadMcpEnvConfig(); });
+
+  if (mcpDom.btn) {
+    mcpDom.btn.addEventListener('click', function() { saveMcpEnvAndConfig(); });
+  }
+  if (mcpDom.ref) {
+    mcpDom.ref.addEventListener('click', function() { loadMcpEnvConfig(); });
+  }
 
   if (mcpDom.addBtn) {
     mcpDom.addBtn.addEventListener('click', function() {

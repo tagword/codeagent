@@ -239,3 +239,49 @@
   width: 100%;
   box-sizing: border-box;
 }
+
+/* ---- MCP 表单分组 ---- */
+.mcp-form-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+.mcp-field-group {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: var(--sp-2) var(--sp-3);
+  margin-top: var(--sp-1);
+}
+.mcp-field-group__label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  margin-bottom: var(--sp-1);
+  padding-bottom: var(--sp-1);
+  border-bottom: 1px solid var(--border);
+}
+.mcp-field-group .form-label {
+  margin-top: var(--sp-1);
+}
+
+/* ---- 卡片内联编辑动作 ---- */
+.mcp-edit-actions {
+  padding-top: var(--sp-2);
+  border-top: 1px solid var(--border-soft);
+}
+
+/* ---- 卡片错误行 ---- */
+.mcp-card__error {
+  font-size: 11px;
+  color: var(--danger);
+  margin-top: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+/* ---- 卡片传输类型标签（由 JS 内联 style 控制） ---- */

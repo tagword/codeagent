@@ -5,6 +5,8 @@
  *   上游依赖：00-utils.js（escAttr）。
  * ================================================================ */
 
+/* ---- 表单构造 ---- */
+
 function mcpGenericFormHtml(cfg, opts) {
   opts = opts || {};
   cfg = cfg || {};
@@ -14,31 +16,51 @@ function mcpGenericFormHtml(cfg, opts) {
   const stdioSel = transport === 'stdio' ? ' selected' : '';
   const sseVis = transport === 'sse' ? '' : ' style="display:none;"';
   const stdioVis = transport === 'stdio' ? '' : ' style="display:none;"';
+
+  const c = function(v) { return escAttr(v || ''); };
+
   return (
+    // ---- 基础信息 ----
+    '<div class="mcp-form-section">' +
     '<label class="form-label">服务 ID</label>' +
-    '<input class="mcp-fld-id form-input-sm" type="text" placeholder="MyMCP" value="' + escAttr(opts.serverId || '') + '"' + idReadonly + '/>' +
-    '<label class="checkbox-row" style="margin:var(--sp-2) 0;">' +
+    '<input class="mcp-fld-id form-input-sm" type="text" placeholder="MyMCP" value="' + c(opts.serverId || '') + '"' + idReadonly + '/>' +
+
+    '<label class="checkbox-row" style="margin:var(--sp-1) 0 var(--sp-2);">' +
     '<input type="checkbox" class="mcp-fld-enabled"' + (cfg.enabled !== false ? ' checked' : '') + '/>' +
     '<span>启用</span></label>' +
+
+    // ---- 传输协议选择 ----
+    '<div class="form-row">' +
     '<label class="form-label">传输协议</label>' +
     '<select class="mcp-fld-transport form-input-sm mcp-transport-sel" onchange="mcpToggleTransport(this)">' +
-    '<option value="stdio"' + stdioSel + '>stdio（本地子进程）</option>' +
+    '<option value="stdio"' + stdioSel + '>stdio（本地进程）</option>' +
     '<option value="sse"' + sseSel + '>SSE（远程 HTTP）</option>' +
-    '</select>' +
-    '<div class="mcp-stdio-fields"' + stdioVis + '>' +
+    '</select></div>' +
+
+    // ---- stdio 字段组 ----
+    '<div class="mcp-stdio-fields mcp-field-group"' + stdioVis + '>' +
+    '<div class="mcp-field-group__label">子进程配置</div>' +
     '<label class="form-label">Command</label>' +
-    '<input class="mcp-fld-command form-input-sm" type="text" placeholder="uvx / npx / /path/to/bin" value="' + escAttr(cfg.command || '') + '"/>' +
+    '<input class="mcp-fld-command form-input-sm" type="text" placeholder="uvx / npx / /path/to/bin" value="' + c(cfg.command || '') + '"/>' +
     '<label class="form-label">Args</label>' +
-    '<input class="mcp-fld-args form-input-sm" type="text" placeholder="pkg -y 或 JSON 数组" value="' + escAttr(formatArgsList(cfg.args)) + '"/>' +
+    '<input class="mcp-fld-args form-input-sm" type="text" placeholder="pkg -y 或 JSON 数组" value="' + c(formatArgsList(cfg.args)) + '"/>' +
     '<label class="form-label">工作目录 cwd（可选）</label>' +
-    '<input class="mcp-fld-cwd form-input-sm" type="text" value="' + escAttr(cfg.cwd || '') + '"/>' +
+    '<input class="mcp-fld-cwd form-input-sm" type="text" value="' + c(cfg.cwd || '') + '"/>' +
     '</div>' +
-    '<div class="mcp-sse-fields"' + sseVis + '>' +
+
+    // ---- SSE 字段组 ----
+    '<div class="mcp-sse-fields mcp-field-group"' + sseVis + '>' +
+    '<div class="mcp-field-group__label">远程连接配置</div>' +
     '<label class="form-label">SSE Endpoint URL</label>' +
-    '<input class="mcp-fld-url form-input-sm" type="text" placeholder="http://host:port/sse" value="' + escAttr(cfg.url || '') + '"/>' +
+    '<input class="mcp-fld-url form-input-sm" type="text" placeholder="http://host:port/sse" value="' + c(cfg.url || '') + '"/>' +
     '</div>' +
-    '<label class="form-label">环境变量（每行 KEY=value）</label>' +
-    '<textarea class="mcp-fld-env form-input-sm" rows="4" placeholder="API_KEY=sk-...">' + escAttr(formatEnvLines(cfg.env)) + '</textarea>'
+
+    // ---- 环境变量 ----
+    '<div class="mcp-field-group">' +
+    '<div class="mcp-field-group__label">环境变量</div>' +
+    '<textarea class="mcp-fld-env form-input-sm" rows="4" placeholder="KEY=value&#10;每行一个" style="font-family:var(--font-mono);font-size:var(--fs-sm);">' + c(formatEnvLines(cfg.env)) + '</textarea>' +
+    '</div>' +
+    '</div>'
   );
 }
 
@@ -46,30 +68,40 @@ function mcpMinimaxFormHtml(cfg, meta) {
   meta = meta || {};
   cfg = cfg || {};
   const env = cfg.env || {};
+  const c = function(v) { return escAttr(v || ''); };
   return (
     '<input type="hidden" class="mcp-fld-kind" value="minimax"/>' +
+
+    '<div class="mcp-form-section">' +
     '<label class="checkbox-row" style="margin:0 0 var(--sp-2);">' +
     '<input type="checkbox" class="mcp-fld-enabled"' + (cfg.enabled !== false ? ' checked' : '') + '/>' +
     '<span>启用 MiniMax MCP</span></label>' +
+
+    '<div class="mcp-field-group">' +
+    '<div class="mcp-field-group__label">密钥</div>' +
     '<div class="form-row sub-row">' +
     '  <label class="form-label">Token Plan API Key</label>' +
-    '  <input class="mcp-fld-minimax-key form-input-sm" type="password" value="' + escAttr(env.MINIMAX_API_KEY || '') + '" autocomplete="off"/>' +
+    '  <input class="mcp-fld-minimax-key form-input-sm" type="password" value="' + c(env.MINIMAX_API_KEY || '') + '" autocomplete="off"/>' +
     '</div>' +
     '<div class="form-row sub-row">' +
     '  <label class="form-label">朗读 API Key（可选）</label>' +
-    '  <input class="mcp-fld-minimax-tts-key form-input-sm" type="password" value="' + escAttr(env.MINIMAX_TTS_API_KEY || '') + '" autocomplete="off"/>' +
+    '  <input class="mcp-fld-minimax-tts-key form-input-sm" type="password" value="' + c(env.MINIMAX_TTS_API_KEY || '') + '" autocomplete="off"/>' +
     '</div>' +
+    '</div>' +
+
+    '<div class="mcp-field-group">' +
+    '<div class="mcp-field-group__label">高级选项</div>' +
     '<div class="form-row sub-row">' +
     '  <label class="form-label">API Host</label>' +
-    '  <input class="mcp-fld-minimax-host form-input-sm" type="text" value="' + escAttr(env.MINIMAX_API_HOST || 'https://api.minimaxi.com') + '"/>' +
+    '  <input class="mcp-fld-minimax-host form-input-sm" type="text" value="' + c(env.MINIMAX_API_HOST || 'https://api.minimaxi.com') + '"/>' +
     '</div>' +
     '<div class="form-row sub-row">' +
     '  <label class="form-label">uvx 路径</label>' +
-    '  <input class="mcp-fld-minimax-uvx form-input-sm" type="text" value="' + escAttr(cfg.command || meta.uvx_path || 'uvx') + '"/>' +
+    '  <input class="mcp-fld-minimax-uvx form-input-sm" type="text" value="' + c(cfg.command || meta.uvx_path || 'uvx') + '"/>' +
     '</div>' +
     '<div class="form-row sub-row">' +
     '  <label class="form-label">本地输出目录</label>' +
-    '  <input class="mcp-fld-minimax-base form-input-sm" type="text" value="' + escAttr(env.MINIMAX_MCP_BASE_PATH || meta.minimax_output_dir || '') + '"/>' +
+    '  <input class="mcp-fld-minimax-base form-input-sm" type="text" value="' + c(env.MINIMAX_MCP_BASE_PATH || meta.minimax_output_dir || '') + '"/>' +
     '</div>' +
     '<div class="form-row sub-row">' +
     '  <label class="form-label">资源模式</label>' +
@@ -78,11 +110,15 @@ function mcpMinimaxFormHtml(cfg, meta) {
     '    <option value="url"' + (env.MINIMAX_API_RESOURCE_MODE === 'url' ? ' selected' : '') + '>url</option>' +
     '    <option value="local"' + (env.MINIMAX_API_RESOURCE_MODE === 'local' ? ' selected' : '') + '>local</option>' +
     '  </select>' +
+    '</div>' +
+    '</div>' +
     '</div>'
   );
 }
 
-/** Toggle stdio/sse field visibility on transport select change. */
+/* ---- Transport 切换 ---- */
+
+/** Toggle stdio/sse field visibility + update hint. */
 function mcpToggleTransport(sel) {
   var wrap = sel.closest('.mcp-card-wrap') || sel.closest('.mcp-edit-wrap');
   if (!wrap) return;
@@ -98,6 +134,8 @@ function mcpToggleTransport(sel) {
   }
 }
 
+/* ---- 采集器 ---- */
+
 function collectGenericServerFromWrap(wrap) {
   const id = (wrap.querySelector('.mcp-fld-id') || {}).value.trim();
   if (!validateMcpServerId(id)) throw new Error('服务 ID 无效（字母开头，仅含字母数字 _ -）');
@@ -109,13 +147,7 @@ function collectGenericServerFromWrap(wrap) {
     const url = (wrap.querySelector('.mcp-fld-url') || {}).value.trim();
     if (enabled && !url) throw new Error('服务「' + id + '」：SSE 模式请填写 URL');
     if (!enabled && !url) return null;
-    const row = {
-      enabled: enabled,
-      transport: 'sse',
-      url: url,
-      env: env,
-    };
-    return { id: id, config: row };
+    return { id: id, config: { enabled: enabled, transport: 'sse', url: url, env: env } };
   }
 
   // stdio
@@ -124,13 +156,7 @@ function collectGenericServerFromWrap(wrap) {
   const cwd = (wrap.querySelector('.mcp-fld-cwd') || {}).value.trim();
   if (!enabled && !command) return null;
   if (enabled && !command) throw new Error('服务「' + id + '」：请填写 command');
-  const row = {
-    enabled: enabled,
-    transport: 'stdio',
-    command: command,
-    args: args,
-    env: env,
-  };
+  const row = { enabled: enabled, transport: 'stdio', command: command, args: args, env: env };
   if (cwd) row.cwd = cwd;
   return { id: id, config: row };
 }
@@ -155,13 +181,7 @@ function collectMinimaxServerFromWrap(wrap, meta) {
   if (mode === 'url' || mode === 'local') env.MINIMAX_API_RESOURCE_MODE = mode;
   return {
     id: MINIMAX_MCP_ID,
-    config: {
-      enabled: enabled,
-      transport: 'stdio',
-      command: uvx,
-      args: ['minimax-coding-plan-mcp', '-y'],
-      env: env,
-    },
+    config: { enabled: enabled, transport: 'stdio', command: uvx, args: ['minimax-coding-plan-mcp', '-y'], env: env },
   };
 }
 

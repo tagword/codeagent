@@ -128,13 +128,16 @@ function validateMcpServerId(id) {
   return /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(String(id || '').trim());
 }
 
+/** 生成简短的状态行文字（用于卡片 badge）。 */
 function mcpStatusLine(status) {
   if (!status) return '未探测';
   if (status.connected) {
-    let s = '已连接';
-    if (status.tools && status.tools.length) s += '（' + status.tools.join('、') + '）';
-    else if (status.tool_count) s += '（' + status.tool_count + ' 个工具）';
-    return s;
+    var parts = [];
+    parts.push('已连接');
+    if (status.tools && status.tools.length) {
+      parts.push(status.tools.length + ' 工具');
+    }
+    return parts.join(' · ');
   }
   if (!status.enabled) return '已禁用';
   return '未连接';
