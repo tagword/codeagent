@@ -63,14 +63,35 @@ function _switchToAgent(agentId) {
   })
     .then(function(r){ return r.json(); })
     .then(function(data){
-      // 切换成功 — 重新加载聊天会话列表
-      console.log('切换到 Agent:', agentId);
-      if (typeof loadChatTree === 'function') loadChatTree(agentId);
-      // 如果当前在聊天页且有会话列表，刷新它
-      if (typeof addTreeSession === 'function') {
-        // 会话列表会在 tree 加载时自动更新
+      // 更新全局 agentId（01c-session-identity.js 中定义的可写变量）
+      if (typeof window.agentId !== 'undefined') {
+        window.agentId = agentId;
       }
-      // 更新所有 agent 相关 UI 的选中状态
+
+      // 更新会话 ID — 如果有当前会话则切换到该 agent 的会话
+      if (data.sessions && data.sessions.length > 0) {
+        var firstSession = data.sessions[0];
+        if (firstSession.id && typeof setSessionId === 'function') {
+          setSessionId(firstSession.id);
+        }
+      }
+
+      // 重新连接 WebSocket（带上新的 agent_id）
+      if (typeof reconnectWsForSession === 'function') {
+        reconnectWsForSession();
+      }
+
+      // 重新加载聊天树
+      if (typeof loadChatTree === 'function') {
+        loadChatTree(agentId);
+      }
+
+      // 更新 session 列表
+      if (typeof refreshSessionList === 'function') {
+        refreshSessionList();
+      }
+
+      // 更新所有 agent 卡片高亮
       document.querySelectorAll('[data-agent-id]').forEach(function(el){
         el.classList.toggle('agent-card--active', el.dataset.agentId === agentId);
       });
