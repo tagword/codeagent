@@ -9,18 +9,34 @@ function mcpGenericFormHtml(cfg, opts) {
   opts = opts || {};
   cfg = cfg || {};
   const idReadonly = opts.idReadonly ? ' readonly' : '';
+  const transport = cfg.transport || 'stdio';
+  const sseSel = transport === 'sse' ? ' selected' : '';
+  const stdioSel = transport === 'stdio' ? ' selected' : '';
+  const sseVis = transport === 'sse' ? '' : ' style="display:none;"';
+  const stdioVis = transport === 'stdio' ? '' : ' style="display:none;"';
   return (
     '<label class="form-label">服务 ID</label>' +
     '<input class="mcp-fld-id form-input-sm" type="text" placeholder="MyMCP" value="' + escAttr(opts.serverId || '') + '"' + idReadonly + '/>' +
     '<label class="checkbox-row" style="margin:var(--sp-2) 0;">' +
     '<input type="checkbox" class="mcp-fld-enabled"' + (cfg.enabled !== false ? ' checked' : '') + '/>' +
     '<span>启用</span></label>' +
+    '<label class="form-label">传输协议</label>' +
+    '<select class="mcp-fld-transport form-input-sm mcp-transport-sel" onchange="mcpToggleTransport(this)">' +
+    '<option value="stdio"' + stdioSel + '>stdio（本地子进程）</option>' +
+    '<option value="sse"' + sseSel + '>SSE（远程 HTTP）</option>' +
+    '</select>' +
+    '<div class="mcp-stdio-fields"' + stdioVis + '>' +
     '<label class="form-label">Command</label>' +
     '<input class="mcp-fld-command form-input-sm" type="text" placeholder="uvx / npx / /path/to/bin" value="' + escAttr(cfg.command || '') + '"/>' +
     '<label class="form-label">Args</label>' +
     '<input class="mcp-fld-args form-input-sm" type="text" placeholder="pkg -y 或 JSON 数组" value="' + escAttr(formatArgsList(cfg.args)) + '"/>' +
     '<label class="form-label">工作目录 cwd（可选）</label>' +
     '<input class="mcp-fld-cwd form-input-sm" type="text" value="' + escAttr(cfg.cwd || '') + '"/>' +
+    '</div>' +
+    '<div class="mcp-sse-fields"' + sseVis + '>' +
+    '<label class="form-label">SSE Endpoint URL</label>' +
+    '<input class="mcp-fld-url form-input-sm" type="text" placeholder="http://host:port/sse" value="' + escAttr(cfg.url || '') + '"/>' +
+    '</div>' +
     '<label class="form-label">环境变量（每行 KEY=value）</label>' +
     '<textarea class="mcp-fld-env form-input-sm" rows="4" placeholder="API_KEY=sk-...">' + escAttr(formatEnvLines(cfg.env)) + '</textarea>'
   );
@@ -66,14 +82,46 @@ function mcpMinimaxFormHtml(cfg, meta) {
   );
 }
 
+/** Toggle stdio/sse field visibility on transport select change. */
+function mcpToggleTransport(sel) {
+  var wrap = sel.closest('.mcp-card-wrap') || sel.closest('.mcp-edit-wrap');
+  if (!wrap) return;
+  var stdioFields = wrap.querySelector('.mcp-stdio-fields');
+  var sseFields = wrap.querySelector('.mcp-sse-fields');
+  if (!stdioFields || !sseFields) return;
+  if (sel.value === 'sse') {
+    stdioFields.style.display = 'none';
+    sseFields.style.display = '';
+  } else {
+    stdioFields.style.display = '';
+    sseFields.style.display = 'none';
+  }
+}
+
 function collectGenericServerFromWrap(wrap) {
   const id = (wrap.querySelector('.mcp-fld-id') || {}).value.trim();
   if (!validateMcpServerId(id)) throw new Error('服务 ID 无效（字母开头，仅含字母数字 _ -）');
   const enabled = !!(wrap.querySelector('.mcp-fld-enabled') || {}).checked;
+  const transport = (wrap.querySelector('.mcp-fld-transport') || {}).value || 'stdio';
+  const env = parseEnvLines((wrap.querySelector('.mcp-fld-env') || {}).value);
+
+  if (transport === 'sse') {
+    const url = (wrap.querySelector('.mcp-fld-url') || {}).value.trim();
+    if (enabled && !url) throw new Error('服务「' + id + '」：SSE 模式请填写 URL');
+    if (!enabled && !url) return null;
+    const row = {
+      enabled: enabled,
+      transport: 'sse',
+      url: url,
+      env: env,
+    };
+    return { id: id, config: row };
+  }
+
+  // stdio
   const command = (wrap.querySelector('.mcp-fld-command') || {}).value.trim();
   const args = parseArgsText((wrap.querySelector('.mcp-fld-args') || {}).value);
   const cwd = (wrap.querySelector('.mcp-fld-cwd') || {}).value.trim();
-  const env = parseEnvLines((wrap.querySelector('.mcp-fld-env') || {}).value);
   if (!enabled && !command) return null;
   if (enabled && !command) throw new Error('服务「' + id + '」：请填写 command');
   const row = {

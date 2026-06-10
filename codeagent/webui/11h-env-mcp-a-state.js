@@ -57,6 +57,19 @@ var MCP_TEMPLATES = [
     },
     hint: '填写 command、args 与环境变量',
   },
+  {
+    id: 'sse',
+    label: 'SSE 远程服务器',
+    serverId: '',
+    kind: 'generic',
+    config: {
+      enabled: true,
+      transport: 'sse',
+      url: '',
+      env: {},
+    },
+    hint: '填写 SSE endpoint URL（如 http://host:port/sse）',
+  },
 ];
 
 window._mcpConfigCache = { servers: {} };
