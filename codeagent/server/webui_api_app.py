@@ -340,6 +340,71 @@ def _session_history_json_for_session(
     )
 
 
+def _agents_dir() -> Path:
+    """Return the agents root directory (~/.codeagent/agents)."""
+    from codeagent.core.paths import codeagent_home
+    return codeagent_home() / "agents"
+
+
+def _list_agent_metas() -> list[dict]:
+    """Scan all agents on the filesystem and return metadata list."""
+    ad = _agents_dir()
+    if not ad.is_dir():
+        return []
+    agents: list[dict] = []
+    for entry in sorted(ad.iterdir()):
+        if not entry.is_dir():
+            continue
+        persona_dir = entry / "persona"
+        if not persona_dir.is_dir():
+            continue
+        agent_id = entry.name
+        # Read system prompt
+        sys_file = persona_dir / "system.md"
+        system_prompt = sys_file.read_text(encoding="utf-8") if sys_file.is_file() else ""
+        # Read tools.json
+        tools = {}
+        tools_file = entry / "tools.json"
+        if tools_file.is_file():
+            try:
+                tools = json.loads(tools_file.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                tools = {}
+        agents.append({
+            "id": agent_id,
+            "name": agent_id,
+            "system_prompt": system_prompt,
+            "tools": tools,
+        })
+    return agents
+
+
+def _read_agent_file(agent_id: str, *rel_parts: str) -> str | None:
+    """Read a file inside an agent's directory if it exists."""
+    p = _agents_dir() / agent_id
+    for part in rel_parts:
+        p = p / part
+    try:
+        if p.is_file():
+            return p.read_text(encoding="utf-8")
+    except OSError:
+        pass
+    return None
+
+
+def _write_agent_file(agent_id: str, content: str, *rel_parts: str) -> bool:
+    """Write a file inside an agent's directory. Returns True on success."""
+    p = _agents_dir() / agent_id
+    for part in rel_parts:
+        p = p / part
+    try:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(content, encoding="utf-8")
+        return True
+    except OSError:
+        return False
+
+
 def build_webui_api_app(project_root: Path) -> Starlette:
     project_root = project_root.resolve()
 
@@ -1875,6 +1940,98 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         }
         return await _llm_probe_response(mapped)
 
+    # ── Agent CRUD ──────────────────────────────────────────────
+
+    async def api_agents_list(request: Request) -> JSONResponse:
+        agents = _list_agent_metas()
+        return JSONResponse({"agents": agents})
+
+    async def api_agents_create(request: Request) -> JSONResponse:
+        try:
+            body = await request.json()
+        except Exception:
+            return JSONResponse({"detail": "invalid json"}, status_code=400)
+        agent_id = (body.get("id") or "").strip()
+        if not agent_id:
+            return JSONResponse({"detail": "agent id is required"}, status_code=400)
+        # Check for conflict
+        ad = _agents_dir()
+        if (ad / agent_id).exists():
+            return JSONResponse({"detail": f"agent '{agent_id}' already exists"}, status_code=409)
+        # Create agent scaffolding
+        from codeagent.core.paths import ensure_agent_scaffold
+        ensure_agent_scaffold(agent_id)
+        # Write system prompt if provided
+        sp = (body.get("system_prompt") or "").strip()
+        if sp:
+            _write_agent_file(agent_id, sp, "persona", "system.md")
+        # Write tools if provided
+        tools = body.get("tools")
+        if tools is not None:
+            tools_file = ad / agent_id / "tools.json"
+            tools_file.write_text(json.dumps(tools, indent=2, ensure_ascii=False), encoding="utf-8")
+        return JSONResponse({"agent": {"id": agent_id, "name": agent_id}}, status_code=201)
+
+    async def api_agents_get(request: Request) -> JSONResponse:
+        agent_id = request.path_params.get("agent_id", "")
+        ad = _agents_dir() / agent_id
+        if not ad.is_dir() or not (ad / "persona").is_dir():
+            return JSONResponse({"detail": "agent not found"}, status_code=404)
+        system_prompt = _read_agent_file(agent_id, "persona", "system.md") or ""
+        tools_raw = _read_agent_file(agent_id, "tools.json")
+        tools = {}
+        if tools_raw:
+            try:
+                tools = json.loads(tools_raw)
+            except json.JSONDecodeError:
+                tools = {}
+        return JSONResponse({
+            "agent": {
+                "id": agent_id,
+                "name": agent_id,
+                "system_prompt": system_prompt,
+                "tools": tools,
+            }
+        })
+
+    async def api_agents_update(request: Request) -> JSONResponse:
+        agent_id = request.path_params.get("agent_id", "")
+        ad = _agents_dir() / agent_id
+        if not ad.is_dir() or not (ad / "persona").is_dir():
+            return JSONResponse({"detail": "agent not found"}, status_code=404)
+        try:
+            body = await request.json()
+        except Exception:
+            return JSONResponse({"detail": "invalid json"}, status_code=400)
+        # Update system prompt
+        if "system_prompt" in body:
+            sp = (body["system_prompt"] or "").strip()
+            _write_agent_file(agent_id, sp, "persona", "system.md")
+        # Update tools
+        if "tools" in body:
+            tools = body["tools"]
+            tools_file = ad / "tools.json"
+            if tools:
+                tools_file.write_text(json.dumps(tools, indent=2, ensure_ascii=False), encoding="utf-8")
+            else:
+                tools_file.unlink(missing_ok=True)
+        return JSONResponse({"agent": {"id": agent_id, "name": agent_id}})
+
+    async def api_agents_delete(request: Request) -> JSONResponse:
+        agent_id = request.path_params.get("agent_id", "")
+        ad = _agents_dir() / agent_id
+        if not ad.is_dir():
+            return JSONResponse({"detail": "agent not found"}, status_code=404)
+        # Cannot delete default agent
+        if agent_id == "default":
+            return JSONResponse({"detail": "cannot delete default agent"}, status_code=403)
+        # Recursive delete
+        import shutil
+        shutil.rmtree(ad, ignore_errors=True)
+        return JSONResponse({"detail": "deleted"})
+
+    # ── Routes ─────────────────────────────────────────────────
+
     routes = [
         Route("/flags", api_flags, methods=["GET"]),
         Route("/auth/status", api_auth_status, methods=["GET"]),
@@ -1932,6 +2089,12 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         Route("/files/read", api_files_read, methods=["GET"]),
         Route("/setup/finish", api_setup_finish, methods=["POST"]),
         Route("/setup/test-llm", api_setup_test_llm, methods=["POST"]),
+        # Agent CRUD
+        Route("/agents", api_agents_list, methods=["GET"]),
+        Route("/agents", api_agents_create, methods=["POST"]),
+        Route("/agents/{agent_id}", api_agents_get, methods=["GET"]),
+        Route("/agents/{agent_id}", api_agents_update, methods=["PUT"]),
+        Route("/agents/{agent_id}", api_agents_delete, methods=["DELETE"]),
     ]
 
     return Starlette(debug=False, routes=routes)
