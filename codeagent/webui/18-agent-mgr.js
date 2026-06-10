@@ -71,14 +71,63 @@ function _showAgentDetail(agentId) {
         html += '<span class="agent-detail__tool-tag">' + escHtml(t) + '</span>';
       });
     }
-    html += '</div></div>';
+    html += '</div>'
+      // Session list placeholder
+      + '<div class="agent-detail__section"><h4 class="agent-detail__section-title">会话列表</h4>'
+      + '<div id="agentSessionList" class="agent-detail__session-list"><span class="text-dim">加载中...</span></div>'
+      + '</div>'
+      + '</div>';
     document.getElementById('agentDetailContent').innerHTML = html;
 
     document.getElementById('btnAgentEdit').onclick = function(){ _openAgentModal(a.id); };
     document.getElementById('btnAgentDelete').onclick = function(){ _deleteAgent(a.id); };
+
+    // Load sessions for this agent
+    _loadAgentSessions(agentId);
   }).catch(function(err){
     _agentSetStatus('error', err.message);
   });
+}
+
+function _loadAgentSessions(agentId) {
+  var url = '/api/ui/agents/' + encodeURIComponent(agentId) + '/sessions';
+  fetch(apiUrl(url))
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      var el = document.getElementById('agentSessionList');
+      if (!el) return;
+      var sessions = data.sessions || [];
+      if (sessions.length === 0) {
+        el.innerHTML = '<div class="agent-detail__empty">该 Agent 暂无会话</div>';
+        return;
+      }
+      var html = '';
+      sessions.forEach(function(s){
+        var title = s.title || s.id || '(未命名)';
+        var time = s.updated_at || s.created_at || '';
+        if (time) {
+          try { time = new Date(time).toLocaleString(); } catch(e) { time = ''; }
+        }
+        html += '<div class="agent-detail__session-item" data-session-id="' + escAttr(s.id) + '" data-agent-id="' + escAttr(agentId) + '">'
+          + '<span class="agent-detail__session-title">' + escHtml(title) + '</span>'
+          + (time ? '<span class="agent-detail__session-time">' + escHtml(time) + '</span>' : '')
+          + '</div>';
+      });
+      el.innerHTML = html;
+      // Click to switch to chat page
+      el.querySelectorAll('.agent-detail__session-item').forEach(function(item){
+        item.addEventListener('click', function(){
+          var sid = item.dataset.sessionId;
+          if (sid && typeof switchToPage === 'function') {
+            switchToPage('page-chat');
+          }
+        });
+      });
+    })
+    .catch(function(err){
+      var el = document.getElementById('agentSessionList');
+      if (el) el.innerHTML = '<span class="text-dim">加载失败</span>';
+    });
 }
 
 function _deleteAgent(agentId) {
