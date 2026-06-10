@@ -2298,6 +2298,67 @@ def build_webui_api_app(project_root: Path) -> Starlette:
             return JSONResponse({"detail": "run not found"}, status_code=404)
         return JSONResponse({"run": run})
 
+    # ── Health / Watchdog ──────────────────────────────────────
+
+    async def api_health_heartbeat(_: Request) -> JSONResponse:
+        """POST /api/health/heartbeat — update agent heartbeat."""
+        ts = time.time()
+        from codeagent.core.paths import codeagent_home
+        hb_file = Path(codeagent_home()) / "heartbeat"
+        hb_file.parent.mkdir(parents=True, exist_ok=True)
+        hb_file.write_text(str(ts), encoding="utf-8")
+        return JSONResponse({"ts": ts})
+
+    async def api_health_status(_: Request) -> JSONResponse:
+        """GET /api/health/status — return heartbeat + process status."""
+        from codeagent.core.paths import codeagent_home
+        hb_file = Path(codeagent_home()) / "heartbeat"
+        now = time.time()
+        last_hb = 0.0
+        if hb_file.is_file():
+            try:
+                last_hb = float(hb_file.read_text(encoding="utf-8").strip())
+            except (ValueError, OSError):
+                pass
+        import os
+        elapsed = now - last_hb if last_hb > 0 else -1
+        status = "alive" if 0 < elapsed < 180 else ("stuck" if elapsed >= 180 else "unknown")
+        return JSONResponse({
+            "status": status,
+            "last_heartbeat": last_hb,
+            "elapsed_seconds": round(elapsed, 1) if elapsed >= 0 else None,
+            "process_id": os.getpid(),
+        })
+
+    # ── Health / Watchdog ──────────────────────────────────────
+
+    async def api_health_heartbeat(_: Request) -> JSONResponse:
+        """POST /api/health/heartbeat — update agent heartbeat."""
+        ts = time.time()
+        hb_file = Path(codeagent_home()) / "heartbeat"
+        hb_file.parent.mkdir(parents=True, exist_ok=True)
+        hb_file.write_text(str(ts), encoding="utf-8")
+        return JSONResponse({"ts": ts})
+
+    async def api_health_status(_: Request) -> JSONResponse:
+        """GET /api/health/status — return heartbeat + process status."""
+        hb_file = Path(codeagent_home()) / "heartbeat"
+        now = time.time()
+        last_hb = 0.0
+        if hb_file.is_file():
+            try:
+                last_hb = float(hb_file.read_text(encoding="utf-8").strip())
+            except (ValueError, OSError):
+                pass
+        elapsed = now - last_hb if last_hb > 0 else -1
+        status = "alive" if 0 < elapsed < 180 else ("stuck" if elapsed >= 180 else "unknown")
+        return JSONResponse({
+            "status": status,
+            "last_heartbeat": last_hb,
+            "elapsed_seconds": round(elapsed, 1) if elapsed >= 0 else None,
+            "process_id": os.getpid(),
+        })
+
     # ── Routes ─────────────────────────────────────────────────
 
     routes = [
@@ -2380,6 +2441,9 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         Route("/hub/send", api_hub_send, methods=["POST"]),
         Route("/hub/events", api_hub_events, methods=["GET"]),
         Route("/hub/messages", api_hub_messages, methods=["GET"]),
+        # Health / Watchdog
+        Route("/health/heartbeat", api_health_heartbeat, methods=["POST"]),
+        Route("/health/status", api_health_status, methods=["GET"]),
     ]
 
     return Starlette(debug=False, routes=routes)
