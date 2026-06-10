@@ -224,3 +224,65 @@
   align-items: center;
   gap: var(--sp-1);
 }
+
+/* ── 健康看板 ── */
+.health-section {
+  margin-bottom: var(--sp-4);
+}
+
+.health-section h3 {
+  font-size: var(--fs-base);
+  font-weight: 600;
+  color: var(--text);
+  margin: 0 0 var(--sp-2);
+}
+
+.health-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: var(--sp-2);
+}
+
+.health-card {
+  padding: var(--sp-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.health-card__label {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+
+.health-card__value {
+  font-size: var(--fs-base);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.health-runs {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.health-run {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-1) var(--sp-2);
+  font-size: var(--fs-sm);
+}
+
+.health-run__icon { font-size: 14px; }
+.health-run__id { color: var(--accent); font-family: monospace; }
+.health-run__status { color: var(--text-dim); }
+.health-run__time { margin-left: auto; color: var(--text-muted); font-size: var(--fs-xs); }
+
+.health__error {
+  padding: var(--sp-4);
+  color: #e53e3e;
+  font-size: var(--fs-sm);
+}
