@@ -57,6 +57,40 @@ def get_cached_system_prompt(session, *, agent_id: str | None = None) -> str:
     return fresh
 
 
+def _codeagent_vars_dict(agent_id: str) -> dict[str, str]:
+    """CodeAgent-specific variables extending Seed's base vars.
+
+    These are product-level path concepts relative to the CodeAgent
+    working directory (``Path.cwd()``), which may differ from Seed's
+    ``project_root()`` (``$SEED_PROJECT_ROOT``).
+    """
+    from seed.core.paths import agent_home
+    from pathlib import Path
+
+    root = Path.cwd().resolve()
+    return {
+        "SESSIONS_ARTIFACTS": str(agent_home(agent_id) / "sessions" / "_artifacts"),
+        "PLANS": str(root / ".plans"),
+        "SCRIPTS": str(root / ".scripts"),
+        "DOCS": str(root / "docs"),
+        "TMP": str(root / ".tmp"),
+        "SESSION_LOG": str(root / "session-log"),
+        "AGENT_STATE": str(root / ".agent-state.md"),
+    }
+
+
+def _codeagent_path_registry(vars_dict: dict[str, str]) -> str:
+    """Build the CodeAgent extension of the path registry table."""
+    rows: list[str] = [
+        "\n\n## 路径基准（CodeAgent 扩展）\n",
+        "| 变量 | 当前值 |",
+        "|------|--------|",
+    ]
+    for key in sorted(vars_dict):
+        rows.append(f"| `${key}` | `{vars_dict[key]}` |")
+    return "\n".join(rows)
+
+
 def fresh_system_prompt(*, agent_id: str | None = None) -> str:
     """
     System prompt for chat: respects Web UI ``config_md_enabled``, plugin skills
@@ -66,34 +100,52 @@ def fresh_system_prompt(*, agent_id: str | None = None) -> str:
     if explicit.strip():
         return explicit.strip()
 
+    from seed.core.paths import agent_id_default
+
+    aid = (agent_id or "").strip() or agent_id_default()
+
     from codeagent.core.settings import get_system_prompt_filenames
 
     base = build_system_prompt(
         base=project_root(),
         filenames=get_system_prompt_filenames(),
+        agent_id=aid,
     )
 
-    try:
-        from seed.core.paths import agent_id_default, agent_persona_memory_path
+    # Merge Seed vars + CodeAgent vars for memory.md rendering
+    from seed.core.config_plane import render_persona, _build_seed_vars_dict
 
-        aid = (agent_id or "").strip() or agent_id_default()
+    seed_vars = _build_seed_vars_dict(aid, project_root())
+    ca_vars = _codeagent_vars_dict(aid)
+    all_vars: dict[str, str] = {**seed_vars, **ca_vars}
+
+    try:
+        from seed.core.paths import agent_persona_memory_path
+
         p = agent_persona_memory_path(aid)
         if p.is_file():
             text = p.read_text(encoding="utf-8").strip()
             if text:
+                # Render memory.md through render_persona (expands $VAR in memory content)
+                text = render_persona(text, all_vars)
                 max_chars = int(pick_nonempty(*_ea.PERSONA_MEMORY_MAX_CHARS) or "4000")
                 max_chars = max(200, min(max_chars, 50_000))
                 if len(text) > max_chars:
                     text = text[: max_chars - 20].rstrip() + "\n…[已截断]"
+                header_path = f"agents/{aid}/persona/memory.md"
                 base = (
                     base.rstrip()
                     + "\n\n---\n"
-                    + f"## Persona core memory (`agents/{aid}/persona/memory.md`)\n\n"
+                    + f"## Persona core memory (`{header_path}`)\n\n"
                     + text
                     + "\n"
                 )
     except Exception:
         pass
+
+    # Append CodeAgent extension path registry
+    base += _codeagent_path_registry(ca_vars)
+
     base = base.rstrip() + vision_multimodal_appendix()
     return base
 
