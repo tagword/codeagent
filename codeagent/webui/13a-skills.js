@@ -33,6 +33,7 @@ async function loadSkills(overrideAgentId) {
     list.innerHTML = '';
     if (skills.length === 0) {
       list.innerHTML = '<div class="cron-empty">暂无技能文件，点击"+ 新增"添加。</div>';
+      if (status) status.textContent = '共 0 个技能文件';
       return;
     }
     skills.forEach(function(s) { list.appendChild(buildSkillCard(s)); });
@@ -118,7 +119,7 @@ function buildSkillCard(s) {
       if (!r.ok) throw new Error(j.detail || r.statusText);
       editStatus.textContent = j.hint || '已保存。';
       toggleEdit(false);
-      await loadSkills();
+      await loadSkills(_currentSkillAgentId());
     } catch (e) { editStatus.classList.add('is-err'); editStatus.textContent = String(e); }
   });
 
@@ -133,7 +134,7 @@ async function toggleSkillEnabled(s) {
       body: JSON.stringify({ action: 'save', name: s.name, content: s.content || '', enabled: s.enabled })
     });
     if (!r.ok) throw new Error((await r.json()).detail || r.statusText);
-    await loadSkills();
+    await loadSkills(_currentSkillAgentId());
   } catch (e) {
     const st = document.getElementById('skillStatus');
     if (st) { st.classList.add('is-err'); st.textContent = String(e); }
@@ -147,7 +148,7 @@ async function deleteSkill(name) {
       body: JSON.stringify({ action: 'delete', name: name })
     });
     if (!r.ok) throw new Error((await r.json()).detail || r.statusText);
-    await loadSkills();
+    await loadSkills(_currentSkillAgentId());
   } catch (e) {
     const st = document.getElementById('skillStatus');
     if (st) { st.classList.add('is-err'); st.textContent = String(e); }

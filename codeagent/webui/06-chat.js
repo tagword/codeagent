@@ -91,6 +91,7 @@ if (sendBtn) sendBtn.onclick = async () => {
     }
   }
   msg.value = '';
+  if (typeof saveMsgDraft === 'function') saveMsgDraft();  // 同步清除 localStorage 草稿，防止刷新后恢复已发送内容
   const requestSid = sessionId;
   scrollLogForce();
   let attachmentIds = [];
