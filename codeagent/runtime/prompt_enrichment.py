@@ -91,6 +91,40 @@ def _codeagent_path_registry(vars_dict: dict[str, str]) -> str:
     return "\n".join(rows)
 
 
+def _runtime_info_block() -> str:
+    """Build a block with current system environment and datetime.
+
+    Added to the system prompt so the agent knows its OS and the real current
+    time, avoiding cross-platform command errors and stale LLM-training dates.
+    """
+    import datetime
+    import platform
+    import os
+    from pathlib import Path
+
+    now = datetime.datetime.now(datetime.timezone.utc).astimezone()
+    os_name = platform.system()     # Windows / Linux / Darwin
+    os_release = platform.release()
+
+    lines = [
+        "\n\n## 当前环境信息\n",
+        f"- **当前时间**: {now.strftime('%Y-%m-%d %H:%M:%S %Z')}",
+        f"- **操作系统**: {os_name} {os_release}",
+        f"- **主机名**: {platform.node()}",
+        f"- **Shell**: {os.environ.get('SHELL', '') or os.environ.get('ComSpec', '')}",
+        f"- **工作目录**: {Path.cwd().resolve()}",
+    ]
+    if os_name == "Windows":
+        lines.append("\n⚠️ 当前运行在 **Windows** 环境。执行命令时请使用 Windows 兼容的指令")
+        lines.append("（如 `dir` 而非 `ls`，`type` 而非 `cat`），路径使用反斜杠或正斜杠均可。")
+    elif os_name == "Linux":
+        lines.append("\n⚠️ 当前运行在 **Linux** 环境。执行命令时请使用 Linux/POSIX 指令。")
+    elif os_name == "Darwin":
+        lines.append("\n⚠️ 当前运行在 **macOS** 环境。执行命令时请使用 macOS/POSIX 指令。")
+
+    return "\n".join(lines)
+
+
 def fresh_system_prompt(*, agent_id: str | None = None) -> str:
     """
     System prompt for chat: respects Web UI ``config_md_enabled``, plugin skills
@@ -145,6 +179,10 @@ def fresh_system_prompt(*, agent_id: str | None = None) -> str:
 
     # Append CodeAgent extension path registry
     base += _codeagent_path_registry(ca_vars)
+
+    # Append session-stable runtime info (time, OS, workdir)
+    # — cached once per session so LLM provider prefix-cache stays effective
+    base += _runtime_info_block()
 
     base = base.rstrip() + vision_multimodal_appendix()
     return base
