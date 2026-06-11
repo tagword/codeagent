@@ -66,6 +66,8 @@ function _switchToAgent(agentId) {
   })
     .then(function(r){ return r.json(); })
     .then(function(data){
+      // 暴露给其他模块（如 18-agent-mgr.js）
+      window._agentSwitcherCurrentId = agentId;
       // 更新全局 agentId（01c-session-identity.js 中定义的可写变量）
       if (typeof window.agentId !== 'undefined') {
         window.agentId = agentId;

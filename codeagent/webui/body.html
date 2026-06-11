@@ -708,7 +708,13 @@
               <button type="button" class="btn btn--ghost btn--sm" id="btnAgentRefresh">刷新</button>
             </div>
           </div>
-          <p class="section__desc">管理当前系统中的所有 Agent。点击可切换当前使用的 Agent，每个 Agent 拥有独立的会话和上下文。</p>
+          <p class="section__desc">管理当前系统中的所有 Agent。点击可查看详情，点「切换」可激活。</p>
+          <div class="agent-toolbar">
+            <div class="agent-search-wrap">
+              <input type="text" class="agent-search" id="agentSearch" placeholder="搜索 Agent 名称或 ID…" />
+            </div>
+            <span class="agent-count" id="agentCount"></span>
+          </div>
           <div id="agentList" class="agent-list" style="margin-bottom:var(--sp-3);"></div>
           <div id="agentStatus" class="status-line"></div>
         </fieldset>
@@ -716,8 +722,12 @@
         <!-- Agent detail panel -->
         <fieldset class="section" id="fieldsetAgentDetail" style="display:none;">
           <div class="section__header">
-            <h3 class="section__title" id="agentDetailTitle">Agent 详情</h3>
+            <div class="section__header-left">
+              <button type="button" class="btn btn--ghost btn--icon" id="btnAgentDetailBack" title="返回列表">&larr;</button>
+              <h3 class="section__title" id="agentDetailTitle">Agent 详情</h3>
+            </div>
             <div class="row-actions" style="display:flex;gap:var(--sp-2);margin:0;">
+              <button type="button" class="btn btn--primary btn--sm" id="btnAgentSwitch">切换到此 Agent</button>
               <button type="button" class="btn btn--ghost btn--sm" id="btnAgentEdit">编辑</button>
               <button type="button" class="btn btn--danger btn--sm" id="btnAgentDelete">删除</button>
             </div>
