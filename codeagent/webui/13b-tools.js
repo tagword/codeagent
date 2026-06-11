@@ -25,14 +25,14 @@ function showNewSkillForm() {
     editStatus.textContent = '保存中…';
     editStatus.classList.remove('is-err');
     try {
-      var r = await fetch('/api/ui/skills?agent_id=' + encodeURIComponent(agentId), {
+      var r = await fetch('/api/ui/skills?agent_id=' + encodeURIComponent(_currentSkillAgentId()), {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'save', name: name, content: body })
       });
       var j = await r.json().catch(function() { return {}; });
       if (!r.ok) throw new Error(j.detail || r.statusText);
       wrap.remove();
-      await loadSkills();
+      await loadSkills(_currentSkillAgentId());
     } catch (e) { editStatus.classList.add('is-err'); editStatus.textContent = String(e); }
   });
   wrap.appendChild(editWrap);
@@ -41,7 +41,7 @@ function showNewSkillForm() {
 }
 
 document.getElementById('btnSkillAdd') && document.getElementById('btnSkillAdd').addEventListener('click', showNewSkillForm);
-document.getElementById('btnSkillRefresh') && document.getElementById('btnSkillRefresh').addEventListener('click', function() { loadSkills(); });
+document.getElementById('btnSkillRefresh') && document.getElementById('btnSkillRefresh').addEventListener('click', function() { loadSkills(typeof _currentSkillAgentId === 'function' ? _currentSkillAgentId() : undefined); });
 
 // ---------------- Tool (integrated plugins) management ----------------
 
@@ -117,6 +117,8 @@ document.getElementById('btnToolRefresh') && document.getElementById('btnToolRef
 // ---------------- Agent page load orchestration ----------------
 
 async function loadAgentPage() {
+  // 确保回到列表视图，不覆盖详情页正在展示的技能数据
+  if (typeof _backToList === 'function') _backToList();
   await loadSkills();
   await loadTools();
   if (typeof loadMdFiles === 'function') {

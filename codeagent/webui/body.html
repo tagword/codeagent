@@ -735,45 +735,6 @@
           <div id="agentDetailContent"></div>
         </fieldset>
 
-        <!-- Agent create/edit modal -->
-        <div id="agentModal" class="modal-overlay" style="display:none;">
-          <div class="modal modal--medium">
-            <div class="modal__header">
-              <h3 id="agentModalTitle">新建 Agent</h3>
-              <button type="button" class="modal__close" id="btnAgentModalClose" aria-label="关闭">&times;</button>
-            </div>
-            <div class="modal__body">
-              <div class="modal-field">
-                <label class="modal-field__label" for="inpAgentId">Agent ID <span class="required">*</span></label>
-                <input type="text" id="inpAgentId" class="input" placeholder="如: my-assistant" />
-                <p class="modal-field__hint">只能包含字母、数字、连字符</p>
-              </div>
-              <div class="modal-field">
-                <label class="modal-field__label" for="inpAgentDesc">一句话描述</label>
-                <input type="text" id="inpAgentDesc" class="input" placeholder="如: 中英翻译助手" />
-              </div>
-              <div class="modal-field">
-                <label class="modal-field__label" for="inpAgentSystemPrompt">系统提示词</label>
-                <textarea id="inpAgentSystemPrompt" class="input textarea" rows="6" placeholder="设置 Agent 的行为和角色..."></textarea>
-              </div>
-              <div class="modal-field">
-                <label class="modal-field__label">允许的工具</label>
-                <div id="agentToolCheckboxList" class="checkbox-group"></div>
-              </div>
-              <div class="modal-field">
-                <label class="modal-field__label">从模板创建</label>
-                <select id="selAgentPreset" class="input">
-                  <option value="">— 不使用模板 —</option>
-                </select>
-              </div>
-            </div>
-            <div class="modal__footer">
-              <button type="button" class="btn btn--ghost" id="btnAgentModalCancel">取消</button>
-              <button type="button" class="btn btn--primary" id="btnAgentModalSave">保存</button>
-            </div>
-          </div>
-        </div>
-
         <!-- Agent detail extensions: Skills + SysPrompt (shown inside detail panel) -->
         <div id="agentDetailExtensions" style="display:none;">
           <!-- Skills → moved inside detail -->

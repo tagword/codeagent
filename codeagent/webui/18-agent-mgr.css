@@ -564,6 +564,28 @@
   justify-content: flex-end;
 }
 
+/* ── 创建模式 ── */
+.agent-detail__create-actions {
+  display: flex;
+  gap: var(--sp-2);
+  justify-content: center;
+  margin-top: var(--sp-4);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--border);
+}
+
+.agent-detail__prompt-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.agent-detail__prompt-edit-btn {
+  align-self: flex-end;
+  font-size: 11px;
+}
+
+/* ── 详情扩展区（知识/技能 + 身份配置） ── */
 .detail-extension {
   margin-top: var(--sp-4);
   border-color: var(--border-soft);
