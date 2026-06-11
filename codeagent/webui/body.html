@@ -32,6 +32,11 @@
           <div class="brand__name">CodeAgent</div>
           <div class="brand__slogan">对话 · 工作台</div>
         </div>
+        <div class="brand__agent">
+          <select id="agentSwitcher" class="brand__agent-select">
+            <option value="">加载中...</option>
+          </select>
+        </div>
       </div>
     </div>
 
@@ -133,11 +138,6 @@
       <div class="topbar__title-group">
         <h2 class="topbar__title" id="currentConvTitle">新对话</h2>
         <span class="channel-pill" id="currentConvChannel">Web 聊天</span>
-        <span class="topbar__agent-switcher">
-          <select id="agentSwitcher" class="topbar__agent-select">
-            <option value="">加载中...</option>
-          </select>
-        </span>
         <span class="topbar__project-path" id="currentProjectPath" style="display:none"></span>
       </div>
       <div class="topbar__meta">
@@ -907,7 +907,6 @@
           <button class="modal-btn modal-btn--confirm" id="btnNewProjectConfirm">创建项目</button>
         </div>
       </div>
-    </div>
 
         <section id="page-team" class="page page--scroll" style="display:none;">
       <div class="content-max">
