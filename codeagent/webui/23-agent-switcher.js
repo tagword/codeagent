@@ -12,6 +12,9 @@ function initAgentSwitcher() {
   var sel = document.getElementById('agentSwitcher');
   if (!sel) return;
 
+  // 与全局 agentId 同步（默认为 'default'）
+  _currentSwitcherAgentId = typeof agentId !== 'undefined' ? agentId : 'default';
+
   // 加载 agent 列表
   _refreshAgentSwitcher();
 
