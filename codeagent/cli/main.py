@@ -595,6 +595,7 @@ def _cmd_chat_llm(args):
     from codeagent.runtime.prompt_enrichment import (
         build_skills_suffix,
         fresh_system_prompt,
+        get_cached_system_prompt,
         record_chat_turn_diary,
     )
     from seed.core.llm_exec import LLMError
@@ -624,7 +625,7 @@ def _cmd_chat_llm(args):
     music_preset_id = _cli_music_preset_id(args)
     video_gen_preset_id = _cli_video_gen_preset_id(args)
     chat_sess = load_or_create_chat_session(name, agent_id)
-    fresh_sys = fresh_system_prompt(agent_id=agent_id)
+    fresh_sys = get_cached_system_prompt(chat_sess, agent_id=agent_id)
     chat_sess.messages[:] = merge_fresh_system(chat_sess.messages, fresh_sys)
 
     pending_attachments, pending_dir_tag = _cli_startup_attachments(

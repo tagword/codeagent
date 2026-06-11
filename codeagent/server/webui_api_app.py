@@ -2265,6 +2265,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
             "name": body.get("name", team_id),
             "description": body.get("description", ""),
             "members": body.get("members", []),
+            "manager_id": body.get("manager_id", ""),
             "mode": body.get("mode", "sequential"),
             "error_policy": body.get("error_policy", "stop"),
             "timeout_seconds": body.get("timeout_seconds", 300),
@@ -2299,7 +2300,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
             data = json.loads(team_file.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
             data = {}
-        for k in ("name", "description", "members", "mode", "error_policy", "timeout_seconds"):
+        for k in ("name", "description", "members", "manager_id", "mode", "error_policy", "timeout_seconds"):
             if k in body:
                 data[k] = body[k]
         team_file.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")

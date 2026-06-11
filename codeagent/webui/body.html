@@ -909,7 +909,7 @@
       </div>
     </div>
 
-        <section id="page-team" class="page page--scroll" style="display:none;">
+        <section id="page-team" class="page page--scroll">
       <div class="content-max">
         <fieldset class="section" id="fieldsetTeams">
           <div class="section__header">
@@ -965,6 +965,13 @@
                 <label class="modal-field__label">团队成员</label>
                 <div id="teamMemberCheckboxList" class="checkbox-group"></div>
               </div>
+              <div class="modal-field" id="fieldManagerSelect" style="display:none;">
+                <label class="modal-field__label">管家（PM）</label>
+                <select id="selTeamManager" class="input">
+                  <option value="">— 请选择管家 —</option>
+                </select>
+                <p class="modal-field__hint">管家负责拆解任务并分派给其他成员</p>
+              </div>
             </div>
             <div class="modal__footer">
               <button class="btn btn--ghost" id="btnTeamModalCancel">取消</button>
@@ -977,7 +984,7 @@
             <h3 class="section__title" id="teamDetailTitle">Team 详情</h3>
             <div class="row-actions" style="display:flex;gap:var(--sp-2);margin:0;">
               <button class="btn btn--primary btn--sm" id="btnTeamRun">运行</button>
-              <button class="btn btn--ghost btn--sm" id="btnTeamEditDetail">编辑</button>
+              <button class="btn btn--primary btn--sm" id="btnTeamSaveDetail" style="display:none;">保存</button>
               <button class="btn btn--danger btn--sm" id="btnTeamDeleteDetail">删除</button>
             </div>
           </div>
@@ -993,7 +1000,7 @@
     </section>
 
 
-<section id="page-hub" class="page page--scroll" style="display:none;">
+<section id="page-hub" class="page page--scroll">
       <div class="content-max">
         <fieldset class="section">
           <div class="section__header">

@@ -22,7 +22,7 @@ from seed.core.llm_sess import load_or_create_chat_session, merge_fresh_system, 
 from seed.core.mem_bridge import finalize_episodic_for_llm
 from codeagent.core import env as ca_env
 
-from codeagent.runtime.prompt_enrichment import build_skills_suffix, fresh_system_prompt
+from codeagent.runtime.prompt_enrichment import build_skills_suffix, fresh_system_prompt, get_cached_system_prompt
 from codeagent.tools.agent_tools import get_tools_for_agent
 
 
@@ -52,7 +52,7 @@ class LLMWorker:
         llm = llm_executor_from_resolved(resolve_preset(None))
 
         chat_sess = load_or_create_chat_session(sid, aid, self.project_id or None)
-        fresh_sys = fresh_system_prompt(agent_id=aid)
+        fresh_sys = get_cached_system_prompt(chat_sess, agent_id=aid)
         if not chat_sess.messages:
             chat_sess.messages = [{"role": "system", "content": fresh_sys}]
         else:

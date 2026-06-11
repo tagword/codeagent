@@ -166,7 +166,7 @@ def run_team(team_id: str, user_input: str) -> dict:
     elif mode == "parallel":
         _run_parallel(run_id, members, user_input, error_policy, timeout)
     elif mode == "manager":
-        _run_manager(run_id, members, user_input, error_policy, timeout)
+        _run_manager(run_id, members, user_input, error_policy, timeout, manager_id=team.get("manager_id", ""))
     else:
         update_run(run_id, {"status": RUN_STATUS_FAILED, "error": f"Unknown mode: {mode}"})
 
@@ -211,11 +211,12 @@ def _run_parallel(run_id: str, members: list, user_input: str, error_policy: str
         concurrent.futures.wait(futures)
 
 
-def _run_manager(run_id: str, members: list, user_input: str, error_policy: str, timeout: int) -> None:
-    """First member is PM who dispatches to others."""
+def _run_manager(run_id: str, members: list, user_input: str, error_policy: str, timeout: int, manager_id: str = "") -> None:
+    """First member is PM who dispatches to others. If manager_id is set, that member is PM."""
     if not members:
         return
-    pm_id = members[0] if isinstance(members[0], str) else members[0].get("id", "")
+    # 显式指定的管家优先，否则取第一个成员
+    pm_id = manager_id if manager_id and manager_id in [m if isinstance(m, str) else m.get("id", "") for m in members] else (members[0] if isinstance(members[0], str) else members[0].get("id", ""))
     workers = members[1:] if len(members) > 1 else []
 
     # PM step: analyze and split

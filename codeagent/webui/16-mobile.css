@@ -172,13 +172,17 @@
   /* Config / tasks / agent: hide sidebar from layout */
   body[data-activity-mode="config"] .sidebar,
   body[data-activity-mode="tasks"] .sidebar,
-  body[data-activity-mode="agent"] .sidebar {
+  body[data-activity-mode="agent"] .sidebar,
+  body[data-activity-mode="team"] .sidebar,
+  body[data-activity-mode="hub"] .sidebar {
     display: none;
   }
 
   body[data-activity-mode="config"] .sidebar-backdrop,
   body[data-activity-mode="tasks"] .sidebar-backdrop,
-  body[data-activity-mode="agent"] .sidebar-backdrop {
+  body[data-activity-mode="agent"] .sidebar-backdrop,
+  body[data-activity-mode="team"] .sidebar-backdrop,
+  body[data-activity-mode="hub"] .sidebar-backdrop {
     display: none !important;
   }
 
@@ -553,6 +557,27 @@
   .modal__box {
     max-width: calc(100vw - var(--sp-6));
     margin: var(--sp-4);
+  }
+
+  /* 手机端 Team/Agent 等模态框可滚动 */
+  .modal-overlay .modal {
+    max-height: calc(100dvh - var(--mobile-nav-h) - var(--sp-6));
+    margin: var(--sp-3);
+    display: flex;
+    flex-direction: column;
+  }
+
+  .modal-overlay .modal__body {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: var(--sp-4);
+  }
+
+  .modal-overlay .modal__footer {
+    flex-shrink: 0;
+    border-top: 1px solid var(--border);
+    padding: var(--sp-3);
   }
 
   /* ---- Search / session tree touch targets ---- */
