@@ -749,6 +749,10 @@
                 <p class="modal-field__hint">只能包含字母、数字、连字符</p>
               </div>
               <div class="modal-field">
+                <label class="modal-field__label" for="inpAgentDesc">一句话描述</label>
+                <input type="text" id="inpAgentDesc" class="input" placeholder="如: 中英翻译助手" />
+              </div>
+              <div class="modal-field">
                 <label class="modal-field__label" for="inpAgentSystemPrompt">系统提示词</label>
                 <textarea id="inpAgentSystemPrompt" class="input textarea" rows="6" placeholder="设置 Agent 的行为和角色..."></textarea>
               </div>
@@ -770,45 +774,50 @@
           </div>
         </div>
 
-        <!-- Skills management -->
-        <fieldset class="section" id="fieldsetAgentSkills">
-          <div class="section__header">
-            <h3 class="section__title">技能（Skills）</h3>
-            <div class="row-actions" style="display:flex;gap:var(--sp-2);margin:0;">
-              <button type="button" class="btn btn--primary btn--sm" id="btnSkillAdd">+ 新增</button>
-              <button type="button" class="btn btn--ghost btn--sm" id="btnSkillRefresh">刷新</button>
+        <!-- Agent detail extensions: Skills + SysPrompt (shown inside detail panel) -->
+        <div id="agentDetailExtensions" style="display:none;">
+          <!-- Skills → moved inside detail -->
+          <fieldset class="section detail-extension" id="fieldsetAgentSkills">
+            <div class="section__header">
+              <h3 class="section__title">📚 知识 / 技能</h3>
+              <div class="row-actions" style="display:flex;gap:var(--sp-2);margin:0;">
+                <button type="button" class="btn btn--primary btn--sm" id="btnSkillAdd">+ 新增</button>
+                <button type="button" class="btn btn--ghost btn--sm" id="btnSkillRefresh">刷新</button>
+              </div>
             </div>
-          </div>
-          <p class="section__desc">
-            在这里管理 Agent 能使用的技能文件。技能是 Markdown 文档，描述了 Agent 可以做什么、怎么做。勾选即可启用/停用，修改后保存，下次新会话生效。
-          </p>
-          <div id="skillList" class="skill-list" style="margin-bottom:var(--sp-3);"></div>
-          <div id="skillStatus" class="status-line"></div>
-        </fieldset>
+            <p class="section__desc">
+              技能文件是 Markdown 文档，教导 Agent 如何完成特定任务。仅对当前 Agent 生效，可独立启用/停用。
+            </p>
+            <div id="skillList" class="skill-list" style="margin-bottom:var(--sp-3);"></div>
+            <div id="skillStatus" class="status-line"></div>
+          </fieldset>
 
-        <!-- Tools (renamed from 集成插件) -->
-        <fieldset class="section" id="fieldsetAgentTools">
+          <!-- System Prompt MD files → moved inside detail -->
+          <fieldset class="section detail-extension" id="fieldsetSysPromptMd">
+            <div class="section__header">
+              <h3 class="section__title">📄 身份配置文件</h3>
+            </div>
+            <p class="section__desc">
+              编辑当前 Agent 的身份/行为配置文件（Markdown）。所有文档默认参与<strong>系统提示</strong>，保存后<strong>下一轮对话</strong>生效。
+            </p>
+            <div id="mdFileList"></div>
+            <div id="mdFileStatus" class="status-line"></div>
+          </fieldset>
+        </div>
+
+        <!-- External Integrations (global, system-level) -->
+        <fieldset class="section section--global" id="fieldsetAgentTools">
           <div class="section__header">
-            <h3 class="section__title">工具</h3>
+            <h3 class="section__title">🔌 外部集成 <span class="section__badge">系统全局</span></h3>
             <div class="row-actions" style="display:flex;gap:var(--sp-2);margin:0;">
               <button type="button" class="btn btn--ghost btn--sm" id="btnToolRefresh">刷新</button>
             </div>
           </div>
-          <p class="section__desc">集成外部工具，开启后 Agent 可以使用对应能力。每个工具可以独立开关，也可以编辑配置。</p>
+          <p class="section__desc">
+            系统级的外部服务集成。开启后所有 Agent 均可使用对应能力（如 AI 图像生成、音乐生成、联网搜索等）。每个集成可独立开关。
+          </p>
           <div id="toolList" class="tool-list" style="margin-bottom:var(--sp-3);"></div>
           <div id="toolStatus" class="status-line"></div>
-        </fieldset>
-
-        <!-- System prompt MD files: click to edit (all enabled by default) -->
-        <fieldset class="section" id="fieldsetSysPromptMd">
-          <div class="section__header">
-            <h3 class="section__title">系统提示（Agent 配置文档）</h3>
-          </div>
-          <p class="section__desc">
-            点击文件名即可编辑对应文档的内容。所有文档默认参与<strong>系统提示</strong>，无需额外勾选。保存后<strong>下一轮对话</strong>生效。
-          </p>
-          <div id="mdFileList"></div>
-          <div id="mdFileStatus" class="status-line"></div>
         </fieldset>
       </div>
     </section>

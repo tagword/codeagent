@@ -187,6 +187,13 @@
   border-color: var(--accent-ring);
 }
 
+.agent-card__tag--unrestricted {
+  background: var(--bg-subtle);
+  color: var(--text-muted);
+  border-style: dashed;
+  opacity: 0.75;
+}
+
 /* ── 卡片右侧操作区 ── */
 .agent-card__actions {
   display: flex;
@@ -301,6 +308,31 @@
 
 .agent-detail__hero-status--active {
   color: var(--success);
+}
+
+.agent-detail__hero-desc {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: var(--sp-1) 0;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+}
+
+.agent-detail__desc-edit-btn {
+  font-size: 11px;
+  padding: 0 4px;
+  opacity: 0.5;
+}
+
+.agent-detail__desc-edit-btn:hover {
+  opacity: 1;
+}
+
+.agent-detail__desc-input {
+  flex: 1;
+  min-width: 200px;
+  font-size: 13px;
 }
 
 .agent-detail__grid {
@@ -483,6 +515,91 @@
   font-size: 11px;
   color: var(--text-muted);
   margin-top: var(--sp-1);
+}
+
+.agent-detail__tool-none--unrestricted {
+  color: var(--text-muted);
+  font-style: italic;
+  border: 1px dashed var(--border);
+  padding: var(--sp-1) var(--sp-2);
+  border-radius: var(--r-sm);
+  display: inline-block;
+}
+
+/* ── 工具编辑区 ── */
+.agent-detail__tool-edit-btn {
+  margin-top: var(--sp-2);
+  display: inline-block;
+}
+
+.agent-tool-edit {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1);
+  max-height: 300px;
+  overflow-y: auto;
+  padding: var(--sp-2);
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  margin-bottom: var(--sp-2);
+}
+
+.agent-tool-edit .checkbox-label {
+  flex: 0 0 auto;
+  min-width: 140px;
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: var(--r-sm);
+  transition: background 0.15s;
+}
+
+.agent-tool-edit .checkbox-label:hover {
+  background: var(--bg-hover);
+}
+
+.agent-detail__tool-actions {
+  display: flex;
+  gap: var(--sp-2);
+  justify-content: flex-end;
+}
+
+.detail-extension {
+  margin-top: var(--sp-4);
+  border-color: var(--border-soft);
+  background: var(--bg-subtle);
+}
+
+.detail-extension .section__title {
+  font-size: 15px;
+}
+
+/* ── 外部集成（全局标记） ── */
+.section--global {
+  border-left: 3px solid var(--accent-muted, #94a3b8);
+}
+
+.section--global .section__header {
+  border-bottom-color: var(--border-soft);
+}
+
+.section__badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 500;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--bg-hover);
+  color: var(--text-muted);
+  vertical-align: middle;
+  margin-left: var(--sp-2);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+/* ── 详情页：返回按钮区域 ── */
+#fieldsetAgentDetail {
+  margin-bottom: 0;
 }
 
 /* ── 适配手机视图 ── */

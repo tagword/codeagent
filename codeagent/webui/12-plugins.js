@@ -8,7 +8,14 @@
 const mdFileList = document.getElementById('mdFileList');
 const mdFileStatus = document.getElementById('mdFileStatus');
 
-async function loadMdFiles() {
+var _mdAgentId = null;
+
+function _currentMdAgentId() {
+  return _mdAgentId || agentId;
+}
+
+async function loadMdFiles(overrideAgentId) {
+  _mdAgentId = overrideAgentId || agentId;
   if (!mdFileList || !mdFileStatus) return;
   mdFileStatus.textContent = '加载中…';
   mdFileStatus.classList.remove('is-err');
@@ -108,7 +115,7 @@ function buildMdFileCard(name) {
 
 async function loadMdFileContent(name, textarea, statusEl) {
   try {
-    var r = await fetch('/api/ui/md/' + encodeURIComponent(name) + '?agent_id=' + encodeURIComponent(agentId));
+    var r = await fetch('/api/ui/md/' + encodeURIComponent(name) + '?agent_id=' + encodeURIComponent(_currentMdAgentId()));
     var j = await r.json();
     if (!r.ok) throw new Error(j.detail || r.statusText);
     textarea.value = j.content || '';
