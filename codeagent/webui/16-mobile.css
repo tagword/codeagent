@@ -233,6 +233,12 @@
     padding: 1px 6px;
   }
 
+  .topbar__agent-select {
+    font-size: 10px;
+    padding: 1px 18px 1px 6px;
+    max-width: 100px;
+  }
+
   .topbar__meta {
     gap: var(--sp-1);
     margin-left: auto;

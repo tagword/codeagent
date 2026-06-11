@@ -133,6 +133,11 @@
       <div class="topbar__title-group">
         <h2 class="topbar__title" id="currentConvTitle">新对话</h2>
         <span class="channel-pill" id="currentConvChannel">Web 聊天</span>
+        <span class="topbar__agent-switcher">
+          <select id="agentSwitcher" class="topbar__agent-select">
+            <option value="">加载中...</option>
+          </select>
+        </span>
         <span class="topbar__project-path" id="currentProjectPath" style="display:none"></span>
       </div>
       <div class="topbar__meta">
@@ -168,14 +173,6 @@
 
     <section id="page-chat" class="page active">
       <div class="chat-workspace">
-        <div class="chat-topbar" id="chatTopbar">
-          <div class="chat-topbar__agent">
-            <span class="chat-topbar__label">Agent:</span>
-            <select id="agentSwitcher" class="chat-topbar__select">
-              <option value="">加载中...</option>
-            </select>
-          </div>
-        </div>
         <div id="log" class="chat-log" role="log" aria-live="polite"></div>
         <button id="btnNewMessages" class="new-msg-btn" style="display:none" title="有新消息，点击回到最新">
           <span class="new-msg-btn__dot"></span>
