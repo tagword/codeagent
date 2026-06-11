@@ -59,6 +59,16 @@
   font-weight: 500;
 }
 
+.team-card__pm {
+  font-size: 11px;
+  color: var(--warning, #b45309);
+  background: var(--warning-soft, #fef3c7);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  margin-left: var(--sp-1);
+}
+
 /* Team 详情 */
 .team-detail {
   display: flex;
@@ -85,6 +95,132 @@
   border-radius: 999px;
   font-size: var(--fs-xs);
   font-weight: 500;
+}
+
+.team-detail__member-tag--pm {
+  background: var(--warning-soft, #fef3c7);
+  border: 1px solid var(--warning, #f59e0b);
+  color: var(--warning, #b45309);
+  position: relative;
+}
+
+.team-detail__pm-badge {
+  display: inline-block;
+  margin-left: 2px;
+  padding: 0 5px;
+  font-size: 10px;
+  font-weight: 700;
+  background: var(--warning, #f59e0b);
+  color: #fff;
+  border-radius: 4px;
+  line-height: 1.5;
+}
+
+/* 删除按钮（通用） */
+.btn--danger {
+  background: #fee2e2;
+  color: #dc2626;
+  border-color: #fecaca;
+}
+.btn--danger:hover {
+  background: #fecaca;
+  color: #b91c1c;
+}
+
+/* 内联编辑表单 */
+.team-detail--edit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding-top: var(--sp-2);
+}
+
+.team-detail__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.team-detail__field-row {
+  display: flex;
+  gap: var(--sp-3);
+}
+
+.team-detail__field--half {
+  flex: 1;
+}
+
+.team-detail__label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary, #1a1a2e);
+}
+
+.team-detail--edit .input,
+.team-detail--edit select.input,
+.team-detail--edit textarea.input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 12px;
+  border: 1px solid var(--border-color, #d1d1d6);
+  border-radius: 6px;
+  font-size: 14px;
+  background: var(--bg-primary, #fff);
+  color: var(--text-primary, #1a1a2e);
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.team-detail--edit .input:focus {
+  border-color: var(--accent, #007aff);
+  box-shadow: 0 0 0 2px rgba(0,122,255,0.15);
+}
+
+.team-detail--edit .input:disabled {
+  opacity: 0.55;
+  background: var(--bg-hover, #f5f5f7);
+}
+
+.team-detail--edit .checkbox-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1);
+}
+
+.team-detail--edit .checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  transition: border-color 0.12s, background 0.12s;
+}
+
+.team-detail--edit .checkbox-label:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft, #e8f0fe);
+}
+
+.team-detail--edit .checkbox-label:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-soft, #e8f0fe);
+}
+
+.team-detail--edit .modal-field__hint {
+  font-size: 12px;
+  color: var(--text-secondary, #888);
+  margin-top: 2px;
+}
+
+@media (max-width: 768px) {
+  .team-detail__field-row {
+    flex-direction: column;
+    gap: var(--sp-3);
+  }
 }
 
 /* Run 卡片 */

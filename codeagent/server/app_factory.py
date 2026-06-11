@@ -108,6 +108,7 @@ def create_app():
         from codeagent.runtime.prompt_enrichment import (
             build_skills_suffix,
             fresh_system_prompt,
+            get_cached_system_prompt,
             record_chat_turn_diary,
         )
         from seed.core.llm_exec import LLMError
@@ -225,7 +226,7 @@ def create_app():
                 chat_sess = load_or_create_chat_session(session_id, agent_id, project_id or None)
                 SESSIONS[mkey] = chat_sess
 
-            fresh_sys = fresh_system_prompt(agent_id=agent_id)
+            fresh_sys = get_cached_system_prompt(chat_sess, agent_id=agent_id)
             if not chat_sess.messages:
                 chat_sess.messages = [{"role": "system", "content": fresh_sys}]
             else:

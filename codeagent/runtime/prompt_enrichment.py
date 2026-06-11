@@ -2,12 +2,59 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Optional  # noqa: UP045
 
-from seed.core.config_plane import build_system_prompt, project_root
-from codeagent.core import env as ca_env
-from seed.core.env_access import pick_nonempty
 import seed.core.env_access as _ea
+from codeagent.core import env as ca_env
+from seed.core.config_plane import build_system_prompt, project_root
+from seed.core.env_access import pick_nonempty
+
+
+def _compute_persona_hash(agent_id: str) -> str:
+    """Hash of all persona files + memory.md that compose the system prompt.
+
+    Used to detect file changes mid-session so the cache is invalidated.
+    """
+    import hashlib
+
+    from codeagent.core.settings import get_system_prompt_filenames
+    from seed.core.paths import agent_id_default, agent_persona_dir, agent_persona_memory_path
+
+    aid = (agent_id or "").strip() or agent_id_default()
+    persona_dir = agent_persona_dir(aid)
+    h = hashlib.sha256()
+    for fname in sorted(get_system_prompt_filenames()):
+        p = persona_dir / fname
+        if p.is_file():
+            h.update(p.read_bytes())
+    p_mem = agent_persona_memory_path(aid)
+    if p_mem.is_file():
+        h.update(p_mem.read_bytes())
+    return h.hexdigest()
+
+
+def get_cached_system_prompt(session, *, agent_id: str | None = None) -> str:
+    """Return system prompt, building fresh only on first turn or if files changed.
+
+    Caches the result in ``session.metadata["base_system"]`` with a hash
+    in ``session.metadata["base_system_hash"]``.
+    """
+    md = session.metadata
+    if not isinstance(md, dict):
+        md = {}
+    aid = (agent_id or "").strip() or "default"
+    current_hash = _compute_persona_hash(aid)
+    cached = md.get("base_system", "")
+    cached_hash = md.get("base_system_hash", "")
+
+    if cached and cached_hash == current_hash:
+        return cached
+
+    fresh = fresh_system_prompt(agent_id=aid)
+    if isinstance(session.metadata, dict):
+        session.metadata["base_system"] = fresh
+        session.metadata["base_system_hash"] = current_hash
+    return fresh
 
 
 def fresh_system_prompt(*, agent_id: str | None = None) -> str:
@@ -64,8 +111,8 @@ def build_skills_suffix(
 
     if ca_env.env_truthy(ca_env.SKILLS_AUTO, default="1"):
         try:
-            from codeagent.skills.select import build_selected_skills_appendix
             from codeagent.core.attachments import content_text_for_skills
+            from codeagent.skills.select import build_selected_skills_appendix
 
             appendix = build_selected_skills_appendix(
                 agent_id,
@@ -142,8 +189,8 @@ def record_chat_turn_diary(
     if ca_env.env_falsy(ca_env.DIARY, default="1"):
         return
     try:
-        from codeagent.memory.diary import append_diary_entry, archive_old_diaries
         from codeagent.core.attachments import content_text_for_skills
+        from codeagent.memory.diary import append_diary_entry, archive_old_diaries
 
         u = content_text_for_skills(user_text or "")
         if not u and (user_text or "").strip():

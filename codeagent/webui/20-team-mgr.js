@@ -32,6 +32,11 @@ function _renderTeams(teams) {
     var members = (t.members || []).length;
     var modeLabels = { sequential: '顺序', parallel: '并行', manager: '管家' };
     var mode = modeLabels[t.mode] || t.mode;
+    var pmName = (t.mode === 'manager' && t.manager_id)
+      ? t.manager_id
+      : (t.mode === 'manager' && t.members && t.members.length > 0
+        ? (typeof t.members[0] === 'string' ? t.members[0] : (t.members[0].name || t.members[0].id || ''))
+        : '');
     html += '<div class="team-card" data-team-id="' + escAttr(t.id) + '">'
       + '<div class="team-card__body">'
       + '<div class="team-card__name">' + escHtml(name) + '</div>'
@@ -39,6 +44,7 @@ function _renderTeams(teams) {
       + '<div class="team-card__meta">'
       + '<span class="team-card__mode">' + escHtml(mode) + '</span>'
       + '<span class="team-card__members">' + members + ' 成员</span>'
+      + (pmName ? '<span class="team-card__pm">管家：' + escHtml(pmName) + '</span>' : '')
       + '</div></div></div>';
   });
   el.innerHTML = html;
@@ -62,7 +68,7 @@ function _teamStatus(type, msg) {
   if (type === 'ok') setTimeout(function(){ el.textContent = ''; el.className = 'status-line'; }, 3000);
 }
 
-// ── Team 详情 ──
+// ── Team 详情（直接可编辑）──
 
 function _showTeamDetail(teamId) {
   _teamApi('/api/ui/teams/' + encodeURIComponent(teamId)).then(function(data){
@@ -70,28 +76,152 @@ function _showTeamDetail(teamId) {
     document.getElementById('fieldsetTeamDetail').style.display = '';
     document.getElementById('fieldsetTeamRuns').style.display = '';
     document.getElementById('teamDetailTitle').textContent = 'Team: ' + (t.name || t.id);
-    var modeLabels = { sequential: '顺序模式', parallel: '并行模式', manager: '管家模式' };
-    var html = '<div class="team-detail">'
-      + '<div class="team-detail__row"><strong>ID:</strong> ' + escHtml(t.id) + '</div>'
-      + '<div class="team-detail__row"><strong>模式:</strong> ' + (modeLabels[t.mode] || t.mode) + '</div>'
-      + '<div class="team-detail__row"><strong>描述:</strong> ' + escHtml(t.description || '(空)') + '</div>'
-      + '<div class="team-detail__row"><strong>超时:</strong> ' + (t.timeout_seconds || 300) + 's</div>'
-      + '<div class="team-detail__row"><strong>错误策略:</strong> ' + (t.error_policy === 'skip' ? '跳过继续' : '出错即停') + '</div>'
-      + '<div class="team-detail__row"><strong>成员:</strong></div>'
-      + '<div class="team-detail__members">';
-    (t.members || []).forEach(function(m){
-      var mid = typeof m === 'string' ? m : (m.id || m);
-      html += '<span class="team-detail__member-tag">' + escHtml(mid) + '</span>';
-    });
-    if (!t.members || t.members.length === 0) html += '<span class="text-dim">无成员</span>';
-    html += '</div></div>';
-    document.getElementById('teamDetailContent').innerHTML = html;
+    document.getElementById('btnTeamSaveDetail').style.display = '';
 
-    document.getElementById('btnTeamRun').onclick = function(){ _runTeam(t.id); };
-    document.getElementById('btnTeamEditDetail').onclick = function(){ _openTeamModal(t.id); };
-    document.getElementById('btnTeamDeleteDetail').onclick = function(){ _deleteTeam(t.id); };
+    // 加载成员列表
+    _teamApi('/api/ui/agents').then(function(agentsData){
+      var agents = agentsData.agents || [];
+
+      var modes = [
+        { value: 'sequential', label: '顺序模式' },
+        { value: 'parallel', label: '并行模式' },
+        { value: 'manager', label: '管家模式' },
+      ];
+
+      var html = '<div class="team-detail team-detail--edit">';
+
+      // ID (只读)
+      html += '<div class="team-detail__field">'
+        + '<label class="team-detail__label">ID</label>'
+        + '<input type="text" class="input" id="detailTeamId" value="' + escAttr(t.id) + '" disabled />'
+        + '</div>';
+
+      // 名称
+      html += '<div class="team-detail__field">'
+        + '<label class="team-detail__label">名称</label>'
+        + '<input type="text" class="input" id="detailTeamName" value="' + escAttr(t.name || '') + '" />'
+        + '</div>';
+
+      // 描述
+      html += '<div class="team-detail__field">'
+        + '<label class="team-detail__label">描述</label>'
+        + '<textarea class="input textarea" id="detailTeamDesc" rows="2">' + escHtml(t.description || '') + '</textarea>'
+        + '</div>';
+
+      // 模式
+      html += '<div class="team-detail__field">'
+        + '<label class="team-detail__label">工作模式</label>'
+        + '<select class="input" id="detailTeamMode">';
+      modes.forEach(function(m){
+        html += '<option value="' + m.value + '"' + (t.mode === m.value ? ' selected' : '') + '>' + m.label + '</option>';
+      });
+      html += '</select></div>';
+
+      // 超时 + 错误策略（一行两列）
+      html += '<div class="team-detail__field-row">'
+        + '<div class="team-detail__field team-detail__field--half">'
+        + '<label class="team-detail__label">超时（秒）</label>'
+        + '<input type="number" class="input" id="detailTeamTimeout" value="' + (t.timeout_seconds || 300) + '" min="30" />'
+        + '</div>'
+        + '<div class="team-detail__field team-detail__field--half">'
+        + '<label class="team-detail__label">错误策略</label>'
+        + '<select class="input" id="detailTeamErrorPolicy">'
+        + '<option value="stop"' + (t.error_policy === 'stop' ? ' selected' : '') + '>出错即停</option>'
+        + '<option value="skip"' + (t.error_policy === 'skip' ? ' selected' : '') + '>跳过继续</option>'
+        + '</select></div></div>';
+
+      // 成员 — 复选框
+      html += '<div class="team-detail__field">'
+        + '<label class="team-detail__label">成员</label>'
+        + '<div class="checkbox-group" id="detailTeamMembers">';
+      agents.forEach(function(a){
+        var checked = t.members && t.members.indexOf(a.id) >= 0;
+        html += '<label class="checkbox-label"><input type="checkbox" class="detail-member-cb" value="' + escAttr(a.id) + '"' + (checked ? ' checked' : '') + '> ' + escHtml(a.name || a.id) + '</label>';
+      });
+      html += '</div></div>';
+
+      // 管家（模式切换时显示/隐藏）
+      var showManager = t.mode === 'manager';
+      html += '<div class="team-detail__field" id="detailFieldManager"' + (showManager ? '' : ' style="display:none"') + '>'
+        + '<label class="team-detail__label">管家（PM）</label>'
+        + '<select class="input" id="detailTeamManager">'
+        + '<option value="">— 请选择管家 —</option>'
+        + '</select><p class="modal-field__hint">管家负责拆解任务并分派给其他成员</p></div>';
+
+      html += '</div>'; // .team-detail
+
+      document.getElementById('teamDetailContent').innerHTML = html;
+
+      // ── 初始化管家下拉（仅显示已勾选成员）──
+      _rebuildDetailManagerSelect();
+      // 如果已有指定管家，恢复选中
+      if (t.manager_id) {
+        document.getElementById('detailTeamManager').value = t.manager_id;
+      }
+
+      // 模式切换 → 显示/隐藏管家选择
+      document.getElementById('detailTeamMode').addEventListener('change', function(){
+        var field = document.getElementById('detailFieldManager');
+        if (field) field.style.display = this.value === 'manager' ? '' : 'none';
+      });
+
+      // 成员复选框变化 → 刷新管家下拉选项
+      document.querySelectorAll('.detail-member-cb').forEach(function(cb){
+        cb.addEventListener('change', _rebuildDetailManagerSelect);
+      });
+
+      // 按钮
+      document.getElementById('btnTeamRun').onclick = function(){ _runTeam(t.id); };
+      document.getElementById('btnTeamSaveDetail').onclick = function(){ _saveTeamDetail(t.id); };
+      document.getElementById('btnTeamDeleteDetail').onclick = function(){ _deleteTeam(t.id); };
+    });
 
     _loadTeamRuns(t.id);
+  }).catch(function(err){ _teamStatus('error', err.message); });
+}
+
+function _rebuildDetailManagerSelect() {
+  var sel = document.getElementById('detailTeamManager');
+  if (!sel) return;
+  var currentVal = sel.value;
+  sel.innerHTML = '<option value="">— 请选择管家 —</option>';
+  document.querySelectorAll('.detail-member-cb:checked').forEach(function(cb){
+    var opt = document.createElement('option');
+    opt.value = cb.value;
+    opt.textContent = cb.value;
+    sel.appendChild(opt);
+  });
+  if (currentVal && sel.querySelector('option[value="' + currentVal.replace(/"/g, '&quot;') + '"]')) {
+    sel.value = currentVal;
+  }
+}
+
+function _saveTeamDetail(teamId) {
+  var members = [];
+  document.querySelectorAll('.detail-member-cb:checked').forEach(function(cb){ members.push(cb.value); });
+  var mode = document.getElementById('detailTeamMode').value;
+  var manager_id = mode === 'manager' ? document.getElementById('detailTeamManager').value : '';
+  if (mode === 'manager' && !manager_id) {
+    _teamStatus('error', '管家模式需要指定一名管家');
+    return;
+  }
+  var body = {
+    name: document.getElementById('detailTeamName').value.trim(),
+    description: document.getElementById('detailTeamDesc').value.trim(),
+    mode: mode,
+    timeout_seconds: parseInt(document.getElementById('detailTeamTimeout').value) || 300,
+    error_policy: document.getElementById('detailTeamErrorPolicy').value,
+    members: members,
+    manager_id: manager_id,
+  };
+  _teamApi('/api/ui/teams/' + encodeURIComponent(teamId), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }).then(function(){
+    _teamStatus('ok', '已保存');
+    _loadTeams();
+    _showTeamDetail(teamId);
   }).catch(function(err){ _teamStatus('error', err.message); });
 }
 
@@ -146,11 +276,36 @@ function _loadTeamRuns(teamId) {
 
 // ── Modal ──
 
+function _rebuildManagerSelect() {
+  var sel = document.getElementById('selTeamManager');
+  if (!sel) return;
+  var currentVal = sel.value;
+  sel.innerHTML = '<option value="">— 请选择管家 —</option>';
+  document.querySelectorAll('.team-member-cb:checked').forEach(function(cb){
+    var opt = document.createElement('option');
+    opt.value = cb.value;
+    opt.textContent = cb.value;
+    sel.appendChild(opt);
+  });
+  // 恢复之前选中的值（如果还在成员列表中）
+  if (currentVal && sel.querySelector('option[value="' + currentVal.replace(/"/g, '&quot;') + '"]')) {
+    sel.value = currentVal;
+  }
+}
+
+function _toggleManagerField() {
+  var mode = document.getElementById('selTeamMode').value;
+  var field = document.getElementById('fieldManagerSelect');
+  if (field) {
+    field.style.display = mode === 'manager' ? '' : 'none';
+  }
+  if (mode === 'manager') _rebuildManagerSelect();
+}
+
 function _openTeamModal(teamId) {
   var isEdit = !!teamId;
   document.getElementById('teamModalTitle').textContent = isEdit ? '编辑 Team' : '新建 Team';
   document.getElementById('teamModal').style.display = '';
-
   document.getElementById('inpTeamId').disabled = isEdit;
 
   // Load agents for member checkbox
@@ -161,7 +316,15 @@ function _openTeamModal(teamId) {
       html += '<label class="checkbox-label"><input type="checkbox" class="team-member-cb" value="' + escAttr(a.id) + '"> ' + escHtml(a.name || a.id) + '</label>';
     });
     document.getElementById('teamMemberCheckboxList').innerHTML = html;
+    // 监听 checkbox 变化，刷新管家下拉
+    document.querySelectorAll('.team-member-cb').forEach(function(cb){
+      cb.addEventListener('change', _rebuildManagerSelect);
+    });
+    _rebuildManagerSelect();
   });
+
+  // 监听模式切换
+  document.getElementById('selTeamMode').addEventListener('change', _toggleManagerField);
 
   if (isEdit) {
     _teamApi('/api/ui/teams/' + encodeURIComponent(teamId)).then(function(data){
@@ -177,6 +340,11 @@ function _openTeamModal(teamId) {
           cb.checked = t.members.indexOf(cb.value) >= 0;
         });
       }
+      // 设置管家
+      _toggleManagerField();
+      if (t.manager_id) {
+        document.getElementById('selTeamManager').value = t.manager_id;
+      }
     });
   } else {
     document.getElementById('inpTeamId').value = '';
@@ -185,6 +353,7 @@ function _openTeamModal(teamId) {
     document.getElementById('selTeamMode').value = 'sequential';
     document.getElementById('inpTeamTimeout').value = '300';
     document.getElementById('selTeamErrorPolicy').value = 'stop';
+    _toggleManagerField();
   }
 }
 
@@ -194,14 +363,21 @@ function _saveTeam() {
   var isEdit = document.getElementById('inpTeamId').disabled;
   var members = [];
   document.querySelectorAll('.team-member-cb:checked').forEach(function(cb){ members.push(cb.value); });
+  var mode = document.getElementById('selTeamMode').value;
+  var manager_id = mode === 'manager' ? document.getElementById('selTeamManager').value : '';
+  if (mode === 'manager' && !manager_id) {
+    _teamStatus('error', '管家模式需要指定一名管家');
+    return;
+  }
   var body = {
     id: teamId,
     name: document.getElementById('inpTeamName').value.trim(),
     description: document.getElementById('inpTeamDesc').value.trim(),
-    mode: document.getElementById('selTeamMode').value,
+    mode: mode,
     timeout_seconds: parseInt(document.getElementById('inpTeamTimeout').value) || 300,
     error_policy: document.getElementById('selTeamErrorPolicy').value,
     members: members,
+    manager_id: manager_id,
   };
   var url = '/api/ui/teams';
   var method = 'POST';

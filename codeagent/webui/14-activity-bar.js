@@ -1,5 +1,5 @@
 var _activeMode = null;
-var _FULL_WIDTH_MODES = ['config', 'tasks', 'agent'];
+var _FULL_WIDTH_MODES = ['config', 'tasks', 'agent', 'team', 'hub'];
 
 function _applySidebarForMode(mode) {
   var chatSidebar = document.getElementById('chatSidebar');
