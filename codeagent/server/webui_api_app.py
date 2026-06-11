@@ -359,22 +359,29 @@ def _list_agent_metas() -> list[dict]:
         if not persona_dir.is_dir():
             continue
         agent_id = entry.name
+        # Read description
+        desc_file = entry / "description.txt"
+        description = desc_file.read_text(encoding="utf-8").strip() if desc_file.is_file() else ""
         # Read system prompt
         sys_file = persona_dir / "system.md"
         system_prompt = sys_file.read_text(encoding="utf-8") if sys_file.is_file() else ""
-        # Read tools.json
+        # Read tools.json (runtime may fall back to "all tools" when absent)
         tools = {}
+        tools_configured = False
         tools_file = entry / "tools.json"
         if tools_file.is_file():
             try:
                 tools = json.loads(tools_file.read_text(encoding="utf-8"))
+                tools_configured = True
             except (json.JSONDecodeError, OSError):
                 tools = {}
         agents.append({
             "id": agent_id,
             "name": agent_id,
+            "description": description,
             "system_prompt": system_prompt,
             "tools": tools,
+            "tools_configured": tools_configured,
         })
     return agents
 
@@ -2018,6 +2025,36 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         agents = _list_agent_metas()
         return JSONResponse({"agents": agents})
 
+    async def api_tools_available(_: Request) -> JSONResponse:
+        """Return all available tool names from the runtime."""
+        try:
+            from codeagent.server import tools_for_agent
+            reg, _ = tools_for_agent("default")
+            tools = sorted(t.name for t in reg.list_all())
+        except Exception:
+            tools = [
+                "file_read", "file_write", "file_edit_tool", "bash_exec", "bash_tool",
+                "web_fetch", "web_search_tool", "code_check", "code_analyze",
+                "grep_tool", "glob_tool", "file_search",
+                "db", "git", "todo_tool", "tool_search_tool",
+                "memory_search", "self_reflect", "notebook_edit_tool",
+                "project", "refactor", "scaffold", "test_gen", "test_run",
+                "symbol_search", "symbol_index_refresh",
+                "lsp_definition", "lsp_diagnostics",
+                "apply_patch", "deploy", "deps_check", "api_docs", "diagram", "pipeline",
+                "browser_status", "browser_connect", "browser_ensure_running",
+                "browser_targets", "browser_new_page", "browser_navigate", "browser_screenshot",
+                "vision_analyze", "vision_analyze_directory",
+                "image_generate", "music_generate", "video_generate",
+                "attachment_resolve_path", "audio_transcribe", "video_analyze",
+                "mcp_servers", "mcp_list_tools", "mcp_call",
+                "seed_cron_path", "seed_cron_reload", "seed_cron_apply",
+                "hub_send", "instruction_read",
+                "whoami", "calculate", "counter", "workspace_verify",
+                "wbs_draft",
+            ]
+        return JSONResponse({"tools": tools})
+
     async def api_agents_create(request: Request) -> JSONResponse:
         try:
             body = await request.json()
@@ -2033,6 +2070,10 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         # Create agent scaffolding
         from codeagent.core.paths import ensure_agent_scaffold
         ensure_agent_scaffold(agent_id)
+        # Write description if provided
+        desc = (body.get("description") or "").strip()
+        if desc:
+            (ad / agent_id / "description.txt").write_text(desc, encoding="utf-8")
         # Write system prompt if provided
         sp = (body.get("system_prompt") or "").strip()
         if sp:
@@ -2049,20 +2090,26 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         ad = _agents_dir() / agent_id
         if not ad.is_dir() or not (ad / "persona").is_dir():
             return JSONResponse({"detail": "agent not found"}, status_code=404)
+        desc_file = ad / "description.txt"
+        description = desc_file.read_text(encoding="utf-8").strip() if desc_file.is_file() else ""
         system_prompt = _read_agent_file(agent_id, "persona", "system.md") or ""
         tools_raw = _read_agent_file(agent_id, "tools.json")
         tools = {}
+        tools_configured = False
         if tools_raw:
             try:
                 tools = json.loads(tools_raw)
+                tools_configured = True
             except json.JSONDecodeError:
                 tools = {}
         return JSONResponse({
             "agent": {
                 "id": agent_id,
                 "name": agent_id,
+                "description": description,
                 "system_prompt": system_prompt,
                 "tools": tools,
+                "tools_configured": tools_configured,
             }
         })
 
@@ -2079,6 +2126,14 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         if "system_prompt" in body:
             sp = (body["system_prompt"] or "").strip()
             _write_agent_file(agent_id, sp, "persona", "system.md")
+        # Update description
+        if "description" in body:
+            desc = (body["description"] or "").strip()
+            desc_file = ad / "description.txt"
+            if desc:
+                desc_file.write_text(desc, encoding="utf-8")
+            else:
+                desc_file.unlink(missing_ok=True)
         # Update tools
         if "tools" in body:
             tools = body["tools"]
@@ -2425,6 +2480,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         Route("/agents/{agent_id}", api_agents_delete, methods=["DELETE"]),
         Route("/agents/{agent_id}/sessions", api_agents_sessions, methods=["GET"]),
         Route("/session/switch-agent", api_agents_switch, methods=["POST"]),
+        Route("/tools/available", api_tools_available, methods=["GET"]),
         # Team CRUD
         Route("/teams", api_teams_list, methods=["GET"]),
         Route("/teams", api_teams_create, methods=["POST"]),

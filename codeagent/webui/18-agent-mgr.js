@@ -68,11 +68,21 @@ function _renderAgentList(agents) {
   agents.forEach(function(a){
     var name = a.name || a.id;
     var firstChar = name.charAt(0).toUpperCase();
-    var desc = a.system_prompt ? a.system_prompt.substring(0, 80) : '';
+    var desc = a.description ? a.description.substring(0, 80) : (a.system_prompt ? a.system_prompt.substring(0, 80) : '');
     if (desc.length >= 80) desc += '…';
     var toolCount = a.tools && a.tools.acquired && a.tools.acquired.allow
       ? a.tools.acquired.allow.length : 0;
     var isActive = a.id === activeId;
+    var toolLabel = '';
+    if (isActive) {
+      toolLabel = '当前';
+    } else if (!a.tools_configured) {
+      toolLabel = '未限制';
+    } else if (toolCount === 0) {
+      toolLabel = '仅基础';
+    } else {
+      toolLabel = toolCount + ' 工具';
+    }
     var activeClass = isActive ? ' agent-card--active' : '';
     var color = _avatarColor(a.id);
 
@@ -83,8 +93,8 @@ function _renderAgentList(agents) {
       + '<span class="agent-card__id">' + escHtml(a.id) + '</span>'
       + '<div class="agent-card__desc">' + escHtml(desc || '无描述') + '</div>'
       + '<div class="agent-card__meta">'
-      + '<span class="agent-card__tag' + (isActive ? ' agent-card__tag--active' : '') + '">'
-      + (isActive ? '当前' : toolCount + ' 工具')
+      + '<span class="agent-card__tag' + (isActive ? ' agent-card__tag--active' : (!a.tools_configured ? ' agent-card__tag--unrestricted' : '')) + '">'
+      + escHtml(toolLabel)
       + '</span>'
       + '</div></div>'
       + '<div class="agent-card__actions">'
@@ -158,10 +168,15 @@ function _showAgentDetail(agentId) {
     var name = a.name || a.id;
     var firstChar = name.charAt(0).toUpperCase();
 
-    // 显示详情面板，隐藏列表操作栏
+    // 显示详情面板 + 内部扩展
     document.getElementById('fieldsetAgents').style.display = 'none';
     document.getElementById('fieldsetAgentDetail').style.display = '';
+    document.getElementById('agentDetailExtensions').style.display = '';
     document.getElementById('agentDetailTitle').textContent = name;
+
+    // 刷新 Skills 和 MD 列表（使用当前详情 Agent ID）
+    if (typeof loadSkills === 'function') loadSkills(agentId);
+    if (typeof loadMdFiles === 'function') setTimeout(function(){ loadMdFiles(agentId); }, 50);
 
     // 切换按钮文本
     var switchBtn = document.getElementById('btnAgentSwitch');
@@ -173,61 +188,177 @@ function _showAgentDetail(agentId) {
     }
 
     // 编辑/删除按钮绑定
-    document.getElementById('btnAgentEdit').onclick = function(){ _openAgentModal(a.id); };
+    document.getElementById('btnAgentEdit').style.display = 'none';
     document.getElementById('btnAgentDelete').onclick = function(){ _deleteAgent(a.id); };
     document.getElementById('btnAgentSwitch').onclick = function(){ _agentMgrSwitchAgent(a.id); };
     document.getElementById('btnAgentDetailBack').onclick = function(){ _backToList(); };
 
-    // 渲染
-    var tools = a.tools && a.tools.acquired && a.tools.acquired.allow ? a.tools.acquired.allow : [];
-    var promptHtml = a.system_prompt
-      ? '<pre class="agent-detail__prompt">' + escHtml(a.system_prompt) + '</pre>'
-      : '<pre class="agent-detail__prompt"></pre>';
-
-    var toolsHtml = tools.length === 0
-      ? '<span class="agent-detail__tool-none">未配置工具</span>'
-      : '<div class="agent-detail__tools">' + tools.map(function(t){
-          return '<span class="agent-detail__tool-tag">' + escHtml(t) + '</span>';
-        }).join('') + '</div>';
-
-    var html = ''
-      + '<div class="agent-detail">'
-      // Hero
-      + '<div class="agent-detail__hero">'
-      + '<div class="agent-card__avatar agent-card__avatar--' + color + '">' + escHtml(firstChar) + '</div>'
-      + '<div class="agent-detail__hero-info">'
-      + '<div class="agent-detail__hero-name">' + escHtml(name) + '</div>'
-      + '<div class="agent-detail__hero-id">' + escHtml(a.id) + '</div>'
-      + '<div class="agent-detail__hero-status' + (isActive ? ' agent-detail__hero-status--active' : '') + '">'
-      + (isActive ? '🟢 当前活跃' : '⚪ 未激活')
-      + '</div></div></div>'
-      // Grid: 系统提示 + 工具
-      + '<div class="agent-detail__grid">'
-      + '<div class="agent-detail__card">'
-      + '<div class="agent-detail__card-title">系统提示词</div>'
-      + promptHtml
-      + '</div>'
-      + '<div class="agent-detail__card">'
-      + '<div class="agent-detail__card-title">已启用工具 (' + tools.length + ')</div>'
-      + toolsHtml
-      + '</div></div>'
-      // Session list
-      + '<div class="agent-detail__section">'
-      + '<h4 class="agent-detail__section-title">📋 会话列表</h4>'
-      + '<div id="agentSessionList" class="agent-detail__session-list"><div class="agent-loading"><div class="agent-loading__spinner"></div><span>加载中...</span></div></div>'
-      + '</div></div>';
-
-    document.getElementById('agentDetailContent').innerHTML = html;
+    // 渲染详情
+    _renderAgentDetailContent(a, tools);
     _loadAgentSessions(agentId);
   }).catch(function(err){
     _agentSetStatus('error', err.message);
   });
 }
 
+function _renderAgentDetailContent(a, tools) {
+  var isActive = a.id === _getActiveAgentId();
+  var color = _avatarColor(a.id);
+  var name = a.name || a.id;
+  var firstChar = name.charAt(0).toUpperCase();
+
+  var promptHtml = a.system_prompt
+    ? '<pre class="agent-detail__prompt">' + escHtml(a.system_prompt) + '</pre>'
+    : '<pre class="agent-detail__prompt"></pre>';
+
+  var descHtml = escHtml(a.description || '')
+    + '<button class="btn btn--ghost btn--sm agent-detail__desc-edit-btn" onclick="_editDescription(\'' + escAttr(a.id) + '\')">✎</button>';
+
+  var toolsHtml;
+  if (!a.tools_configured) {
+    toolsHtml = '<span class="agent-detail__tool-none agent-detail__tool-none--unrestricted">未限制（全部工具开放）</span>'
+      + '<button class="btn btn--ghost btn--sm agent-detail__tool-edit-btn" onclick="_startEditTools(\'' + escAttr(a.id) + '\')">✎ 编辑</button>';
+  } else if (tools.length === 0) {
+    toolsHtml = '<span class="agent-detail__tool-none">仅基础工具</span>'
+      + '<button class="btn btn--ghost btn--sm agent-detail__tool-edit-btn" onclick="_startEditTools(\'' + escAttr(a.id) + '\')">✎ 编辑</button>';
+  } else {
+    toolsHtml = '<div class="agent-detail__tools">' + tools.map(function(t){
+        return '<span class="agent-detail__tool-tag">' + escHtml(t) + '</span>';
+      }).join('') + '</div>'
+      + '<button class="btn btn--ghost btn--sm agent-detail__tool-edit-btn" onclick="_startEditTools(\'' + escAttr(a.id) + '\')">✎ 编辑</button>';
+  }
+
+  var html = ''
+    + '<div class="agent-detail">'
+    // Hero
+    + '<div class="agent-detail__hero">'
+    + '<div class="agent-card__avatar agent-card__avatar--' + color + '">' + escHtml(firstChar) + '</div>'
+    + '<div class="agent-detail__hero-info">'
+    + '<div class="agent-detail__hero-name">' + escHtml(name) + '</div>'
+    + '<div class="agent-detail__hero-id">' + escHtml(a.id) + '</div>'
+    + '<div class="agent-detail__hero-desc" id="agentDetailDesc">' + descHtml + '</div>'
+    + '<div class="agent-detail__hero-status' + (isActive ? ' agent-detail__hero-status--active' : '') + '">'
+    + (isActive ? '🟢 当前活跃' : '⚪ 未激活')
+    + '</div></div></div>'
+    // Grid: 系统提示 + 工具
+    + '<div class="agent-detail__grid">'
+    + '<div class="agent-detail__card">'
+    + '<div class="agent-detail__card-title">系统提示词</div>'
+    + promptHtml
+    + '</div>'
+    + '<div class="agent-detail__card" id="agentToolsCard">'
+    + '<div class="agent-detail__card-title">已启用工具' + (a.tools_configured ? ' (' + tools.length + ')' : '') + '</div>'
+    + '<div id="agentToolsContent">' + toolsHtml + '</div>'
+    + '</div></div>'
+    // Session list
+    + '<div class="agent-detail__section">'
+    + '<h4 class="agent-detail__section-title">📋 会话列表</h4>'
+    + '<div id="agentSessionList" class="agent-detail__session-list"><div class="agent-loading"><div class="agent-loading__spinner"></div><span>加载中...</span></div></div>'
+    + '</div></div>';
+
+  document.getElementById('agentDetailContent').innerHTML = html;
+}
+
+function _startEditTools(agentId) {
+  var contentEl = document.getElementById('agentToolsContent');
+  if (!contentEl) return;
+  contentEl.innerHTML = '<div class="agent-loading"><div class="agent-loading__spinner"></div><span>加载工具列表...</span></div>';
+
+  fetch(apiUrl('/api/ui/tools/available'))
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      var allTools = data.tools || [];
+      // Get current allowed tools
+      return fetch(apiUrl('/api/ui/agents/' + encodeURIComponent(agentId)))
+        .then(function(r){ return r.json(); })
+        .then(function(d){
+          var a = d.agent;
+          var allowed = a.tools && a.tools.acquired && a.tools.acquired.allow ? a.tools.acquired.allow : [];
+          return {allTools: allTools, allowed: allowed, agentId: agentId};
+        });
+    })
+    .then(function(ctx){
+      var html = '<div class="agent-tool-edit">';
+      ctx.allTools.forEach(function(t){
+        var checked = ctx.allowed.indexOf(t) >= 0 ? ' checked' : '';
+        html += '<label class="checkbox-label"><input type="checkbox" class="agent-tool-cb" value="' + escAttr(t) + '"' + checked + '> ' + escHtml(t) + '</label>';
+      });
+      html += '</div>'
+        + '<div class="agent-detail__tool-actions">'
+        + '<button class="btn btn--primary btn--sm" onclick="_saveTools(\'' + escAttr(ctx.agentId) + '\')">💾 保存</button>'
+        + '<button class="btn btn--ghost btn--sm" onclick="_cancelEditTools(\'' + escAttr(ctx.agentId) + '\')">取消</button>'
+        + '</div>';
+      contentEl.innerHTML = html;
+    })
+    .catch(function(err){
+      contentEl.innerHTML = '<span class="agent-detail__tool-none">加载失败: ' + escHtml(err.message) + '</span>'
+        + '<button class="btn btn--ghost btn--sm" onclick="_cancelEditTools(\'' + escAttr(agentId) + '\')">返回</button>';
+    });
+}
+
+function _saveTools(agentId) {
+  var checked = [];
+  document.querySelectorAll('#agentToolsContent .agent-tool-cb:checked').forEach(function(cb){
+    checked.push(cb.value);
+  });
+  var toolsData = { acquired: { allow: checked } };
+
+  fetch(apiUrl('/api/ui/agents/' + encodeURIComponent(agentId)), {
+    method: 'PUT',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ tools: toolsData })
+  })
+    .then(function(r){ return r.json(); })
+    .then(function(){
+      _agentSetStatus('ok', '工具已更新');
+      _showAgentDetail(agentId); // refresh
+    })
+    .catch(function(err){
+      _agentSetStatus('error', '保存失败: ' + err.message);
+    });
+}
+
+function _cancelEditTools(agentId) {
+  _showAgentDetail(agentId); // just re-render
+}
+
+function _editDescription(agentId) {
+  var descEl = document.getElementById('agentDetailDesc');
+  if (!descEl) return;
+  var current = descEl.textContent.replace('✎', '').trim();
+  descEl.innerHTML = '<input type="text" class="input agent-detail__desc-input" id="inpAgentDesc" value="' + escAttr(current) + '" placeholder="一句话描述这个 Agent 的用途" />'
+    + '<button class="btn btn--primary btn--sm" onclick="_saveDescription(\'' + escAttr(agentId) + '\')">保存</button>'
+    + '<button class="btn btn--ghost btn--sm" onclick="_cancelEditDescription(\'' + escAttr(agentId) + '\')">取消</button>';
+  var inp = document.getElementById('inpAgentDesc');
+  if (inp) { inp.focus(); inp.select(); }
+}
+
+function _saveDescription(agentId) {
+  var desc = document.getElementById('inpAgentDesc') ? document.getElementById('inpAgentDesc').value.trim() : '';
+  fetch(apiUrl('/api/ui/agents/' + encodeURIComponent(agentId)), {
+    method: 'PUT',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ description: desc })
+  })
+    .then(function(r){ return r.json(); })
+    .then(function(){
+      _agentSetStatus('ok', '描述已更新');
+      _showAgentDetail(agentId);
+    })
+    .catch(function(err){
+      _agentSetStatus('error', '保存失败: ' + err.message);
+    });
+}
+
+function _cancelEditDescription(agentId) {
+  _showAgentDetail(agentId);
+}
+
 function _backToList() {
   _currentDetailAgentId = null;
   document.getElementById('fieldsetAgents').style.display = '';
   document.getElementById('fieldsetAgentDetail').style.display = 'none';
+  document.getElementById('agentDetailExtensions').style.display = 'none';
 }
 
 function _loadAgentSessions(agentId) {
@@ -323,18 +454,22 @@ function _openAgentModal(agentId) {
   document.getElementById('agentModal').style.display = '';
 
   var inpId = document.getElementById('inpAgentId');
+  var inpDesc = document.getElementById('inpAgentDesc');
   var inpSp = document.getElementById('inpAgentSystemPrompt');
+  var inpToolsContainer = document.getElementById('agentToolCheckboxList');
 
   if (isEdit) {
     inpId.disabled = true;
     _agentMgrApi('/api/ui/agents/' + encodeURIComponent(agentId)).then(function(data){
       inpId.value = data.agent.id;
+      inpDesc.value = data.agent.description || '';
       inpSp.value = data.agent.system_prompt || '';
       _renderToolCheckboxes(data.agent.tools);
     });
   } else {
     inpId.disabled = false;
     inpId.value = '';
+    inpDesc.value = '';
     inpSp.value = '';
     _renderToolCheckboxes(null);
   }
@@ -360,6 +495,7 @@ function _renderToolCheckboxes(currentTools) {
 
 function _saveAgent() {
   var agentId = document.getElementById('inpAgentId').value.trim();
+  var agentDesc = document.getElementById('inpAgentDesc').value.trim();
   var systemPrompt = document.getElementById('inpAgentSystemPrompt').value.trim();
   if (!agentId) { _agentSetStatus('error', 'Agent ID 不能为空'); return; }
 
@@ -375,7 +511,7 @@ function _saveAgent() {
     : '/api/ui/agents';
   var method = isEdit ? 'PUT' : 'POST';
 
-  var bodyData = { id: agentId, system_prompt: systemPrompt, tools: tools };
+  var bodyData = { id: agentId, description: agentDesc, system_prompt: systemPrompt, tools: tools };
 
   if (!isEdit) {
     var presetId = document.getElementById('selAgentPreset').value;

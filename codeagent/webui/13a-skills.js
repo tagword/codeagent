@@ -9,13 +9,24 @@
 
 // ---------------- Skill management ----------------
 
-async function loadSkills() {
+// Track which agent's skills are currently displayed.
+// When viewing an agent detail, this is the detail agent ID;
+// on page load, it falls back to the global agentId.
+var _skillAgentId = null;
+
+function _currentSkillAgentId() {
+  return _skillAgentId || agentId;
+}
+
+async function loadSkills(overrideAgentId) {
+  const aid = overrideAgentId || agentId;
+  _skillAgentId = aid;
   const list = document.getElementById('skillList');
   const status = document.getElementById('skillStatus');
   if (!list) return;
   if (status) status.classList.remove('is-err');
   try {
-    const r = await fetch('/api/ui/skills?agent_id=' + encodeURIComponent(agentId));
+    const r = await fetch('/api/ui/skills?agent_id=' + encodeURIComponent(aid));
     if (!r.ok) throw new Error(r.statusText);
     const j = await r.json();
     const skills = j.skills || [];
@@ -99,7 +110,7 @@ function buildSkillCard(s) {
     editStatus.textContent = '保存中…';
     editStatus.classList.remove('is-err');
     try {
-      var r = await fetch('/api/ui/skills?agent_id=' + encodeURIComponent(agentId), {
+      var r = await fetch('/api/ui/skills?agent_id=' + encodeURIComponent(_currentSkillAgentId()), {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'save', name: name, content: body })
       });
@@ -117,7 +128,7 @@ function buildSkillCard(s) {
 
 async function toggleSkillEnabled(s) {
   try {
-    var r = await fetch('/api/ui/skills?agent_id=' + encodeURIComponent(agentId), {
+    var r = await fetch('/api/ui/skills?agent_id=' + encodeURIComponent(_currentSkillAgentId()), {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'save', name: s.name, content: s.content || '', enabled: s.enabled })
     });
@@ -131,7 +142,7 @@ async function toggleSkillEnabled(s) {
 
 async function deleteSkill(name) {
   try {
-    var r = await fetch('/api/ui/skills?agent_id=' + encodeURIComponent(agentId), {
+    var r = await fetch('/api/ui/skills?agent_id=' + encodeURIComponent(_currentSkillAgentId()), {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'delete', name: name })
     });
