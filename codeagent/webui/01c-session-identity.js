@@ -11,7 +11,7 @@
 const READ_KEY = STORAGE_KEYS.SESS_LAST_READ;
 let lastSessionsCache = [];
 let webuiSessionsEnabled = false;
-let agentId = 'default';
+var agentId = 'default';
 
 /** RFC4122 v4；在 HTTP 或非 Chromium 旧版等环境下 crypto.randomUUID 可能不存在。 */
 function oaRandomUUID() {
