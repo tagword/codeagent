@@ -13,7 +13,7 @@ function _hubApi(path, opts) {
 
 // ── 页面切换 ──
 function switchToHubPage() {
-  if (typeof switchToPage === 'function') switchToPage('page-hub');
+  if (typeof switchToPage === 'function') switchToPage('hub');
 }
 
 // ── 加载历史消息 ──
@@ -134,8 +134,12 @@ function _activateHubButton() {
   btn.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.75"/><path d="M12 7v5l3 3" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/></svg>';
   teamBtn.parentNode.insertBefore(btn, teamBtn);
   btn.addEventListener('click', function(){
-    document.querySelectorAll('.activity-btn').forEach(function(b){ b.classList.remove('active'); });
-    btn.classList.add('active');
+    if (typeof switchActivityMode === 'function') {
+      switchActivityMode('hub');
+    } else {
+      document.querySelectorAll('.activity-btn').forEach(function(b){ b.classList.remove('active'); });
+      btn.classList.add('active');
+    }
     switchToHubPage();
     _loadHubHistory();
     _connectHubSSE();

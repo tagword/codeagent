@@ -82,19 +82,25 @@
 /* 配置 / 计划 / Agent：全宽主内容，隐藏项目侧栏 */
 body[data-activity-mode="config"] .app,
 body[data-activity-mode="tasks"] .app,
-body[data-activity-mode="agent"] .app {
+body[data-activity-mode="agent"] .app,
+body[data-activity-mode="team"] .app,
+body[data-activity-mode="hub"] .app {
   grid-template-columns: var(--activity-bar-w, 48px) 1fr;
 }
 
 body[data-activity-mode="config"] .workspace,
 body[data-activity-mode="tasks"] .workspace,
-body[data-activity-mode="agent"] .workspace {
+body[data-activity-mode="agent"] .workspace,
+body[data-activity-mode="team"] .workspace,
+body[data-activity-mode="hub"] .workspace {
   grid-column: 2;
 }
 
 body[data-activity-mode="config"] .app > aside.sidebar,
 body[data-activity-mode="tasks"] .app > aside.sidebar,
-body[data-activity-mode="agent"] .app > aside.sidebar {
+body[data-activity-mode="agent"] .app > aside.sidebar,
+body[data-activity-mode="team"] .app > aside.sidebar,
+body[data-activity-mode="hub"] .app > aside.sidebar {
   display: none !important;
 }
 
@@ -103,7 +109,9 @@ body[data-activity-mode="chat"] .workspace > .page:not(#page-chat),
 body[data-activity-mode="config"] .workspace > .page:not(#page-config),
 body[data-activity-mode="tasks"] .workspace > .page:not(#page-tasks),
 body[data-activity-mode="agent"] .workspace > .page:not(#page-agent),
-body[data-activity-mode="files"] .workspace > .page:not(#page-files) {
+body[data-activity-mode="files"] .workspace > .page:not(#page-files),
+body[data-activity-mode="team"] .workspace > .page:not(#page-team),
+body[data-activity-mode="hub"] .workspace > .page:not(#page-hub) {
   display: none !important;
   flex: 0 0 0 !important;
   min-height: 0 !important;
@@ -114,7 +122,9 @@ body[data-activity-mode="chat"] .workspace > #page-chat,
 body[data-activity-mode="config"] .workspace > #page-config,
 body[data-activity-mode="tasks"] .workspace > #page-tasks,
 body[data-activity-mode="agent"] .workspace > #page-agent,
-body[data-activity-mode="files"] .workspace > #page-files {
+body[data-activity-mode="files"] .workspace > #page-files,
+body[data-activity-mode="team"] .workspace > #page-team,
+body[data-activity-mode="hub"] .workspace > #page-hub {
   display: flex !important;
   flex-direction: column;
   min-height: 0 !important;

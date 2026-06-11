@@ -228,7 +228,7 @@ if (msg) {
 // ---------------- Active page persistence (localStorage) ----------------
 
 const TAB_KEY = STORAGE_KEYS.SESS_ACTIVE_PAGE;
-const WORKSPACE_PAGE_IDS = ['chat', 'config', 'tasks', 'agent', 'files'];
+const WORKSPACE_PAGE_IDS = ['chat', 'config', 'tasks', 'agent', 'files', 'team', 'hub'];
 
 function switchToPage(id) {
   if (!id) return;

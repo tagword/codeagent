@@ -14,7 +14,7 @@ var _currentAgentsForTeam = [];
 // ── 页面切换 ──
 
 function switchToTeamPage() {
-  if (typeof switchToPage === 'function') switchToPage('page-team');
+  if (typeof switchToPage === 'function') switchToPage('team');
 }
 
 // ── Team 列表 ──
@@ -231,8 +231,12 @@ function _activateTeamButton() {
   teamBtn.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/><circle cx="9" cy="7" r="4" fill="none" stroke="currentColor" stroke-width="1.75"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/></svg>';
   configBtn.parentNode.insertBefore(teamBtn, configBtn);
   teamBtn.addEventListener('click', function(){
-    document.querySelectorAll('.activity-btn').forEach(function(b){ b.classList.remove('active'); });
-    teamBtn.classList.add('active');
+    if (typeof switchActivityMode === 'function') {
+      switchActivityMode('team');
+    } else {
+      document.querySelectorAll('.activity-btn').forEach(function(b){ b.classList.remove('active'); });
+      teamBtn.classList.add('active');
+    }
     switchToTeamPage();
     _loadTeams();
   });
