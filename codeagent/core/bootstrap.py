@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 from typing import Optional
@@ -9,6 +10,8 @@ from typing import Optional
 from codeagent.core.env import apply_default_product_home
 from codeagent.core.seed_bridge import bridge_codeagent_env_to_seed
 from seed.integrations.env_config import apply_seed_env_from_config
+
+logger = logging.getLogger(__name__)
 
 _CODEAGENT_BOOTSTRAP_MD = """\
 # CodeAgent 首次启动引导
@@ -142,4 +145,20 @@ def bootstrap_codeagent_runtime(base: Optional[Path] = None) -> Path:
     apply_seed_env_from_config(None)
     bridge_codeagent_env_to_seed()
     _ensure_codeagent_bootstrap_md(home)
+
+    # ── Team config: load if exists ──
+    try:
+        team_cfg_path = home / "config" / "team.json"
+        if team_cfg_path.is_file():
+            from codeagent.core.team_manager import TeamManager
+            tm = TeamManager()
+            if tm.init_from_config(team_cfg_path):
+                logger.info(f"Team mode enabled: {len(tm.config.members)} member agents configured")
+            else:
+                logger.info("Single-agent mode (team config invalid or empty)")
+        else:
+            logger.info("Single-agent mode (no team.json found)")
+    except Exception:
+        logger.exception("Team config init failed — continuing in single-agent mode")
+
     return home
