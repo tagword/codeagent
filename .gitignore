@@ -18,6 +18,9 @@ build/
 
 # webui verify 脚本的临时产物（拼接中间文件）
 **/webui/.scripts/.tmp/
+
+# Agent 运行临时脚本和日志产物
+.scripts/
 **/webui/scripts/.tmp/
 *.egg-info/
 .pytest_cache/
