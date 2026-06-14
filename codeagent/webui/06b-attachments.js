@@ -1,6 +1,5 @@
 /* Attachment composer: files, folder, paste, drag-drop */
-
-const pendingAttachments = [];
+/* pendingAttachments 在 01q-inflight.js 中声明 */
 
 function fileNeedsVision(mime) {
   return mime.startsWith('image/') || mime.startsWith('video/');
