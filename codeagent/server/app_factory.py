@@ -119,7 +119,7 @@ def create_app():
         from seed.integrations.session_title import maybe_llm_refresh_session_title
         import threading
 
-        from . import SESSIONS, _DEFAULT_AUTO_CONTINUE_NUDGE, _running_add, _running_discard, tools_for_agent, ACTIVE_CHAT_CANCELS, PENDING_INJECTIONS
+        from . import SESSIONS, _DEFAULT_AUTO_CONTINUE_NUDGE, _running_add, _running_discard, _running_contains, tools_for_agent, ACTIVE_CHAT_CANCELS, PENDING_INJECTIONS
 
         try:
             body = await request.json()
@@ -137,12 +137,16 @@ def create_app():
             pick_int,
         )
 
+        _run_started = False
+        _run_was_cancelled = False
+        _run_mkey = ""
+        _cancel_token = None
+
         try:
             agent_id = str(body.get("agent_id") or ca_env.default_agent_id()).strip() or "default"
             body["agent_id"] = agent_id
             body["session_id"] = session_id
             _run_mkey = _memkey(agent_id, session_id)
-            _cancel_token = None
 
             llm_id = str(body.get("llm_id") or "").strip()
             vision_llm_id = str(body.get("vision_llm_id") or "").strip()
@@ -198,19 +202,26 @@ def create_app():
                 project_id = ""
 
             # ── 同 session 并发注入 ──
-            # 如果 session 已在处理中，将消息入队（下一轮工具循环会自动捡起）
+            # 仅当 session 确实在跑时才入队；否则清掉残留 queue 并正常发起新 run
+            if not _running_contains(_run_mkey):
+                PENDING_INJECTIONS.pop(_run_mkey, None)
             existing_queue = PENDING_INJECTIONS.get(_run_mkey)
-            if existing_queue is not None:
+            if existing_queue is not None and _running_contains(_run_mkey):
                 from datetime import datetime, timezone
                 queued = dict(user_msg)
                 queued.setdefault("ts", datetime.now(timezone.utc).isoformat())
                 existing_queue.append(queued)
+                with contextlib.suppress(Exception):
+                    await _broadcast_session_event(agent_id, session_id, {
+                        "type": "message_queued",
+                    })
                 return JSONResponse(
                     {"queued": True, "session_id": session_id, "agent_id": agent_id},
                     status_code=202,
                 )
             PENDING_INJECTIONS[_run_mkey] = []
             _running_add(_run_mkey)
+            _run_started = True
 
             mkey = _memkey(agent_id, session_id)
             try:
@@ -353,6 +364,12 @@ def create_app():
                     )
 
             emitter_token = set_chat_event_emitter(_emit_progress_from_worker)
+
+            with contextlib.suppress(Exception):
+                asyncio.run_coroutine_threadsafe(
+                    _broadcast_session_event(agent_id, session_id, {"type": "run_started"}),
+                    main_loop,
+                )
 
             # ── 停止信号：接线到 ACTIVE_CHAT_CANCELS ──
             try:
@@ -528,6 +545,8 @@ def create_app():
                                     _acc_usage[_k] = _acc_usage.get(_k, 0) + int(_v)
 
                         if _seg_meta.get("stopped_reason") != "max_tool_rounds":
+                            if _seg_meta.get("stopped_reason") == "cancelled":
+                                _run_was_cancelled = True
                             break
 
                         _segment += 1
@@ -756,6 +775,7 @@ def create_app():
                         "accumulated_cost": _total_cost_info,
                         "accumulated_usage": _acc,
                         "model": _model_name,
+                        "cancelled": bool(_run_was_cancelled),
                     }
                 )
             except LLMError as e:
@@ -776,15 +796,25 @@ def create_app():
                 _ev.set()
             raise
         finally:
-            _running_discard(_run_mkey)
-            PENDING_INJECTIONS.pop(_run_mkey, None)
-            _ev = ACTIVE_CHAT_CANCELS.get(_run_mkey)
-            if _ev is not None:
-                _ev.set()
-            ACTIVE_CHAT_CANCELS.pop(_run_mkey, None)
-            if _cancel_token is not None:
+            if _run_started:
+                _running_discard(_run_mkey)
+                PENDING_INJECTIONS.pop(_run_mkey, None)
+                _ev = ACTIVE_CHAT_CANCELS.get(_run_mkey)
+                if _ev is not None:
+                    _ev.set()
+                ACTIVE_CHAT_CANCELS.pop(_run_mkey, None)
+                if _cancel_token is not None:
+                    with contextlib.suppress(Exception):
+                        reset_chat_cancel_checker(_cancel_token)
                 with contextlib.suppress(Exception):
-                    reset_chat_cancel_checker(_cancel_token)
+                    await _broadcast_session_event(agent_id, session_id, {
+                        "type": "run_finished",
+                        "cancelled": bool(_run_was_cancelled),
+                    })
+                    if _run_was_cancelled:
+                        await _broadcast_session_event(agent_id, session_id, {
+                            "type": "chat_cancelled",
+                        })
 
     async def api_chat_stop(request: Request) -> JSONResponse:
         try:
@@ -798,6 +828,10 @@ def create_app():
         cancel_event = ACTIVE_CHAT_CANCELS.get(_run_mkey)
         if cancel_event:
             cancel_event.set()
+            with contextlib.suppress(Exception):
+                await _broadcast_session_event(agent_id, session_id, {
+                    "type": "chat_stop_requested",
+                })
             return JSONResponse({"cancelled": True})
         return JSONResponse({"cancelled": False, "reason": "not_running"})
 

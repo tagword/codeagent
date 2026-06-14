@@ -1,5 +1,7 @@
 
 const chatInflightBySid = {};
+/** 待发送附件（06b-attachments.js 读写；须在此提前声明避免 TDZ） */
+var pendingAttachments = [];
 
 /**
  * 刚刚结束运行的会话集合（sid → true）。
