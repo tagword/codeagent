@@ -56,3 +56,4 @@ credentials.json
 *-credentials.json
 *_secrets.*
 **/local.override.*
+webui-v2

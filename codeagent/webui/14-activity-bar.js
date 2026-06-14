@@ -1,12 +1,12 @@
 var _activeMode = null;
-var _FULL_WIDTH_MODES = ['config', 'tasks', 'agent', 'team', 'hub'];
+var _FULL_WIDTH_MODES = ['config', 'tasks', 'agent'];
 
 function _applySidebarForMode(mode) {
   var chatSidebar = document.getElementById('chatSidebar');
   var outerSidebar = document.querySelector('.app > aside.sidebar');
   if (outerSidebar) outerSidebar.style.removeProperty('display');
 
-  if (mode === 'stats' || mode === 'files') {
+  if (mode === 'files') {
     if (chatSidebar) chatSidebar.style.display = 'none';
     return;
   }
@@ -55,25 +55,15 @@ function switchActivityMode(mode) {
     b.classList.toggle('active', b.getAttribute('data-mode') === mode);
   });
 
-  var statsSection = document.getElementById('sidebarStats');
   var filesSection = document.getElementById('sidebarFiles');
   var gitSidebarSection = document.getElementById('sidebarGit');
 
   function hideSidebarModes() {
-    if (statsSection) statsSection.style.display = 'none';
     if (filesSection) filesSection.style.display = 'none';
     if (gitSidebarSection) gitSidebarSection.style.display = 'none';
   }
 
-  if (mode === 'stats') {
-    hideSidebarModes();
-    if (statsSection) statsSection.style.display = 'flex';
-    _applySidebarForMode(mode);
-    if (typeof switchToPage === 'function') switchToPage('chat');
-    else _syncWorkspacePages('chat');
-    if (typeof activatePage === 'function') activatePage('chat');
-    if (typeof loadStats === 'function') loadStats();
-  } else if (mode === 'files') {
+  if (mode === 'files') {
     hideSidebarModes();
     if (filesSection) filesSection.style.display = 'flex';
     _applySidebarForMode(mode);
@@ -118,7 +108,7 @@ function syncTopbarChatShortcutUi() {
 function restoreActivityMode() {
   try {
     var saved = tryGetLS(STORAGE_KEYS.SESS_ACTIVITY_MODE);
-    if (saved && ['chat', 'tasks', 'agent', 'config', 'stats', 'files'].indexOf(saved) >= 0) {
+    if (saved && ['chat', 'tasks', 'agent', 'config', 'files'].indexOf(saved) >= 0) {
       _activeMode = null;
       switchActivityMode(saved);
       return;

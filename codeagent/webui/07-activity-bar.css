@@ -109,9 +109,7 @@ body[data-activity-mode="chat"] .workspace > .page:not(#page-chat),
 body[data-activity-mode="config"] .workspace > .page:not(#page-config),
 body[data-activity-mode="tasks"] .workspace > .page:not(#page-tasks),
 body[data-activity-mode="agent"] .workspace > .page:not(#page-agent),
-body[data-activity-mode="files"] .workspace > .page:not(#page-files),
-body[data-activity-mode="team"] .workspace > .page:not(#page-team),
-body[data-activity-mode="hub"] .workspace > .page:not(#page-hub) {
+body[data-activity-mode="files"] .workspace > .page:not(#page-files) {
   display: none !important;
   flex: 0 0 0 !important;
   min-height: 0 !important;
@@ -122,9 +120,7 @@ body[data-activity-mode="chat"] .workspace > #page-chat,
 body[data-activity-mode="config"] .workspace > #page-config,
 body[data-activity-mode="tasks"] .workspace > #page-tasks,
 body[data-activity-mode="agent"] .workspace > #page-agent,
-body[data-activity-mode="files"] .workspace > #page-files,
-body[data-activity-mode="team"] .workspace > #page-team,
-body[data-activity-mode="hub"] .workspace > #page-hub {
+body[data-activity-mode="files"] .workspace > #page-files {
   display: flex !important;
   flex-direction: column;
   min-height: 0 !important;

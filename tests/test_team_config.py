@@ -147,7 +147,7 @@ class TestTeamConfig:
 
     def test_create_default_config(self, tmp_path: Path):
         """create_default_team_config produces valid config with 8 members."""
-        config = create_default_team_config(tmp_path)
+        config = create_default_team_config(Path(tmp_path))
 
         assert config.lead.id == "lead"
         assert len(config.members) == 8

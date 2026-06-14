@@ -248,7 +248,7 @@ if (msg) {
 // ---------------- Active page persistence (localStorage) ----------------
 
 const TAB_KEY = STORAGE_KEYS.SESS_ACTIVE_PAGE;
-const WORKSPACE_PAGE_IDS = ['chat', 'config', 'tasks', 'agent', 'files', 'team', 'hub'];
+const WORKSPACE_PAGE_IDS = ['chat', 'config', 'tasks', 'agent', 'files'];
 
 function switchToPage(id) {
   if (!id) return;
@@ -266,7 +266,7 @@ function switchToPage(id) {
 function activatePage(id) {
   var actMode = '';
   try { actMode = document.body.getAttribute('data-activity-mode') || ''; } catch (_) {}
-  if (actMode && actMode !== 'chat' && actMode !== 'stats' && actMode !== 'files' && id === 'chat') {
+  if (actMode && actMode !== 'chat' && actMode !== 'files' && id === 'chat') {
     id = actMode;
   }
   switchToPage(id);

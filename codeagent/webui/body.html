@@ -13,10 +13,6 @@
       <button type="button" class="activity-btn" data-mode="config" title="配置">
         <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.75"/><path d="M12 2v2m0 18v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m18 0h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/></svg>
       </button>
-      <button type="button" class="activity-btn" data-mode="stats" title="统计">
-        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 20V11M10 20V4M16 20v-7M22 20V9" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/></svg>
-      </button>
-
     </div>
     <div class="activity-bar__bottom">
       <button type="button" class="activity-btn" id="btnLogout" title="退出登录">
@@ -31,11 +27,6 @@
         <div class="brand__text">
           <div class="brand__name">CodeAgent</div>
           <div class="brand__slogan">对话 · 工作台</div>
-        </div>
-        <div class="brand__agent">
-          <select id="agentSwitcher" class="brand__agent-select">
-            <option value="">加载中...</option>
-          </select>
         </div>
       </div>
     </div>
@@ -61,35 +52,6 @@
 
 
     </aside>
-
-    <section id="sidebarStats" class="sidebar-mode" style="display:none;">
-      <div class="sidebar-mode__scroll">
-        <div class="sidebar__head" style="padding-bottom:0;">
-          <div class="brand brand--stats">
-            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 20V11M10 20V4M16 20v-7M22 20V9" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/></svg>
-            <div class="brand__text">
-              <div class="brand__name" style="font-size:13px;">统计数据</div>
-              <div class="brand__slogan" style="font-size:10.5px;" id="statsLastUpdated">加载中…</div>
-            </div>
-          </div>
-        </div>
-        <div class="stats-grid" id="statsGrid">
-          <div class="stats-card"><div class="stats-card__value" id="statProjects">-</div><div class="stats-card__label">项目数</div></div>
-          <div class="stats-card"><div class="stats-card__value" id="statSessions">-</div><div class="stats-card__label">会话数</div></div>
-          <div class="stats-card"><div class="stats-card__value" id="statMessages">-</div><div class="stats-card__label">消息数</div></div>
-          <div class="stats-card"><div class="stats-card__value" id="statTodos">-</div><div class="stats-card__label">待办项</div></div>
-        </div>
-        <div id="statsContent"></div>
-        <div class="stats-section">
-          <div class="sidebar__section-label" style="margin-top:0;">最近项目</div>
-          <div id="statsRecentProjects" class="stats-recent"><div class="config-tool-list__empty">加载中…</div></div>
-        </div>
-        <div class="stats-section">
-          <div class="sidebar__section-label" style="margin-top:0;">最近会话</div>
-          <div id="statsRecentSessions" class="stats-recent"><div class="config-tool-list__empty">加载中…</div></div>
-        </div>
-      </div>
-    </section>
 
     <section id="sidebarFiles" class="sidebar-mode" style="display:none;">
       <div class="sidebar-mode__scroll">
@@ -696,87 +658,43 @@
     <section id="page-agent" class="page page--scroll">
       <div class="content-max">
 
-        <!-- Agent management -->
-        <fieldset class="section" id="fieldsetAgents">
+        <!-- Current agent detail (always visible, single-agent mode) -->
+        <fieldset class="section" id="fieldsetAgentDetail">
           <div class="section__header">
-            <h3 class="section__title">Agent 管理</h3>
-            <div class="row-actions" style="display:flex;gap:var(--sp-2);margin:0;">
-              <button type="button" class="btn btn--primary btn--sm" id="btnAgentCreate">+ 新建</button>
-              <button type="button" class="btn btn--ghost btn--sm" id="btnAgentRefresh">刷新</button>
-            </div>
+            <h3 class="section__title" id="agentDetailTitle">Agent 配置</h3>
           </div>
-          <p class="section__desc">管理当前系统中的所有 Agent。点击可查看详情，点「切换」可激活。</p>
-          <div class="agent-toolbar">
-            <div class="agent-search-wrap">
-              <input type="text" class="agent-search" id="agentSearch" placeholder="搜索 Agent 名称或 ID…" />
-            </div>
-            <span class="agent-count" id="agentCount"></span>
-          </div>
-          <div id="agentList" class="agent-list" style="margin-bottom:var(--sp-3);"></div>
+          <div id="agentDetailContent"></div>
           <div id="agentStatus" class="status-line"></div>
         </fieldset>
 
-        <!-- Agent detail panel -->
-        <fieldset class="section" id="fieldsetAgentDetail" style="display:none;">
+        <!-- Skills section -->
+        <fieldset class="section" id="fieldsetAgentSkills">
           <div class="section__header">
-            <div class="section__header-left">
-              <button type="button" class="btn btn--ghost btn--icon" id="btnAgentDetailBack" title="返回列表">&larr;</button>
-              <h3 class="section__title" id="agentDetailTitle">Agent 详情</h3>
-            </div>
+            <h3 class="section__title">📚 知识 / 技能</h3>
             <div class="row-actions" style="display:flex;gap:var(--sp-2);margin:0;">
-              <button type="button" class="btn btn--primary btn--sm" id="btnAgentSwitch">切换到此 Agent</button>
-              <button type="button" class="btn btn--ghost btn--sm" id="btnAgentEdit">编辑</button>
-              <button type="button" class="btn btn--danger btn--sm" id="btnAgentDelete">删除</button>
-            </div>
-          </div>
-          <div id="agentDetailContent"></div>
-        </fieldset>
-
-        <!-- Agent detail extensions: Skills + SysPrompt (shown inside detail panel) -->
-        <div id="agentDetailExtensions" style="display:none;">
-          <!-- Skills → moved inside detail -->
-          <fieldset class="section detail-extension" id="fieldsetAgentSkills">
-            <div class="section__header">
-              <h3 class="section__title">📚 知识 / 技能</h3>
-              <div class="row-actions" style="display:flex;gap:var(--sp-2);margin:0;">
-                <button type="button" class="btn btn--primary btn--sm" id="btnSkillAdd">+ 新增</button>
-                <button type="button" class="btn btn--ghost btn--sm" id="btnSkillRefresh">刷新</button>
-              </div>
-            </div>
-            <p class="section__desc">
-              技能文件是 Markdown 文档，教导 Agent 如何完成特定任务。仅对当前 Agent 生效，可独立启用/停用。
-            </p>
-            <div id="skillList" class="skill-list" style="margin-bottom:var(--sp-3);"></div>
-            <div id="skillStatus" class="status-line"></div>
-          </fieldset>
-
-          <!-- System Prompt MD files → moved inside detail -->
-          <fieldset class="section detail-extension" id="fieldsetSysPromptMd">
-            <div class="section__header">
-              <h3 class="section__title">📄 身份配置文件</h3>
-            </div>
-            <p class="section__desc">
-              编辑当前 Agent 的身份/行为配置文件（Markdown）。所有文档默认参与<strong>系统提示</strong>，保存后<strong>下一轮对话</strong>生效。
-            </p>
-            <div id="mdFileList"></div>
-            <div id="mdFileStatus" class="status-line"></div>
-          </fieldset>
-        </div>
-
-        <!-- External Integrations (global, system-level) -->
-        <fieldset class="section section--global" id="fieldsetAgentTools">
-          <div class="section__header">
-            <h3 class="section__title">🔌 外部集成 <span class="section__badge">系统全局</span></h3>
-            <div class="row-actions" style="display:flex;gap:var(--sp-2);margin:0;">
-              <button type="button" class="btn btn--ghost btn--sm" id="btnToolRefresh">刷新</button>
+              <button type="button" class="btn btn--primary btn--sm" id="btnSkillAdd">+ 新增</button>
+              <button type="button" class="btn btn--ghost btn--sm" id="btnSkillRefresh">刷新</button>
             </div>
           </div>
           <p class="section__desc">
-            系统级的外部服务集成。开启后所有 Agent 均可使用对应能力（如 AI 图像生成、音乐生成、联网搜索等）。每个集成可独立开关。
+            技能文件是 Markdown 文档，教导 Agent 如何完成特定任务。仅对当前 Agent 生效，可独立启用/停用。
           </p>
-          <div id="toolList" class="tool-list" style="margin-bottom:var(--sp-3);"></div>
-          <div id="toolStatus" class="status-line"></div>
+          <div id="skillList" class="skill-list" style="margin-bottom:var(--sp-3);"></div>
+          <div id="skillStatus" class="status-line"></div>
         </fieldset>
+
+        <!-- System Prompt MD files -->
+        <fieldset class="section" id="fieldsetSysPromptMd">
+          <div class="section__header">
+            <h3 class="section__title">📄 身份配置文件</h3>
+          </div>
+          <p class="section__desc">
+            编辑当前 Agent 的身份/行为配置文件（Markdown）。所有文档默认参与<strong>系统提示</strong>，保存后<strong>下一轮对话</strong>生效。
+          </p>
+          <div id="mdFileList"></div>
+          <div id="mdFileStatus" class="status-line"></div>
+        </fieldset>
+
       </div>
     </section>
 
@@ -908,130 +826,6 @@
         </div>
       </div>
     </div>
-
-        <section id="page-team" class="page page--scroll">
-      <div class="content-max">
-        <fieldset class="section" id="fieldsetTeams">
-          <div class="section__header">
-            <h3 class="section__title">Team 管理</h3>
-            <div class="row-actions" style="display:flex;gap:var(--sp-2);margin:0;">
-              <button class="btn btn--primary btn--sm" id="btnTeamCreate">+ 新建</button>
-              <button class="btn btn--ghost btn--sm" id="btnTeamRefresh">刷新</button>
-            </div>
-          </div>
-          <p class="section__desc">将多个 Agent 组成团队，按顺序/并行/管家模式协同工作。</p>
-          <div id="teamList" class="team-list"></div>
-          <div id="teamStatus" class="status-line"></div>
-        </fieldset>
-        <div id="teamModal" class="modal-overlay" style="display:none;">
-          <div class="modal modal--medium">
-            <div class="modal__header">
-              <h3 id="teamModalTitle">新建 Team</h3>
-              <button class="modal__close" id="btnTeamModalClose">&times;</button>
-            </div>
-            <div class="modal__body">
-              <div class="modal-field">
-                <label class="modal-field__label" for="inpTeamId">Team ID <span class="required">*</span></label>
-                <input type="text" id="inpTeamId" class="input" placeholder="content-pipeline" />
-              </div>
-              <div class="modal-field">
-                <label class="modal-field__label" for="inpTeamName">名称</label>
-                <input type="text" id="inpTeamName" class="input" />
-              </div>
-              <div class="modal-field">
-                <label class="modal-field__label" for="inpTeamDesc">描述</label>
-                <textarea id="inpTeamDesc" class="input textarea" rows="3"></textarea>
-              </div>
-              <div class="modal-field">
-                <label class="modal-field__label">工作模式</label>
-                <select id="selTeamMode" class="input">
-                  <option value="sequential">顺序模式</option>
-                  <option value="parallel">并行模式</option>
-                  <option value="manager">管家模式</option>
-                </select>
-              </div>
-              <div class="modal-field">
-                <label class="modal-field__label">超时（秒）</label>
-                <input type="number" id="inpTeamTimeout" class="input" value="300" min="30" />
-              </div>
-              <div class="modal-field">
-                <label class="modal-field__label">错误策略</label>
-                <select id="selTeamErrorPolicy" class="input">
-                  <option value="stop">出错即停</option>
-                  <option value="skip">跳过继续</option>
-                </select>
-              </div>
-              <div class="modal-field">
-                <label class="modal-field__label">团队成员</label>
-                <div id="teamMemberCheckboxList" class="checkbox-group"></div>
-              </div>
-              <div class="modal-field" id="fieldManagerSelect" style="display:none;">
-                <label class="modal-field__label">管家（PM）</label>
-                <select id="selTeamManager" class="input">
-                  <option value="">— 请选择管家 —</option>
-                </select>
-                <p class="modal-field__hint">管家负责拆解任务并分派给其他成员</p>
-              </div>
-            </div>
-            <div class="modal__footer">
-              <button class="btn btn--ghost" id="btnTeamModalCancel">取消</button>
-              <button class="btn btn--primary" id="btnTeamModalSave">保存</button>
-            </div>
-          </div>
-        </div>
-        <fieldset class="section" id="fieldsetTeamDetail" style="display:none;">
-          <div class="section__header">
-            <h3 class="section__title" id="teamDetailTitle">Team 详情</h3>
-            <div class="row-actions" style="display:flex;gap:var(--sp-2);margin:0;">
-              <button class="btn btn--primary btn--sm" id="btnTeamRun">运行</button>
-              <button class="btn btn--primary btn--sm" id="btnTeamSaveDetail" style="display:none;">保存</button>
-              <button class="btn btn--danger btn--sm" id="btnTeamDeleteDetail">删除</button>
-            </div>
-          </div>
-          <div id="teamDetailContent"></div>
-        </fieldset>
-        <fieldset class="section" id="fieldsetTeamRuns" style="display:none;">
-          <div class="section__header">
-            <h3 class="section__title">运行历史</h3>
-          </div>
-          <div id="teamRunsList"></div>
-        </fieldset>
-      </div>
-    </section>
-
-
-<section id="page-hub" class="page page--scroll">
-      <div class="content-max">
-        <fieldset class="section">
-          <div class="section__header">
-            <h3 class="section__title">Hub 消息总线</h3>
-            <div class="row-actions" style="display:flex;gap:var(--sp-2);margin:0;">
-              <button class="btn btn--ghost btn--sm" id="btnHubClear">清空</button>
-            </div>
-          </div>
-          <p class="section__desc">Agent 之间的实时消息流。可通过 SSE 订阅，支持按 Agent 过滤。</p>
-          <div id="hubMessageList" class="hub-message-list"></div>
-        </fieldset>
-        <fieldset class="section">
-          <div class="section__header">
-            <h3 class="section__title">发送消息</h3>
-          </div>
-          <div class="hub-send">
-            <div class="hub-send__row">
-              <input type="text" id="hubSendFrom" class="input" placeholder="发送者" style="width:150px;" />
-              <span style="padding:0 var(--sp-1);color:var(--text-muted);">→</span>
-              <input type="text" id="hubSendTo" class="input" placeholder="目标 (留空=全部)" style="width:150px;" />
-            </div>
-            <div class="hub-send__row" style="margin-top:var(--sp-2);">
-              <textarea id="hubSendContent" class="input textarea" rows="3" placeholder="输入消息..."></textarea>
-            </div>
-            <div style="margin-top:var(--sp-2);">
-              <button class="btn btn--primary" id="btnHubSend">发送</button>
-            </div>
-          </div>
-        </fieldset>
-      </div>
-    </section>
 
 </main>
 </div>

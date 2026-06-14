@@ -363,28 +363,6 @@
   margin-bottom: var(--sp-2);
 }
 
-.agent-detail__prompt {
-  margin: 0;
-  padding: var(--sp-3);
-  background: var(--bg-subtle);
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  font-size: 13px;
-  line-height: 1.6;
-  white-space: pre-wrap;
-  word-break: break-all;
-  max-height: 240px;
-  overflow-y: auto;
-  color: var(--text);
-  font-family: var(--font-mono);
-}
-
-.agent-detail__prompt:empty::before {
-  content: '未设置系统提示词';
-  color: var(--text-subtle);
-  font-style: italic;
-}
-
 .agent-detail__tools {
   display: flex;
   flex-wrap: wrap;
@@ -572,17 +550,6 @@
   margin-top: var(--sp-4);
   padding-top: var(--sp-3);
   border-top: 1px solid var(--border);
-}
-
-.agent-detail__prompt-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-1);
-}
-
-.agent-detail__prompt-edit-btn {
-  align-self: flex-end;
-  font-size: 11px;
 }
 
 /* ── 详情扩展区（知识/技能 + 身份配置） ── */

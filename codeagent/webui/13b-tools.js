@@ -117,8 +117,8 @@ document.getElementById('btnToolRefresh') && document.getElementById('btnToolRef
 // ---------------- Agent page load orchestration ----------------
 
 async function loadAgentPage() {
-  // 确保回到列表视图，不覆盖详情页正在展示的技能数据
-  if (typeof _backToList === 'function') _backToList();
+  // 单 Agent 模式：加载当前 Agent 的技能、工具和身份配置文件
+  if (typeof renderCurrentAgent === 'function') renderCurrentAgent();
   await loadSkills();
   await loadTools();
   if (typeof loadMdFiles === 'function') {

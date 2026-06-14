@@ -1,9 +1,10 @@
-// Agent 管理面板 v2
-// 依赖: 00-utils.js (apiUrl, escapeHtml, escAttr)
-
-var _currentAgents = [];
-var _currentPresets = [];
-var _currentDetailAgentId = null;
+/* ================================================================
+ * 18-agent-mgr.js  —  单 Agent 配置页（v2）
+ *
+ * 简化版：去掉多 Agent 列表/搜索/创建/删除/切换，
+ * 直接展示当前 Agent 的详情 + 编辑能力（描述/系统提示/工具）。
+ * Skills/SysPrompt MD/外部集成由 13a-skills.js / 13b-tools.js 管理。
+ * ================================================================ */
 
 // ── 头像色板 ──
 var _AVATAR_COLORS = [
@@ -24,215 +25,39 @@ function _agentMgrApi(path, options) {
   });
 }
 
-// ── 获取当前全局 agentId ──
-function _getActiveAgentId() {
-  if (typeof agentId !== 'undefined') return agentId;
-  return 'default';
-}
-
-// ── 搜索过滤 ──
-function _filterAgents(agents, query) {
-  if (!query || !query.trim()) return agents;
-  var q = query.trim().toLowerCase();
-  return agents.filter(function(a){
-    return (a.id && a.id.toLowerCase().indexOf(q) >= 0)
-        || (a.name && a.name.toLowerCase().indexOf(q) >= 0)
-        || (a.system_prompt && a.system_prompt.toLowerCase().indexOf(q) >= 0);
-  });
-}
-
-function _onSearchInput() {
-  var q = document.getElementById('agentSearch').value;
-  _renderAgentList(_filterAgents(_currentAgents, q));
-}
-
-// ── 列表渲染 ──
-function _renderAgentList(agents) {
-  var el = document.getElementById('agentList');
-  var countEl = document.getElementById('agentCount');
-  var activeId = _getActiveAgentId();
-
-  if (!agents || agents.length === 0) {
-    el.innerHTML = '<div class="agent-list__empty">'
-      + (document.getElementById('agentSearch').value
-        ? '没有匹配的 Agent，试试其他关键词'
-        : '暂无 Agent，点击上方「+ 新建」创建一个')
-      + '</div>';
-    if (countEl) countEl.textContent = '0';
-    return;
-  }
-
-  if (countEl) countEl.textContent = agents.length + ' 个';
-
-  var html = '<div class="agent-list__grid">';
-  agents.forEach(function(a){
-    var name = a.name || a.id;
-    var firstChar = name.charAt(0).toUpperCase();
-    var desc = a.description ? a.description.substring(0, 80) : (a.system_prompt ? a.system_prompt.substring(0, 80) : '');
-    if (desc.length >= 80) desc += '…';
-    var toolCount = a.tools && a.tools.acquired && a.tools.acquired.allow
-      ? a.tools.acquired.allow.length : 0;
-    var isActive = a.id === activeId;
-    var toolLabel = '';
-    if (isActive) {
-      toolLabel = '当前';
-    } else if (!a.tools_configured) {
-      toolLabel = '未限制';
-    } else if (toolCount === 0) {
-      toolLabel = '仅基础';
-    } else {
-      toolLabel = toolCount + ' 工具';
-    }
-    var activeClass = isActive ? ' agent-card--active' : '';
-    var color = _avatarColor(a.id);
-
-    html += '<div class="agent-card' + activeClass + '" data-agent-id="' + escAttr(a.id) + '">'
-      + '<div class="agent-card__avatar agent-card__avatar--' + color + '">' + escHtml(firstChar) + '</div>'
-      + '<div class="agent-card__body">'
-      + '<div class="agent-card__name">' + escHtml(name) + '</div>'
-      + '<span class="agent-card__id">' + escHtml(a.id) + '</span>'
-      + '<div class="agent-card__desc">' + escHtml(desc || '无描述') + '</div>'
-      + '<div class="agent-card__meta">'
-      + '<span class="agent-card__tag' + (isActive ? ' agent-card__tag--active' : (!a.tools_configured ? ' agent-card__tag--unrestricted' : '')) + '">'
-      + escHtml(toolLabel)
-      + '</span>'
-      + '</div></div>'
-      + '<div class="agent-card__actions">'
-      + (isActive ? '' : '<button class="agent-card__action-btn agent-card__action-btn--switch" title="切换到此 Agent" data-action="switch">✓</button>')
-      + '<button class="agent-card__action-btn agent-card__action-btn--danger" title="删除" data-action="delete">✕</button>'
-      + '</div></div>';
-  });
-  html += '</div>';
-  el.innerHTML = html;
-
-  // 事件绑定
-  el.querySelectorAll('.agent-card').forEach(function(card){
-    // 点击卡片 → 查看详情
-    card.addEventListener('click', function(e){
-      // 如果点的是操作按钮，不触发详情
-      if (e.target.closest('.agent-card__actions')) return;
-      var id = card.dataset.agentId;
-      _showAgentDetail(id);
+// ── 渲染当前 Agent 详情 ──
+function renderCurrentAgent() {
+  var aid = typeof agentId !== 'undefined' ? agentId : 'default';
+  _agentMgrApi('/api/ui/agents/' + encodeURIComponent(aid))
+    .then(function(data) {
+      var a = data.agent;
+      if (!a) { _setStatus('error', '未找到 Agent: ' + aid); return; }
+      _renderAgentDetail(a);
+      // 加载技能和 MD 文件
+      if (typeof loadSkills === 'function') loadSkills(a.id);
+      if (typeof loadMdFiles === 'function') setTimeout(function(){ loadMdFiles(a.id); }, 50);
+    })
+    .catch(function(err) {
+      _setStatus('error', '加载 Agent 失败: ' + err.message);
     });
-
-    // 操作按钮
-    card.querySelectorAll('[data-action]').forEach(function(btn){
-      btn.addEventListener('click', function(e){
-        e.stopPropagation();
-        var id = card.dataset.agentId;
-        var action = btn.dataset.action;
-        if (action === 'switch') _agentMgrSwitchAgent(id);
-        else if (action === 'delete') _deleteAgent(id);
-      });
-    });
-  });
 }
 
-function _agentMgrSwitchAgent(agentId) {
-  // 优先用 23-agent-switcher.js 的切换函数（会同步更新下拉菜单 + WS）
-  if (typeof _switchToAgent === 'function') {
-    _switchToAgent(agentId);
-    _agentSetStatus('ok', '已切换到 ' + agentId);
-    // 刷新列表高亮
-    setTimeout(function(){
-      _renderAgentList(_filterAgents(_currentAgents, document.getElementById('agentSearch').value));
-    }, 100);
-    return;
-  }
-  // Fallback
-  _agentMgrApi('/api/ui/session/switch-agent', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ agent_id: agentId }),
-  }).then(function(){
-    if (typeof window.agentId !== 'undefined') window.agentId = agentId;
-    _agentSetStatus('ok', '已切换到 ' + agentId);
-    _renderAgentList(_filterAgents(_currentAgents, document.getElementById('agentSearch').value));
-    if (typeof refreshSessionList === 'function') refreshSessionList();
-    if (typeof loadChatTree === 'function') loadChatTree(agentId);
-  }).catch(function(err){
-    _agentSetStatus('error', err.message);
-  });
-}
-
-// ── 详情 ──
-// ── 详情（支持 createMode） ──
-function _showAgentDetail(agentId, createMode) {
-  _currentDetailAgentId = agentId || '__new__';
-
-  function renderDetail(a) {
-    var isCreate = createMode || !a;
-    var agent = a || { id: '', name: '', description: '', system_prompt: '', tools: {}, tools_configured: false };
-
-    // 显示详情面板
-    document.getElementById('fieldsetAgents').style.display = 'none';
-    document.getElementById('fieldsetAgentDetail').style.display = '';
-    document.getElementById('agentDetailExtensions').style.display = isCreate ? 'none' : '';
-    document.getElementById('agentDetailTitle').textContent = isCreate ? '新建 Agent' : (agent.name || agent.id);
-
-    if (!isCreate) {
-      if (typeof loadSkills === 'function') loadSkills(agent.id);
-      if (typeof loadMdFiles === 'function') setTimeout(function(){ loadMdFiles(agent.id); }, 50);
-    }
-
-    // 顶部按钮
-    document.getElementById('btnAgentEdit').style.display = 'none';
-    document.getElementById('btnAgentDelete').style.display = isCreate ? 'none' : '';
-    document.getElementById('btnAgentDelete').onclick = function(){ if(agent.id) _deleteAgent(agent.id); };
-    document.getElementById('btnAgentSwitch').style.display = isCreate ? 'none' : (agent.id === _getActiveAgentId() ? 'none' : '');
-    if (!isCreate && agent.id !== _getActiveAgentId()) {
-      document.getElementById('btnAgentSwitch').textContent = '切换到此 Agent';
-      document.getElementById('btnAgentSwitch').onclick = function(){ _agentMgrSwitchAgent(agent.id); };
-    }
-    document.getElementById('btnAgentDetailBack').onclick = function(){ _backToList(); };
-
-    _renderAgentDetailContent(agent, isCreate);
-  }
-
-  if (createMode) {
-    renderDetail(null);
-  } else {
-    _agentMgrApi('/api/ui/agents/' + encodeURIComponent(agentId))
-      .then(function(data){ renderDetail(data.agent); })
-      .catch(function(err){ _agentSetStatus('error', err.message); });
-  }
-}
-
-function _renderAgentDetailContent(agent, isCreate) {
-  var a = agent;
-  var isActive = !isCreate && a.id === _getActiveAgentId();
-  var color = isCreate ? 'default' : _avatarColor(a.id);
-  var name = isCreate ? '新 Agent' : (a.name || a.id);
+function _renderAgentDetail(a) {
+  var color = _avatarColor(a.id);
+  var name = a.name || a.id;
   var firstChar = name.charAt(0).toUpperCase();
+  var isActive = a.id === (typeof agentId !== 'undefined' ? agentId : 'default');
   var tools = a.tools && a.tools.acquired && a.tools.acquired.allow ? a.tools.acquired.allow : [];
 
-  // 描述
-  var descHtml;
-  if (isCreate) {
-    descHtml = '<input type="text" class="input agent-detail__desc-input" id="inpAgentDesc" value="" placeholder="一句话描述这个 Agent 的用途" />';
-  } else {
-    descHtml = '<span class="agent-detail__desc-text">' + escHtml(a.description || '') + '</span>'
-      + '<button class="btn btn--ghost btn--sm agent-detail__desc-edit-btn" onclick="_editDescription(\'' + escAttr(a.id) + '\')">✎</button>';
-  }
+  document.getElementById('agentDetailTitle').textContent = 'Agent 配置: ' + (a.name || a.id);
 
-  // 系统提示
-  var promptHtml;
-  if (isCreate) {
-    promptHtml = '<textarea class="input textarea" id="inpAgentSystemPrompt" rows="6" placeholder="设置 Agent 的行为和角色..."></textarea>';
-  } else {
-    promptHtml = '<div class="agent-detail__prompt-wrap">'
-      + '<pre class="agent-detail__prompt">' + escHtml(a.system_prompt || '（空）') + '</pre>'
-      + '<button class="btn btn--ghost btn--sm agent-detail__prompt-edit-btn" onclick="_editSystemPrompt(\'' + escAttr(a.id) + '\')">✎ 编辑</button>'
-      + '</div>';
-  }
+  // 描述
+  var descHtml = '<span class="agent-detail__desc-text">' + escHtml(a.description || '') + '</span>'
+    + '<button class="btn btn--ghost btn--sm agent-detail__desc-edit-btn" onclick="_editDescription(\'' + escAttr(a.id) + '\')">✎</button>';
 
   // 工具
   var toolsHtml;
-  if (isCreate) {
-    toolsHtml = '<div class="agent-tool-edit" id="agentToolsCreateEdit">'
-      + '<div class="agent-loading"><div class="agent-loading__spinner"></div><span>加载工具列表...</span></div>'
-      + '</div>';
-  } else if (!a.tools_configured) {
+  if (!a.tools_configured) {
     toolsHtml = '<span class="agent-detail__tool-none agent-detail__tool-none--unrestricted">未限制（全部工具开放）</span>'
       + '<button class="btn btn--ghost btn--sm agent-detail__tool-edit-btn" onclick="_startEditTools(\'' + escAttr(a.id) + '\')">✎ 编辑</button>';
   } else if (tools.length === 0) {
@@ -245,111 +70,30 @@ function _renderAgentDetailContent(agent, isCreate) {
       + '<button class="btn btn--ghost btn--sm agent-detail__tool-edit-btn" onclick="_startEditTools(\'' + escAttr(a.id) + '\')">✎ 编辑</button>';
   }
 
-  // 创建模式下提前加载工具列表
-  if (isCreate) {
-    fetch(apiUrl('/api/ui/tools/available'))
-      .then(function(r){ return r.json(); })
-      .then(function(data){
-        var el = document.getElementById('agentToolsCreateEdit');
-        if (el) {
-          var h = '';
-          (data.tools || []).forEach(function(t){
-            h += '<label class="checkbox-label"><input type="checkbox" class="agent-tool-cb" value="' + escAttr(t) + '"> ' + escHtml(t) + '</label>';
-          });
-          el.innerHTML = h;
-        }
-      });
-  }
-
   var html = ''
     + '<div class="agent-detail">'
     // Hero
     + '<div class="agent-detail__hero">'
     + '<div class="agent-card__avatar agent-card__avatar--' + color + '">' + escHtml(firstChar) + '</div>'
     + '<div class="agent-detail__hero-info">'
-    + '<div class="agent-detail__hero-name">' + (isCreate ? '<input type="text" class="input" id="inpAgentId" placeholder="Agent ID（如 my-assistant）" />' : escHtml(name)) + '</div>'
-    + '<div class="agent-detail__hero-id">' + (isCreate ? '' : escHtml(a.id)) + '</div>'
+    + '<div class="agent-detail__hero-name">' + escHtml(name) + '</div>'
+    + '<div class="agent-detail__hero-id">' + escHtml(a.id) + '</div>'
     + '<div class="agent-detail__hero-desc" id="agentDetailDesc">' + descHtml + '</div>'
-    + (isCreate ? '' : '<div class="agent-detail__hero-status' + (isActive ? ' agent-detail__hero-status--active' : '') + '">'
-      + (isActive ? '🟢 当前活跃' : '⚪ 未激活') + '</div>')
+    + '<div class="agent-detail__hero-status' + (isActive ? ' agent-detail__hero-status--active' : '') + '">'
+    + (isActive ? '🟢 当前活跃' : '⚪ 未激活') + '</div>'
     + '</div></div>'
     // Grid
     + '<div class="agent-detail__grid">'
-    + '<div class="agent-detail__card">'
-    + '<div class="agent-detail__card-title">系统提示词</div>'
-    + promptHtml
-    + '</div>'
-    + '<div class="agent-detail__card" id="agentToolsCard">'
-    + '<div class="agent-detail__card-title">已启用工具' + (isCreate ? '' : (a.tools_configured ? ' (' + tools.length + ')' : '')) + '</div>'
+    + '<div class="agent-detail__card" id="agentToolsCard" style="grid-column:1/-1">'
+    + '<div class="agent-detail__card-title">已启用工具' + (a.tools_configured ? ' (' + tools.length + ')' : '') + '</div>'
     + '<div id="agentToolsContent">' + toolsHtml + '</div>'
     + '</div></div>'
-    // 创建按钮
-    + (isCreate ? '<div class="agent-detail__create-actions"><button class="btn btn--primary" onclick="_createAgent()">✨ 创建 Agent</button><button class="btn btn--ghost" onclick="_backToList()">取消</button></div>' : '')
     + '</div>';
 
   document.getElementById('agentDetailContent').innerHTML = html;
 }
 
-function _createAgent() {
-  var agentId = document.getElementById('inpAgentId').value.trim();
-  if (!agentId) { _agentSetStatus('error', 'Agent ID 不能为空'); return; }
-  var desc = document.getElementById('inpAgentDesc').value.trim();
-  var sp = document.getElementById('inpAgentSystemPrompt').value.trim();
-  var checked = [];
-  document.querySelectorAll('#agentToolsCreateEdit .agent-tool-cb:checked').forEach(function(cb){ checked.push(cb.value); });
-  var tools = { acquired: { allow: checked } };
-
-  fetch(apiUrl('/api/ui/agents'), {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({ id: agentId, description: desc, system_prompt: sp, tools: tools })
-  })
-    .then(function(r){
-      if (!r.ok) return r.json().then(function(e){ throw new Error(e.detail || '创建失败'); });
-      return r.json();
-    })
-    .then(function(){
-      _agentSetStatus('ok', 'Agent 已创建');
-      _loadAgentList();
-      _showAgentDetail(agentId); // 进入详情查看模式
-    })
-    .catch(function(err){ _agentSetStatus('error', err.message); });
-}
-
-function _editSystemPrompt(agentId) {
-  _agentMgrApi('/api/ui/agents/' + encodeURIComponent(agentId)).then(function(data){
-    var current = data.agent.system_prompt || '';
-    var card = document.querySelector('#agentToolsCard');
-    if (!card) return;
-    var grid = card.parentNode;
-    var promptCard = grid ? grid.firstElementChild : null;
-    if (!promptCard) return;
-    promptCard.innerHTML = '<div class="agent-detail__card-title">系统提示词</div>'
-      + '<textarea class="input textarea" id="inpAgentSystemPrompt" rows="8" placeholder="设置 Agent 的行为和角色...">' + escHtml(current) + '</textarea>'
-      + '<div class="agent-detail__tool-actions" style="margin-top:var(--sp-2)">'
-      + '<button class="btn btn--primary btn--sm" onclick="_saveSystemPrompt(\'' + escAttr(agentId) + '\')">💾 保存</button>'
-      + '<button class="btn btn--ghost btn--sm" onclick="_showAgentDetail(\'' + escAttr(agentId) + '\')">取消</button>'
-      + '</div>';
-    var ta = document.getElementById('inpAgentSystemPrompt');
-    if (ta) ta.focus();
-  });
-}
-
-function _saveSystemPrompt(agentId) {
-  var sp = document.getElementById('inpAgentSystemPrompt') ? document.getElementById('inpAgentSystemPrompt').value : '';
-  fetch(apiUrl('/api/ui/agents/' + encodeURIComponent(agentId)), {
-    method: 'PUT',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({ system_prompt: sp })
-  })
-    .then(function(r){ return r.json(); })
-    .then(function(){
-      _agentSetStatus('ok', '系统提示词已更新');
-      _showAgentDetail(agentId);
-    })
-    .catch(function(err){ _agentSetStatus('error', '保存失败: ' + err.message); });
-}
-
+// ── 编辑工具 ──
 function _startEditTools(agentId) {
   var contentEl = document.getElementById('agentToolsContent');
   if (!contentEl) return;
@@ -359,7 +103,6 @@ function _startEditTools(agentId) {
     .then(function(r){ return r.json(); })
     .then(function(data){
       var allTools = data.tools || [];
-      // Get current allowed tools
       return fetch(apiUrl('/api/ui/agents/' + encodeURIComponent(agentId)))
         .then(function(r){ return r.json(); })
         .then(function(d){
@@ -377,13 +120,13 @@ function _startEditTools(agentId) {
       html += '</div>'
         + '<div class="agent-detail__tool-actions">'
         + '<button class="btn btn--primary btn--sm" onclick="_saveTools(\'' + escAttr(ctx.agentId) + '\')">💾 保存</button>'
-        + '<button class="btn btn--ghost btn--sm" onclick="_cancelEditTools(\'' + escAttr(ctx.agentId) + '\')">取消</button>'
+        + '<button class="btn btn--ghost btn--sm" onclick="renderCurrentAgent()">取消</button>'
         + '</div>';
       contentEl.innerHTML = html;
     })
     .catch(function(err){
       contentEl.innerHTML = '<span class="agent-detail__tool-none">加载失败: ' + escHtml(err.message) + '</span>'
-        + '<button class="btn btn--ghost btn--sm" onclick="_cancelEditTools(\'' + escAttr(agentId) + '\')">返回</button>';
+        + '<button class="btn btn--ghost btn--sm" onclick="renderCurrentAgent()">返回</button>';
     });
 }
 
@@ -401,25 +144,22 @@ function _saveTools(agentId) {
   })
     .then(function(r){ return r.json(); })
     .then(function(){
-      _agentSetStatus('ok', '工具已更新');
-      _showAgentDetail(agentId); // refresh
+      _setStatus('ok', '工具已更新');
+      renderCurrentAgent();
     })
     .catch(function(err){
-      _agentSetStatus('error', '保存失败: ' + err.message);
+      _setStatus('error', '保存失败: ' + err.message);
     });
 }
 
-function _cancelEditTools(agentId) {
-  _showAgentDetail(agentId); // just re-render
-}
-
+// ── 编辑描述 ──
 function _editDescription(agentId) {
   var descEl = document.getElementById('agentDetailDesc');
   if (!descEl) return;
   var current = descEl.textContent.replace('✎', '').trim();
   descEl.innerHTML = '<input type="text" class="input agent-detail__desc-input" id="inpAgentDesc" value="' + escAttr(current) + '" placeholder="一句话描述这个 Agent 的用途" />'
     + '<button class="btn btn--primary btn--sm" onclick="_saveDescription(\'' + escAttr(agentId) + '\')">保存</button>'
-    + '<button class="btn btn--ghost btn--sm" onclick="_cancelEditDescription(\'' + escAttr(agentId) + '\')">取消</button>';
+    + '<button class="btn btn--ghost btn--sm" onclick="renderCurrentAgent()">取消</button>';
   var inp = document.getElementById('inpAgentDesc');
   if (inp) { inp.focus(); inp.select(); }
 }
@@ -433,64 +173,16 @@ function _saveDescription(agentId) {
   })
     .then(function(r){ return r.json(); })
     .then(function(){
-      _agentSetStatus('ok', '描述已更新');
-      _showAgentDetail(agentId);
+      _setStatus('ok', '描述已更新');
+      renderCurrentAgent();
     })
     .catch(function(err){
-      _agentSetStatus('error', '保存失败: ' + err.message);
+      _setStatus('error', '保存失败: ' + err.message);
     });
 }
 
-function _cancelEditDescription(agentId) {
-  _showAgentDetail(agentId);
-}
-
-function _backToList() {
-  _currentDetailAgentId = null;
-  document.getElementById('fieldsetAgents').style.display = '';
-  document.getElementById('fieldsetAgentDetail').style.display = 'none';
-  document.getElementById('agentDetailExtensions').style.display = 'none';
-}
-
-// (dead code: _loadAgentSessions kept for reference)
-
-function _deleteAgent(agentId) {
-  if (!confirm('确认删除 Agent "' + agentId + '"？此操作不可撤销。')) return;
-  _agentMgrApi('/api/ui/agents/' + encodeURIComponent(agentId), { method: 'DELETE' }).then(function(){
-    _agentSetStatus('ok', '已删除 ' + agentId);
-    _loadAgentList();
-    if (_currentDetailAgentId === agentId) _backToList();
-  }).catch(function(err){
-    _agentSetStatus('error', err.message);
-  });
-}
-
-// ── 预设 / 工具列表 ──
-function _loadPresets() {
-  _agentMgrApi('/api/ui/agent-presets').then(function(data){
-    _currentPresets = data.presets || [];
-    var sel = document.getElementById('selAgentPreset');
-    if (!sel) return;
-    sel.innerHTML = '<option value="">— 不使用模板 —</option>';
-    _currentPresets.forEach(function(p){
-      sel.innerHTML += '<option value="' + escAttr(p.id) + '">' + escHtml(p.name) + '</option>';
-    });
-  }).catch(function(err){
-    console.warn('加载模板失败:', err);
-  });
-}
-
-function _loadAgentList() {
-  _agentMgrApi('/api/ui/agents').then(function(data){
-    _currentAgents = data.agents || [];
-    var q = document.getElementById('agentSearch').value;
-    _renderAgentList(_filterAgents(_currentAgents, q));
-  }).catch(function(err){
-    _agentSetStatus('error', err.message);
-  });
-}
-
-function _agentSetStatus(type, msg) {
+// ── 状态提示 ──
+function _setStatus(type, msg) {
   var el = document.getElementById('agentStatus');
   if (!el) return;
   el.textContent = msg;
@@ -502,18 +194,7 @@ function _agentSetStatus(type, msg) {
 
 // ── 初始化 ──
 function initAgentMgr() {
-  document.getElementById('btnAgentCreate').addEventListener('click', function(){ _showAgentDetail(null, true); });
-  document.getElementById('btnAgentRefresh').addEventListener('click', _loadAgentList);
-  document.getElementById('btnAgentDetailBack').onclick = function(){ _backToList(); };
-
-  // 搜索
-  var searchInput = document.getElementById('agentSearch');
-  if (searchInput) {
-    searchInput.addEventListener('input', _onSearchInput);
-  }
-
-  _loadPresets();
-  _loadAgentList();
+  renderCurrentAgent();
 }
 
 if (document.readyState === 'loading') {
