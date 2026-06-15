@@ -107,8 +107,8 @@ function handleProgressEvent(evt) {
       }, 0, 1);
     }
     liveToolBlocks.delete(String((evt && evt.event_id) || ''));
-    // Auto-refresh todo panel when todo_tool finishes
-    if (tool === 'todo_tool' && typeof refreshTodos === 'function' && typeof todoIsVisible === 'function' && todoIsVisible()) {
+    // Auto-refresh todo panel when todo finishes
+    if (tool === 'todo' && typeof refreshTodos === 'function' && typeof todoIsVisible === 'function' && todoIsVisible()) {
       refreshTodos();
     }
     scrollLog();

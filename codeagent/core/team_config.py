@@ -189,8 +189,8 @@ def create_default_team_config(config_dir: Path) -> TeamConfig:
             "name": "Lead Developer",
             "persona": persona("lead"),
             "tools": [
-                "file_read", "file_write", "file_edit_tool",
-                "bash", "git", "grep_tool", "glob_tool",
+                "file_read", "file_write", "file_edit",
+                "bash", "git", "grep", "glob",
             ],
         },
         "members": [

@@ -918,7 +918,11 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         try:
             from seed_tools import setup_builtin_tools
 
-            from codeagent.core.paths import agent_projects_data_dir, ensure_agent_scaffold
+            from codeagent.core.paths import (
+                agent_projects_data_dir,
+                ensure_agent_scaffold,
+                ensure_project_dirs,
+            )
 
             ensure_agent_scaffold(aid)
 
@@ -1002,6 +1006,9 @@ def build_webui_api_app(project_root: Path) -> Starlette:
                             timeout=5,
                             cwd=str(git_dir),
                         )
+                    # Create .codeagent/ working directory in the project
+                    ensure_project_dirs(agent_id=aid, root=project_dir)
+                    messages.append("📁 已创建 .codeagent/ 工作目录")
                     add_out = await asyncio.to_thread(
                         subprocess.run,
                         ["git", "add", "-A"],
@@ -1156,11 +1163,13 @@ def build_webui_api_app(project_root: Path) -> Starlette:
             return JSONResponse({"plans": []})
         try:
             from seed.core.paths import agent_project_data_subdir
+            from seed.core.proj_reg import resolve_project_path
 
+            plans: list[dict[str, Any]] = []
+
+            # 1. Project-level plans (agents/{aid}/projects-data/{pid}/plans/)
             plans_dir = Path(agent_project_data_subdir(aid, pid, "plans"))
-            rels = list_project_plan_files(aid, pid)
-            plans = []
-            for rel in rels:
+            for rel in list_project_plan_files(aid, pid):
                 fp = plans_dir / rel
                 if not fp.is_file():
                     continue
@@ -1172,11 +1181,60 @@ def build_webui_api_app(project_root: Path) -> Starlette:
                 plans.append(
                     {
                         "name": rel,
+                        "source": "project_plans",
                         "modified_at": int(st.st_mtime),
                         "size": st.st_size,
                         "content": content[:80000],
                     }
                 )
+
+            # 2. Agent-level docs/ and plans/ under project root (.codeagent/{aid}/)
+            proj_path = resolve_project_path(aid, pid)
+            if proj_path:
+                agent_dir = Path(proj_path) / ".codeagent" / aid
+
+                # docs/ — requirement.md, design.md, task.md
+                docs_dir = agent_dir / "docs"
+                if docs_dir.is_dir():
+                    for fp in sorted(docs_dir.glob("*.md")):
+                        if not fp.is_file():
+                            continue
+                        try:
+                            st = fp.stat()
+                            content = fp.read_text(encoding="utf-8", errors="replace")
+                        except OSError:
+                            continue
+                        plans.append(
+                            {
+                                "name": fp.name,
+                                "source": "docs",
+                                "modified_at": int(st.st_mtime),
+                                "size": st.st_size,
+                                "content": content[:80000],
+                            }
+                        )
+
+                # plans/ — *-plan.md
+                plans_dir2 = agent_dir / "plans"
+                if plans_dir2.is_dir():
+                    for fp in sorted(plans_dir2.glob("*.md")):
+                        if not fp.is_file():
+                            continue
+                        try:
+                            st = fp.stat()
+                            content = fp.read_text(encoding="utf-8", errors="replace")
+                        except OSError:
+                            continue
+                        plans.append(
+                            {
+                                "name": fp.name,
+                                "source": "plans",
+                                "modified_at": int(st.st_mtime),
+                                "size": st.st_size,
+                                "content": content[:80000],
+                            }
+                        )
+
             return JSONResponse({"plans": plans})
         except Exception as e:
             logger.exception("api_projects_plans")
@@ -2013,7 +2071,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
                 "name": "调试专家",
                 "description": "诊断代码问题，定位根因",
                 "system_prompt": "你是调试专家。分析错误信息、日志和代码上下文，定位根因并给出修复方案。",
-                "tools": {"acquired": {"allow": ["file_read", "bash", "grep_tool"]}},
+                "tools": {"acquired": {"allow": ["file_read", "bash", "grep"]}},
             },
         ]
         return JSONResponse({"presets": presets})
@@ -2030,11 +2088,11 @@ def build_webui_api_app(project_root: Path) -> Starlette:
             tools = sorted(t.name for t in reg.list_all())
         except Exception:
             tools = [
-                "file_read", "file_write", "file_edit_tool", "bash",
-                "web_fetch", "web_search_tool", "code_check", "code_analyze",
-                "grep_tool", "glob_tool", "file_search",
-                "db", "git", "todo_tool", "tool_search_tool",
-                "memory_search", "self_reflect", "notebook_edit_tool",
+                "file_read", "file_write", "file_edit", "bash",
+                "web_fetch", "web_search", "code_check", "code_analyze",
+                "grep", "glob", "file_search",
+                "db", "git", "todo", "tool_search",
+                "memory_search", "self_reflect", "notebook_edit",
                 "project", "refactor", "scaffold", "test_gen", "test_run",
                 "symbol_search", "symbol_index_refresh",
                 "lsp_definition", "lsp_diagnostics",

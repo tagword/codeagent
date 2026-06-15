@@ -86,21 +86,50 @@ async function fetchPlans() {
 
 // ---- 渲染 ---- //
 
+var SOURCE_LABELS = {
+  docs: { icon: '\uD83D\uDCC4', label: '项目文档' },         // 📄
+  plans: { icon: '\uD83D\uDCCB', label: '工作计划' },        // 📋
+  project_plans: { icon: '\uD83D\uDCC1', label: '项目计划' }, // 📁
+};
+var SOURCE_ORDER = ['docs', 'plans', 'project_plans'];
+
 async function refreshPlans() {
   var plans = await fetchPlans();
   if (!planList) return;
   planList.innerHTML = '';
 
   if (!plans || plans.length === 0) {
-    planList.innerHTML = '<div class="plan-empty">当前项目暂无规划文档。<br/>Agent 在规划项目时会自动生成 <code>*-plan.md</code> 文件。</div>';
+    planList.innerHTML = '<div class="plan-empty">当前项目暂无规划文档。<br/>Agent 在规划项目时会自动在 <code>docs/</code> 生成 <code>requirement.md / design.md / task.md</code>，<br/>在 <code>plans/</code> 生成 <code>*-plan.md</code>。</div>';
     if (planStatus) planStatus.textContent = '';
     return;
   }
 
   if (planStatus) planStatus.textContent = plans.length + ' 个文件';
 
+  // 按 source 分组
+  var groups = {};
   plans.forEach(function(p) {
-    planList.appendChild(buildPlanCard(p));
+    var src = p.source || 'project_plans';
+    if (!groups[src]) groups[src] = [];
+    groups[src].push(p);
+  });
+
+  // 按 SOURCE_ORDER 顺序渲染，每组的文件按修改时间倒序
+  SOURCE_ORDER.forEach(function(src) {
+    var items = groups[src];
+    if (!items || items.length === 0) return;
+
+    items.sort(function(a, b) { return (b.modified_at || 0) - (a.modified_at || 0); });
+
+    var label = SOURCE_LABELS[src] || { icon: '\uD83D\uDCC4', label: src };
+    var groupHeader = document.createElement('div');
+    groupHeader.className = 'plan-group-header';
+    groupHeader.textContent = label.icon + ' ' + label.label + ' (' + items.length + ')';
+    planList.appendChild(groupHeader);
+
+    items.forEach(function(p) {
+      planList.appendChild(buildPlanCard(p));
+    });
   });
 }
 

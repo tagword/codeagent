@@ -181,3 +181,14 @@
   font-size: 13px;
   line-height: 1.8;
 }
+
+/* ---- Group headers ---- */
+
+.plan-group-header {
+  padding: var(--sp-2) var(--sp-4) var(--sp-1);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
