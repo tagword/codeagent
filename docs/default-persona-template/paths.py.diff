@@ -1,0 +1,30 @@
+--- codeagent/core/paths.py (当前)
++++ codeagent/core/paths.py (改后)
+
+@@ -39,72 +39,23 @@
+ 
+ def _ensure_default_persona_files(persona_dir: Path) -> None:
+-    """Create default persona *.md files if they do not exist (does not overwrite)."""
+-    defaults = {
+-        "agent.md": (
+-            "# Agent Profile\n\n"
+-            "你是 CodeAgent，一个能自主执行编程、搜索、文件操作等任务的通用 AI Agent。\n"
+-            ...
+-        ),
+-        ...
+-    }
++    """Create default persona *.md files from template files if they do not exist."""
++    _template_dir = Path(__file__).resolve().parent.parent / "docs" / "default-persona-template"
++    if not _template_dir.is_dir():
++        return  # no template directory → cannot init; skip
+     for fname in _DEFAULT_PERSONA_FILENAMES:
+         p = persona_dir / fname
+         if not p.is_file():
+-            body = defaults.get(fname, "")
+-            if body:
+-                with contextlib.suppress(OSError):
+-                    p.write_text(body, encoding="utf-8")
++            src = _template_dir / fname
++            if src.is_file():
++                with contextlib.suppress(OSError):
++                    p.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")

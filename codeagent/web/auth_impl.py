@@ -121,7 +121,7 @@ def is_public_webui_route(path: str, method: str) -> bool:
         return True
     if path == "/api/ui/llm/providers" and method == "GET":
         return True
-    return bool(method == "GET" and path in ("/icon.png", "/favicon.ico", "/health"))
+    return bool(method == "GET" and path in ("/icon.png", "/favicon.ico", "/favicon.svg", "/health", "/api/health"))
 
 
 def get_login_html() -> str:

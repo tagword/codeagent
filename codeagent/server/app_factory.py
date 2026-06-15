@@ -1143,6 +1143,7 @@ def create_app():
         Route("/", homepage),
         Route("/setup", setup_page),
         Route("/health", health),
+        Route("/api/health", health),
         Route("/icon.png", icon_png),
         Route("/favicon.ico", favicon_ico),
         # NOTE: routes under /api/ui/session/model-stack must be registered
