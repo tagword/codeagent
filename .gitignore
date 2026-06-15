@@ -19,12 +19,11 @@ build/
 # webui verify 脚本的临时产物（拼接中间文件）
 **/webui/.scripts/.tmp/
 
-# Agent 运行临时脚本和日志产物
+# Agent 运行产物（旧根目录 — 已迁移到 .codeagent/）
 .scripts/
-**/webui/scripts/.tmp/
+.tmp/
 *.egg-info/
 .pytest_cache/
-.tmp/
 team-knowledge-base/
 super-mines-game/
 llm_sessions/
@@ -57,3 +56,4 @@ credentials.json
 *_secrets.*
 **/local.override.*
 webui-v2
+.codeagent/
