@@ -13,8 +13,27 @@ logger = logging.getLogger(__name__)
 
 from seed.core.config_plane import project_root  # noqa: E402
 
-COOKIE_NAME = "ca_webui"
 TOKEN_FILENAME = "codeagent.webui.token"
+
+# Cookie 名按端口隔离，防止本地多实例 cookie 互相覆盖（localhost 同域名）
+_DEFAULT_PORT = 8099
+
+
+def cookie_name(port: int = 0) -> str:
+    """返回端口限定的 cookie 名。port=0 时用默认值，兼容旧 cookie 名。"""
+    p = port or _DEFAULT_PORT
+    return f"ca_webui_{p}"
+
+
+def _port_from_scope(scope: dict) -> int:
+    """从 ASGI scope 提取服务端口。"""
+    try:
+        server = scope.get("server")
+        if server and len(server) >= 2:
+            return int(server[1])
+    except (TypeError, ValueError):
+        pass
+    return _DEFAULT_PORT
 
 
 def _project_root() -> Path:
@@ -209,7 +228,8 @@ class WebUIAuthMiddleware:
             # Some dev proxies / IDE previews rewrite websocket paths like:
             #   /ws//127.0.0.1%3A8765/ws?...  (still our Web UI websocket)
             if tok and (path == "/ws" or path.startswith("/ws/")):
-                ck = _read_cookie_from_scope(scope, COOKIE_NAME)
+                port = _port_from_scope(scope)
+                ck = _read_cookie_from_scope(scope, cookie_name(port))
                 ok = verify_webui_cookie(tok, ck)
                 if not ok and ws_query_token_bridge_enabled():
                     ok = _raw_token_matches(tok, _first_query_value(scope, "webui_token"))
@@ -268,7 +288,8 @@ class WebUIAuthMiddleware:
         if not tok or is_public_webui_route(path, method):
             await self.app(scope, receive, send)
             return
-        ck = _read_cookie_from_scope(scope, COOKIE_NAME)
+        port = _port_from_scope(scope)
+        ck = _read_cookie_from_scope(scope, cookie_name(port))
         if verify_webui_cookie(tok, ck):
             await self.app(scope, receive, send)
             return

@@ -439,7 +439,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
     project_root = project_root.resolve()
 
     from codeagent.core.settings import plugins_public_view, save_plugins_from_ui
-    from codeagent.web.auth_impl import COOKIE_NAME, get_webui_token, make_webui_cookie_value
+    from codeagent.web.auth_impl import cookie_name, get_webui_token, make_webui_cookie_value
     from seed.core.config_plane import CONFIG_FILENAMES, ensure_default_config_files
     from seed.core.config_plane import project_root as project_root_fn
     from seed.core.llm_presets import (
@@ -505,7 +505,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         tok = get_webui_token(project_root)
         if not tok:
             return JSONResponse({"auth_required": False, "authenticated": True})
-        ok = bool(verify_webui_cookie(tok, request.cookies.get(COOKIE_NAME)))
+        ok = bool(verify_webui_cookie(tok, request.cookies.get(cookie_name(request.url.port or 0))))
         return JSONResponse({"auth_required": True, "authenticated": ok})
 
     async def api_auth_login(request: Request) -> JSONResponse:
@@ -526,8 +526,9 @@ def build_webui_api_app(project_root: Path) -> Starlette:
             payload["ws_query_token"] = tok
 
         resp = JSONResponse(payload)
+        cname = cookie_name(request.url.port or 0)
         resp.set_cookie(
-            COOKIE_NAME,
+            cname,
             make_webui_cookie_value(tok),
             max_age=604800,
             httponly=True,
@@ -536,9 +537,9 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         )
         return resp
 
-    async def api_auth_logout(_: Request) -> JSONResponse:
+    async def api_auth_logout(request: Request) -> JSONResponse:
         resp = JSONResponse({"ok": True})
-        resp.delete_cookie(COOKIE_NAME, path="/")
+        resp.delete_cookie(cookie_name(request.url.port or 0), path="/")
         return resp
 
     async def api_plugins_get(_: Request) -> JSONResponse:
