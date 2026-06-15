@@ -67,6 +67,9 @@ class LLMWorker:
         )
         compact_result = maybe_compact_context_messages(api_msgs, llm)
         persist_compact_summary(chat_sess.messages, compact_result)
+        # ── If compact happened, inject current project state into system message ──
+        if compact_result is not None:
+            _inject_state_into_system(api_msgs, aid)
         strip_ephemeral_message_fields(api_msgs)
         if not isinstance(chat_sess.metadata, dict):
             chat_sess.metadata = {}
@@ -103,3 +106,45 @@ class LLMWorker:
             return f"[LLM error] {e}", {"agent_id": aid, "error": str(e)}
         finally:
             set_active_llm_session(None)
+
+
+# ---------------------------------------------------------------------------
+# State injection (compact-time only)
+# ---------------------------------------------------------------------------
+
+def _inject_state_into_system(api_msgs: list[dict[str, Any]], agent_id: str) -> None:
+    """Read ``.codeagent/{agent_id}/state.md`` and inject into ``api_msgs[0]``.
+
+    Called only when ``maybe_compact_context_messages`` has just truncated
+    the context.  Strips any previous ``<<<STATE>>>`` block and inserts
+    the current state so the agent can pick up where it left off.
+    """
+    import re
+
+    try:
+        from codeagent.core.paths import read_state_file
+    except Exception:
+        return
+
+    state_text = read_state_file(agent_id)
+    if not state_text:
+        return
+
+    sys_msg = api_msgs[0]
+    content = str(sys_msg.get("content") or "")
+
+    # Strip any previous state block
+    content = re.sub(
+        r"\n+<<<STATE>>>\n.*?\n<<<END_STATE>>>\n?",
+        "\n",
+        content,
+        flags=re.DOTALL,
+    ).strip()
+
+    state_block = (
+        "\n\n<<<STATE>>>\n"
+        "## 当前项目状态\n\n"
+        f"{state_text}\n"
+        "<<<END_STATE>>>"
+    )
+    sys_msg["content"] = content + state_block

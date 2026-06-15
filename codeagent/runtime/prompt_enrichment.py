@@ -11,7 +11,7 @@ from seed.core.env_access import pick_nonempty
 
 
 def _compute_persona_hash(agent_id: str) -> str:
-    """Hash of all persona files + memory.md that compose the system prompt.
+    """Hash of all persona files + memory.md + project rules that compose the system prompt.
 
     Used to detect file changes mid-session so the cache is invalidated.
     """
@@ -30,6 +30,19 @@ def _compute_persona_hash(agent_id: str) -> str:
     p_mem = agent_persona_memory_path(aid)
     if p_mem.is_file():
         h.update(p_mem.read_bytes())
+
+    # Also hash project-level rules files so edits invalidate the cache
+    try:
+        from codeagent.core.paths import read_global_rules, read_agent_rules
+        gr = read_global_rules()
+        if gr:
+            h.update(gr.encode("utf-8"))
+        ar = read_agent_rules(aid)
+        if ar:
+            h.update(ar.encode("utf-8"))
+    except Exception:
+        pass
+
     return h.hexdigest()
 
 
@@ -60,22 +73,24 @@ def get_cached_system_prompt(session, *, agent_id: str | None = None) -> str:
 def _codeagent_vars_dict(agent_id: str) -> dict[str, str]:
     """CodeAgent-specific variables extending Seed's base vars.
 
-    These are product-level path concepts relative to the CodeAgent
-    working directory (``Path.cwd()``), which may differ from Seed's
-    ``project_root()`` (``$SEED_PROJECT_ROOT``).
+    All project working paths are under ``.codeagent/{agent_id}/``.
+    The ``SESSIONS_ARTIFACTS`` remains under the system-level agent home
+    (shared across all projects for cross-session artifact access).
     """
     from seed.core.paths import agent_home
+    from codeagent.core.paths import _agent_work_dir
     from pathlib import Path
 
     root = Path.cwd().resolve()
+    wd = _agent_work_dir(agent_id, root)
     return {
         "SESSIONS_ARTIFACTS": str(agent_home(agent_id) / "sessions" / "_artifacts"),
-        "PLANS": str(root / ".plans"),
-        "SCRIPTS": str(root / ".scripts"),
-        "DOCS": str(root / "docs"),
-        "TMP": str(root / ".tmp"),
-        "SESSION_LOG": str(root / "session-log"),
-        "AGENT_STATE": str(root / ".agent-state.md"),
+        "PLANS": str(wd / "plans"),
+        "SCRIPTS": str(wd / "scripts"),
+        "DOCS": str(wd / "docs"),
+        "TMP": str(wd / "tmp"),
+        "SESSION_LOG": str(wd / "sessions"),
+        "AGENT_STATE": str(wd / "state.md"),
     }
 
 
@@ -145,6 +160,19 @@ def fresh_system_prompt(*, agent_id: str | None = None) -> str:
         filenames=get_system_prompt_filenames(),
         agent_id=aid,
     )
+
+    # ── Append project-level constraints (rules.md) ──
+    from codeagent.core.paths import read_global_rules, read_agent_rules
+
+    rules_parts: list[str] = []
+    gr = read_global_rules()
+    if gr:
+        rules_parts.append(f"## Project Rules (.codeagent/rules.md)\n\n{gr}")
+    ar = read_agent_rules(aid)
+    if ar:
+        rules_parts.append(f"## Agent Rules (.codeagent/{aid}/rules.md)\n\n{ar}")
+    if rules_parts:
+        base += "\n\n---\n" + "\n\n".join(rules_parts)
 
     # Merge Seed vars + CodeAgent vars for memory.md rendering
     from seed.core.config_plane import render_persona, _build_seed_vars_dict

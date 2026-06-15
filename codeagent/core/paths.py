@@ -30,6 +30,110 @@ from seed.core.paths import (
     ensure_agent_dirs,
 )
 
+
+# ---------------------------------------------------------------------------
+# Project-level working directories (.codeagent/{agent_id}/)
+# ---------------------------------------------------------------------------
+
+_PROJECT_SUBDIRS = ("docs", "plans", "scripts", "sessions", "cache", "tmp")
+
+
+def _codeagent_dir(root: Path | None = None) -> Path:
+    """Return the ``.codeagent/`` directory under the given root (default: cwd)."""
+    base = Path(root).resolve() if root is not None else Path.cwd().resolve()
+    return base / ".codeagent"
+
+
+def _agent_work_dir(agent_id: str, root: Path | None = None) -> Path:
+    """Return the agent work directory ``.codeagent/{agent_id}/``."""
+    return _codeagent_dir(root) / agent_id
+
+
+def ensure_project_dirs(
+    agent_id: str | None = None,
+    root: Path | None = None,
+) -> Path:
+    """Create ``.codeagent/{agent_id}/*`` working directories under *root*.
+
+    Creates the full structure including global ``rules.md``, per-agent
+    ``rules.md`` and ``state.md``, and sub-directories for docs, plans,
+    scripts, sessions, cache, and tmp.
+
+    Also appends ``.codeagent/`` to the project root ``.gitignore`` if not
+    already present.
+
+    Returns the ``.codeagent/`` path.
+    """
+    from seed.core.paths import agent_id_default
+
+    base = Path(root).resolve() if root is not None else Path.cwd().resolve()
+    aid = (agent_id or "").strip() or agent_id_default()
+
+    ca_root = _codeagent_dir(base)
+    ca_root.mkdir(parents=True, exist_ok=True)
+
+    # Global rules placeholder
+    (ca_root / "rules.md").touch(exist_ok=True)
+
+    # Per-agent dirs
+    agent_dir = ca_root / aid
+    for sub in _PROJECT_SUBDIRS:
+        (agent_dir / sub).mkdir(parents=True, exist_ok=True)
+    (agent_dir / "rules.md").touch(exist_ok=True)
+    (agent_dir / "state.md").touch(exist_ok=True)
+
+    # Ensure project root .gitignore has .codeagent/ entry
+    _append_gitignore_entry(base)
+
+    return ca_root
+
+
+def read_state_file(agent_id: str, root: Path | None = None) -> str:
+    """Read ``.codeagent/{agent_id}/state.md``, return empty string if missing."""
+    p = _agent_work_dir(agent_id, root) / "state.md"
+    if p.is_file():
+        return p.read_text(encoding="utf-8").strip()
+    return ""
+
+
+def write_state_file(
+    content: str,
+    agent_id: str,
+    root: Path | None = None,
+) -> None:
+    """Write ``.codeagent/{agent_id}/state.md`` with the given content."""
+    p = _agent_work_dir(agent_id, root) / "state.md"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(content.strip(), encoding="utf-8")
+
+
+def read_global_rules(root: Path | None = None) -> str:
+    """Read ``.codeagent/rules.md``, return empty string if missing."""
+    p = _codeagent_dir(root) / "rules.md"
+    if p.is_file():
+        return p.read_text(encoding="utf-8").strip()
+    return ""
+
+
+def read_agent_rules(agent_id: str, root: Path | None = None) -> str:
+    """Read ``.codeagent/{agent_id}/rules.md``, return empty string if missing."""
+    p = _agent_work_dir(agent_id, root) / "rules.md"
+    if p.is_file():
+        return p.read_text(encoding="utf-8").strip()
+    return ""
+
+
+def _append_gitignore_entry(root: Path) -> None:
+    """Append ``.codeagent/`` to project root ``.gitignore`` if not already present."""
+    gi = root / ".gitignore"
+    line = ".codeagent/"
+    if gi.is_file():
+        content = gi.read_text(encoding="utf-8")
+        if line not in content:
+            gi.write_text(content.rstrip() + "\n" + line + "\n", encoding="utf-8")
+    else:
+        gi.write_text(line + "\n", encoding="utf-8")
+
 # Default persona Markdown filenames (same as CONFIG_FILENAMES in config_plane).
 _DEFAULT_PERSONA_FILENAMES = [
     "agent.md",
@@ -103,11 +207,12 @@ def _ensure_default_persona_files(persona_dir: Path) -> None:
 
 
 def ensure_agent_scaffold(agent_id: str, base: Path | None = None) -> Path:
-    """Ensure agent dirs exist and seed default CodeAgent persona Markdown if missing."""
+    """Ensure agent dirs exist, persona files, and project working directories."""
     root = Path(base).resolve() if base is not None else _kernel_project_root()
     aid = (agent_id or "").strip() or agent_id_default()
     home = ensure_agent_dirs(aid, base=root)
     _ensure_default_persona_files(home / "persona")
+    ensure_project_dirs(aid, root=root)
     return home
 
 
@@ -129,4 +234,10 @@ __all__ = [
     "agent_skills_dir",
     "ensure_agent_dirs",
     "ensure_agent_scaffold",
+    # Project-level working directories
+    "ensure_project_dirs",
+    "read_state_file",
+    "write_state_file",
+    "read_global_rules",
+    "read_agent_rules",
 ]
