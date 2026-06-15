@@ -349,7 +349,7 @@ def main(host: str = "0.0.0.0", port: int = 8765) -> None:
 
 
 def _webui_root() -> Path:
-    # server/../ -> codeagent/ (webui.html and webui/ live here)
+    # server/../ -> codeagent/ (web/ and web/static/ live here)
     return Path(__file__).resolve().parent.parent
 
 
@@ -435,8 +435,8 @@ def get_app_html() -> tuple[str, str]:
     """Return (html_content, etag).  ETag 基于文件 mtime，浏览器可缓存复用。"""
     global _app_html_cache
     root = _webui_root()
-    shell = root / "webui.html"
-    parts_dir = root / "webui"
+    shell = root / "web" / "webui.html"
+    parts_dir = root / "web" / "static"
     body_primary = parts_dir / "body.html"
 
     latest = shell.stat().st_mtime if shell.is_file() else 0
@@ -456,7 +456,7 @@ def get_app_html() -> tuple[str, str]:
     body = (
         body_primary.read_text(encoding="utf-8")
         if body_primary.is_file()
-        else "<div class=\"app\"><p>Web UI body 缺失：缺少 webui/body.html</p></div>"
+        else "<div class=\"app\"><p>Web UI body 缺失：缺少 web/static/body.html</p></div>"
     )
 
     js_files = sorted(p for p in parts_dir.glob("*.js"))
@@ -475,7 +475,7 @@ def get_setup_html() -> str:
     if single.is_file():
         return single.read_text(encoding="utf-8")
 
-    parts_dir = root / "webui" / "setup"
+    parts_dir = root / "web" / "static" / "setup"
     names = (
         "setup_head.html",
         "setup_form.html",
@@ -496,7 +496,7 @@ def get_setup_html() -> str:
     return (
         "<!DOCTYPE html><html lang=\"zh-CN\"><meta charset=\"utf-8\"/>"
         "<title>CodeAgent Setup</title><body><h1>初始化</h1>"
-        "<p>缺少向导片段（<code>seed/setup/*.html</code>）。"
+        "<p>缺少向导片段（<code>web/static/setup/*.html</code>）。"
         "可在仓库根放置 <code>web_setup.html</code>，或运行 <code>codeagent config init</code>。"
         "</p></body></html>"
     )

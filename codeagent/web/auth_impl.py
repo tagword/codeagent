@@ -125,7 +125,7 @@ def is_public_webui_route(path: str, method: str) -> bool:
 
 
 def get_login_html() -> str:
-    p = Path(__file__).resolve().parent.parent / "webui" / "web_login.html"
+    p = Path(__file__).resolve().parent / "web_login.html"
     if p.is_file():
         return p.read_text(encoding="utf-8")
     return (
