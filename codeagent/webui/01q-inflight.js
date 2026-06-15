@@ -43,16 +43,47 @@ let lastLocalAgentReplyNorm = '';
 let lastLocalAgentReplyAt = 0;
 let pinSessionToTopOnce = '';
 
+function isSessionRunning(sid) {
+  return (chatInflightBySid[String(sid || '')] || 0) > 0;
+}
+
+function composeHasSendPayload() {
+  const text = msg && msg.value ? msg.value.trim() : '';
+  const hasPending = pendingAttachments && pendingAttachments.length > 0;
+  return !!(text || hasPending);
+}
+
+/** 幂等设置会话 running / idle（单一状态源，避免 +/- 计数漂移） */
+function setSessionRunning(sid, running) {
+  const k = String(sid || '');
+  if (!k) return;
+  if (running) {
+    chatInflightBySid[k] = 1;
+    delete chatCompletedBySid[k];
+    persistCompletedSessions();
+  } else {
+    delete chatInflightBySid[k];
+    chatCompletedBySid[k] = true;
+    persistCompletedSessions();
+  }
+  updateComposerButtons();
+  if (typeof applySessionRunningState === 'function') applySessionRunningState(k);
+  if (typeof applySessionCompletedState === 'function') applySessionCompletedState(k);
+}
+
 function updateComposerButtons() {
-  const active = (chatInflightBySid[sessionId] || 0) > 0;
+  const active = isSessionRunning(sessionId);
+  const showStop = active && !composeHasSendPayload();
   if (typeof stopBtn !== 'undefined' && stopBtn) stopBtn.disabled = !active;
   if (sendBtn) {
-    sendBtn.classList.toggle('is-stop', active);
-    sendBtn.title = active ? '停止' : '发送 (Enter)';
+    sendBtn.classList.toggle('is-stop', showStop);
+    sendBtn.title = showStop
+      ? '停止'
+      : (active ? '发送补充消息 (Enter)' : '发送 (Enter)');
     const sendIcon = sendBtn.querySelector('.compose__send-icon');
     const stopIcon = sendBtn.querySelector('.compose__stop-icon');
-    if (sendIcon) sendIcon.style.display = active ? 'none' : '';
-    if (stopIcon) stopIcon.style.display = active ? '' : 'none';
+    if (sendIcon) sendIcon.style.display = showStop ? 'none' : '';
+    if (stopIcon) stopIcon.style.display = showStop ? '' : 'none';
     sendBtn.disabled = false;
   }
 }
@@ -67,25 +98,8 @@ function clearSessionCompleted(sid) {
 }
 
 function bumpChatInflight(sid, delta) {
-  const k = String(sid || '');
-  if (!k) return;
-  const n = (chatInflightBySid[k] || 0) + delta;
-  if (n <= 0) {
-    delete chatInflightBySid[k];
-    // 运行结束：标记为「已完成」状态（绿色实心）
-    if (delta < 0) {
-      chatCompletedBySid[k] = true;
-      persistCompletedSessions();
-    }
-  } else {
-    chatInflightBySid[k] = n;
-    // 重新运行时清除已完成标记
-    delete chatCompletedBySid[k];
-    persistCompletedSessions();
-  }
-  updateComposerButtons();
-  if (typeof applySessionRunningState === 'function') applySessionRunningState(k);
-  if (typeof applySessionCompletedState === 'function') applySessionCompletedState(k);
+  if (delta > 0) setSessionRunning(sid, true);
+  else if (delta < 0) setSessionRunning(sid, false);
 }
 function rememberLocalAgentReply(text) {
   const n = normReply(text);
@@ -118,11 +132,7 @@ async function restoreRunningSessions() {
     const j = await r.json();
     if (j && Array.isArray(j.running)) {
       j.running.forEach(function(sid) {
-        if (sid) {
-          const k = String(sid);
-          // 通过 bumpChatInflight 统一变更状态，确保 UI 同步
-          bumpChatInflight(k, 1);
-        }
+        if (sid) setSessionRunning(String(sid), true);
       });
     }
   } catch (_) {}

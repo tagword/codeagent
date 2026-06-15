@@ -15,7 +15,6 @@
     if (tryGetLS(STORAGE_KEYS.SETUP_GREETED) === '1') return;
     trySetLS(STORAGE_KEYS.SETUP_GREETED, '1');
     const greetSid = sessionId;
-    bumpChatInflight(greetSid, 1);
     try {
       const r = await fetch('/api/chat', {
         method: 'POST',
@@ -36,7 +35,7 @@
           bubble('agent', j.reply, { at: Date.now(), toolTrace: j.tool_trace || [] });
         }
       }
-    } finally { bumpChatInflight(greetSid, -1); }
+    } catch (_) {}
   } catch (_) {}
 })();
 
@@ -44,7 +43,7 @@
 
 async function stopActiveChat() {
   const requestSid = sessionId;
-  if ((chatInflightBySid[requestSid] || 0) <= 0) return;
+  if (!isSessionRunning(requestSid)) return;
   const btn = (typeof stopBtn !== 'undefined' && stopBtn) || sendBtn;
   try {
     if (btn) btn.disabled = true;
@@ -54,7 +53,14 @@ async function stopActiveChat() {
     });
     const j = await r.json();
     if (!r.ok) throw new Error(j.detail || r.statusText);
-    if (sessionId === requestSid) systemMsg('info', j.cancelled ? '已请求停止当前执行；当前工具若支持中断，会尽快停止。' : '当前会话没有正在运行的 agent。');
+    if (sessionId === requestSid) {
+      if (j.cancelled) {
+        systemMsg('info', '已请求停止当前执行；当前工具若支持中断，会尽快停止。');
+      } else {
+        systemMsg('info', '当前会话没有正在运行的 agent。');
+        setSessionRunning(requestSid, false);
+      }
+    }
   } catch (e) { if (sessionId === requestSid) systemMsg('err', '停止失败：' + String(e)); }
   finally { updateComposerButtons(); }
 }
@@ -76,14 +82,16 @@ function buildChatRequestBody(requestSid, text, attachmentIds) {
 }
 
 async function submitChatMessage() {
-  const alreadyRunning = (chatInflightBySid[sessionId] || 0) > 0;
-  if (alreadyRunning) {
+  // 运行中且无输入 → 停止；有输入 → 注入队列（不停止）
+  if (isSessionRunning(sessionId) && !composeHasSendPayload()) {
     await stopActiveChat();
     return;
   }
+
   const text = msg.value.trim();
   const hasPending = pendingAttachments && pendingAttachments.length > 0;
   if (!text && !hasPending) return;
+
   if (hasPending) {
     let needImage = false;
     let needVideo = false;
@@ -107,8 +115,11 @@ async function submitChatMessage() {
       return;
     }
   }
+
   msg.value = '';
   if (typeof saveMsgDraft === 'function') saveMsgDraft();
+  updateComposerButtons();
+
   const requestSid = sessionId;
   scrollLogForce();
   let attachmentIds = [];
@@ -120,11 +131,12 @@ async function submitChatMessage() {
     systemMsg('err', String(e));
     return;
   }
+
   const displayText = text || (attachmentIds.length ? '[附件]' : '');
   bubble('user', displayText, { at: Date.now(), attachmentIds: attachmentIds });
   if (typeof resetAgentReplyDedupe === 'function') resetAgentReplyDedupe();
-  const startedOwnRun = !alreadyRunning;
-  if (startedOwnRun) bumpChatInflight(requestSid, 1);
+
+  // 运行状态由后端 WS run_started / run_finished 驱动；此处不手动 bump
   try {
     const r = await fetch('/api/chat', {
       method: 'POST',
@@ -135,8 +147,9 @@ async function submitChatMessage() {
       const respText = await r.text().catch(() => '');
       return { detail: respText || r.statusText };
     });
+
     if (r.status === 202 && j.queued) {
-      bumpChatInflight(requestSid, 1);
+      setSessionRunning(requestSid, true);
       if (sessionId === requestSid) {
         systemMsg('info', '已加入执行队列，将在当前步骤完成后继续处理。');
       }
@@ -146,7 +159,9 @@ async function submitChatMessage() {
       }
       return;
     }
+
     if (!r.ok) throw new Error(j.detail || r.statusText);
+
     const replySid = (j.session_id || requestSid);
     const reply = j.reply || '';
     const viewingReplySession = sessionId === replySid;
@@ -184,12 +199,14 @@ async function submitChatMessage() {
         }
       }
       const _tt = j.tool_trace || [];
-      if (j.tools_used && j.tools_used.length && !_tt.length && !hadLiveProgress)
+      if (j.tools_used && j.tools_used.length && !_tt.length && !hadLiveProgress) {
         systemMsg('tools', '工具：' + j.tools_used.join(', '));
+      }
       if (j.cancelled && sessionId === requestSid) {
         systemMsg('info', '当前执行已停止。');
       }
     }
+
     if (webuiSessionsEnabled) {
       pinSessionToTopOnce = requestSid;
       await refreshSessionList();
@@ -198,12 +215,11 @@ async function submitChatMessage() {
         markSessionReadByCount(sessionId, row2 ? (row2.message_count || 0) : 0);
       }
     }
+
     window._lastContextUsage = j.context || null;
     window._lastAccumulatedUsage = j.accumulated_usage || null;
-    if (startedOwnRun) bumpChatInflight(requestSid, -1);
   } catch (e) {
     if (sessionId === requestSid) systemMsg('err', String(e));
-    if (startedOwnRun) bumpChatInflight(requestSid, -1);
   } finally {
     var ctx = window._lastContextUsage;
     if (ctx && typeof updateTokenUsage === 'function') {
@@ -230,10 +246,7 @@ if (msg) {
   msg.addEventListener('keydown', (e) => {
   if (e.key !== 'Enter') return;
   if (e.shiftKey) return;
-  // macOS IME (中文输入法) 在候选词确认时也会触发 Enter keydown，
-  // isComposing 为 true 表示处于输入法组合状态，此时不应发送消息。
   if (e.isComposing || e.keyCode === 229) return;
-  // 手机端：Enter 换行，不发送（用键盘上的「发送」按钮代替）
   if (window.matchMedia('(max-width: 768px)').matches) return;
   e.preventDefault();
   sendBtn.click();
@@ -242,13 +255,14 @@ if (msg) {
   msg.addEventListener('input', () => {
     msg.style.height = 'auto';
     msg.style.height = Math.min(msg.scrollHeight, 220) + 'px';
+    updateComposerButtons();
   });
 }
 
 // ---------------- Active page persistence (localStorage) ----------------
 
 const TAB_KEY = STORAGE_KEYS.SESS_ACTIVE_PAGE;
-const WORKSPACE_PAGE_IDS = ['chat', 'config', 'tasks', 'agent', 'files'];
+const WORKSPACE_PAGE_IDS = ['chat', 'config', 'tasks', 'agent', 'files', 'team', 'hub'];
 
 function switchToPage(id) {
   if (!id) return;
@@ -266,7 +280,7 @@ function switchToPage(id) {
 function activatePage(id) {
   var actMode = '';
   try { actMode = document.body.getAttribute('data-activity-mode') || ''; } catch (_) {}
-  if (actMode && actMode !== 'chat' && actMode !== 'files' && id === 'chat') {
+  if (actMode && actMode !== 'chat' && actMode !== 'stats' && actMode !== 'files' && id === 'chat') {
     id = actMode;
   }
   switchToPage(id);
@@ -279,7 +293,6 @@ function activatePage(id) {
     loadGitRemoteConfig();
   }
   if (id === 'tasks') { loadCronPanel(); }
-  // id 'tasks' 对应导航栏「计划」
   if (id === 'agent') { loadAgentPage(); }
   if (id === 'chat' && webuiSessionsEnabled) {
     refreshSessionList().catch(() => {});
@@ -293,4 +306,3 @@ function activatePage(id) {
     }
   }
 }
-
