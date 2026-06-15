@@ -1465,7 +1465,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
 
         reset_mcp_manager()
         reset_agent_tools_cache()
-        return JSONResponse({"ok": True, "hint": "已写入 config/seed.env；重启服务后 MCP 开关完全生效。"})
+        return JSONResponse({"ok": True, "hint": "已写入 config/env；重启服务后 MCP 开关完全生效。"})
 
     async def api_env_chat_post(request: Request) -> JSONResponse:
         try:
@@ -1492,7 +1492,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         for k, v in updates.items():
             if k.startswith("CODEAGENT_"):
                 os.environ["SEED_" + k[len("CODEAGENT_") :]] = v
-        return JSONResponse({"ok": True, "hint": "已写入 config/seed.env；内核项已同步 SEED_*。"})
+        return JSONResponse({"ok": True, "hint": "已写入 config/env；内核项已同步 SEED_*。"})
 
     async def api_tts_options(_: Request) -> JSONResponse:
         from codeagent.core.speech_synth import minimax_tts_configured
@@ -1995,7 +1995,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         from codeagent.web.auth_impl import TOKEN_FILENAME
 
         (cfg / TOKEN_FILENAME).write_text(tok + "\n", encoding="utf-8")
-        marker = cfg / "codeagent.setup.json"
+        marker = cfg / "setup.json"
         marker.write_text(json.dumps({"done": True}, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
         # Sensible defaults for new installs (context compact uses tokens, not bytes).
         _write_env_file_merge(

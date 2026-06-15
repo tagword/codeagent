@@ -4,10 +4,9 @@ Extends seed's `get_default_preset_id()` (which is a single chat-only default)
 with a multi-slot default map: ``{chat: 'preset-abc', vision: 'preset-xyz', ...}``.
 
 Storage:
-- Primary: ``<config_dir>/codeagent.default_preset_ids.json`` (a JSON object)
-- Fallback: the legacy single-id file from seed (which is
-  ``seed.models.default.txt`` — that's the file that actually holds the
-  chat default in the current install), assigned to the ``chat`` slot.
+- Primary: ``<config_dir>/default_presets.json`` (a JSON object)
+- Legacy fallback: ``<config_dir>/codeagent.default_preset_ids.json``
+- Ultimate fallback: seed's ``seed.default_model`` (chat only)
 
 Slots: ``chat``, ``vision``, ``image_gen``, ``audio``, ``music``, ``video_gen``.
 """
@@ -31,8 +30,8 @@ SLOTS: tuple[str, ...] = (
     "video_gen",
 )
 
-# New canonical filename (sits next to the legacy single-id file)
-DEFAULT_PRESET_IDS_FILENAME = "codeagent.default_preset_ids.json"
+DEFAULT_PRESET_IDS_FILENAME = "default_presets.json"
+LEGACY_PRESET_IDS_FILENAME = "codeagent.default_preset_ids.json"
 
 
 def _config_dir() -> Path:
@@ -74,8 +73,8 @@ def _read_legacy_single_id() -> str:
 def get_default_preset_ids() -> Dict[str, str]:
     """Return a mapping ``{slot: preset_id}`` for every slot that has a default.
 
-    Reads the new JSON map first; falls back to the legacy single-id file
-    (assigned to ``chat``) if the new file doesn't exist yet.
+    Reads the new JSON map first; falls back to ``codeagent.default_preset_ids.json``
+    (legacy), then the seed single-id file (assigned to ``chat``).
     """
     p = _new_path()
     if p.is_file():
@@ -90,7 +89,22 @@ def get_default_preset_ids() -> Dict[str, str]:
                 if isinstance(v, str) and v.strip():
                     out[slot] = v.strip()
             return out
-    # Legacy fallback: single id assigned to "chat"
+    # Legacy fallback 1: old codeagent.default_preset_ids.json
+    leg = _config_dir() / LEGACY_PRESET_IDS_FILENAME
+    if leg.is_file():
+        try:
+            data = json.loads(leg.read_text(encoding="utf-8") or "{}")
+        except (json.JSONDecodeError, OSError):
+            data = {}
+        if isinstance(data, dict):
+            out: Dict[str, str] = {}
+            for slot in SLOTS:
+                v = data.get(slot)
+                if isinstance(v, str) and v.strip():
+                    out[slot] = v.strip()
+            if out:
+                return out
+    # Legacy fallback 2: single id assigned to "chat"
     legacy = _read_legacy_single_id()
     if legacy:
         return {"chat": legacy}

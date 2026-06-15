@@ -13,7 +13,8 @@ logger = logging.getLogger(__name__)
 
 from seed.core.config_plane import project_root  # noqa: E402
 
-TOKEN_FILENAME = "codeagent.webui.token"
+TOKEN_FILENAME = "webui.token"
+LEGACY_TOKEN_FILENAME = "codeagent.webui.token"
 
 # Cookie 名按端口隔离，防止本地多实例 cookie 互相覆盖（localhost 同域名）
 _DEFAULT_PORT = 8099
@@ -42,7 +43,15 @@ def _project_root() -> Path:
 
 def _token_file_path(base: Path | None = None) -> Path:
     root = base if base is not None else _project_root()
-    return root / "config" / TOKEN_FILENAME
+    p = root / "config" / TOKEN_FILENAME
+    if p.is_file():
+        return p
+    # Legacy fallback
+    leg = root / "config" / LEGACY_TOKEN_FILENAME
+    if leg.is_file():
+        return leg
+    # Neither exists — return new name (write path)
+    return p
 
 
 def get_webui_token(project_root: Path | None = None) -> str:
@@ -90,9 +99,11 @@ def verify_webui_cookie(token: str, cookie_val: str | None) -> bool:
 
 
 def _setup_incomplete(project_root: Path | None = None) -> bool:
-    """True until ``config/codeagent.setup.json`` exists with ``\"done\": true``."""
+    """True until ``config/setup.json`` exists with ``\"done\": true``."""
     root = Path(project_root).resolve() if project_root is not None else _project_root()
-    marker = root / "config" / "codeagent.setup.json"
+    marker = root / "config" / "setup.json"
+    if not marker.is_file():
+        marker = root / "config" / "codeagent.setup.json"
     if not marker.is_file():
         return True
     try:
@@ -269,7 +280,9 @@ class WebUIAuthMiddleware:
         # even when a token exists (otherwise users get stuck at login before setup).
         if tok and method == "GET" and path == "/":
             try:
-                marker = self.project_root / "config" / "codeagent.setup.json"
+                marker = self.project_root / "config" / "setup.json"
+                if not marker.is_file():
+                    marker = self.project_root / "config" / "codeagent.setup.json"
                 if marker.is_file():
                     import json
 

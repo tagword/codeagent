@@ -68,7 +68,9 @@ def create_app():
     async def homepage(request: Request) -> HTMLResponse:
         from starlette.responses import RedirectResponse, Response
 
-        setup_marker = project_root / "config" / "codeagent.setup.json"
+        setup_marker = project_root / "config" / "setup.json"
+        if not setup_marker.is_file():
+            setup_marker = project_root / "config" / "codeagent.setup.json"
         done = False
         if setup_marker.is_file():
             try:

@@ -25,10 +25,10 @@ _CODEAGENT_BOOTSTRAP_MD = """\
 复制模板并填写 LLM 信息：
 
 ```bash
-cp config/seed.env.example config/seed.env
+cp config/env.example config/env
 ```
 
-最低必填项（编辑 `config/seed.env`）：
+最低必填项（编辑 `config/env`）：
 
 | 变量 | 说明 |
 |------|------|
@@ -87,7 +87,9 @@ agents/default/sessions/
 agents/default/projects-data/
 agents/default/memory/
 mcp-minimax-out/
+config/env
 config/seed.env
+config/webui.token
 config/codeagent.webui.token
 ```
 

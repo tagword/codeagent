@@ -22,7 +22,7 @@ def agent_home(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("CODEAGENT_HOME", str(tmp_path))
     cfg = tmp_path / "config"
     cfg.mkdir(parents=True, exist_ok=True)
-    (cfg / "seed.env").write_text(
+    (cfg / "env").write_text(
         "SEED_LLM_BASEURL=https://example.test/v1\nSEED_MCP_ENABLED=1\n",
         encoding="utf-8",
     )

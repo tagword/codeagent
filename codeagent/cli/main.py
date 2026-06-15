@@ -259,7 +259,7 @@ def main():
     chat_parser.add_argument(
         '--llm',
         action='store_true',
-        help='Use SEED_LLM_BASEURL / SEED_LLM_MODEL (aliases CODEAGENT_*) and builtin tools; optional config/seed.env',
+        help='Use SEED_LLM_BASEURL / SEED_LLM_MODEL (aliases CODEAGENT_*) and builtin tools; optional config/env',
     )
     chat_parser.add_argument('--max-tool-rounds', type=int, default=16, help='Max LLM/tool cycles per user line')
     chat_parser.add_argument(
@@ -343,7 +343,7 @@ def main():
 
     wt_parser = subparsers.add_parser(
         "webui-token",
-        help="Web UI: create/show/reset access token (local CLI only; file config/codeagent.webui.token)",
+        help="Web UI: create/show/reset access token (local CLI only; file config/webui.token)",
     )
     wt_sub = wt_parser.add_subparsers(dest="wt_action", required=True, metavar="action")
     wt_sub.add_parser("init", help="Create token file if missing (fails if file already exists)")
@@ -888,11 +888,11 @@ def cmd_config(args):
     if sub == 'init':
         root = project_root()
         ensure_default_config_files(root)
-        ex = root / "config" / "seed.env.example"
+        ex = root / "config" / "env.example"
         print(f"Default Markdown written under: {root / 'config'}")
         print("Tip: optional plugin skills live in config/skills/ directory.")
         if ex.is_file():
-            print(f"Context/LLM env template: {ex}  -> copy to config/seed.env if you want repo-local settings.")
+            print(f"Context/LLM env template: {ex}  -> copy to config/env if you want repo-local settings.")
         return
     print("Usage: codeagent config init")
 
@@ -967,7 +967,7 @@ def cmd_session(args):
         print("  codeagent session migrate [--agent-id default] [--dry-run]")
         print("  codeagent session audit-list <session_id>")
         print("  codeagent session audit-show <session_id> --seq N")
-        print("  Enable snapshots: SEED_LLM_PROJECTION_AUDIT=1 in config/seed.env")
+        print("  Enable snapshots: SEED_LLM_PROJECTION_AUDIT=1 in config/env")
     elif action == 'delete' and session_id:
         from seed.core.llm_sess import delete_stored_session
 
