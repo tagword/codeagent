@@ -112,6 +112,8 @@ function presetFormHtml(p) {
     '</div>' +
     '<label class="form-label">API Key</label>' +
     '<input class="preset-fld-key" type="password" placeholder="本地部署可留空" value="' + escAttr(p.api_key || '') + '"/>' +
+    '<label class="form-label">最大输出 tokens</label>' +
+    '<input class="preset-fld-max-tokens" type="number" min="256" max="65536" step="512" style="width:100%;" value="' + (p.max_tokens || 8192) + '"/>' +
     '<div class="preset-copy-row">' +
     '  <label class="form-label">复制连接</label>' +
     '  <select class="preset-fld-copy-from md-select" style="max-width:100%;"><option value="">从已有预设复制 Base URL / Key…</option></select>' +
@@ -254,6 +256,9 @@ function collectPresetPayload(editWrap, presetId) {
   const provider = (editWrap.querySelector('.preset-fld-provider') || {}).value.trim();
   const key = (editWrap.querySelector('.preset-fld-key') || {}).value.trim();
   const useType = getSelectedUseType(editWrap);
+  let maxTokens = parseInt((editWrap.querySelector('.preset-fld-max-tokens') || {}).value, 10);
+  if (isNaN(maxTokens) || maxTokens < 256) maxTokens = 8192;
+  if (maxTokens > 65536) maxTokens = 65536;
   const manualConn = formUsesManualConnection(editWrap);
   const schemeSel = editWrap.querySelector('.preset-fld-scheme');
   const scheme = schemeSel ? schemeSel.value : 'Bearer';
@@ -270,6 +275,7 @@ function collectPresetPayload(editWrap, presetId) {
       model: model,
       api_key: key,
       auth_scheme: scheme === 'None' ? '' : scheme,
+      max_tokens: maxTokens,
       advanced: true,
     };
   }
@@ -282,6 +288,7 @@ function collectPresetPayload(editWrap, presetId) {
     model: model,
     api_key: key,
     auth_scheme: 'Bearer',
+    max_tokens: maxTokens,
   };
 }
 
