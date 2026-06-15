@@ -167,7 +167,6 @@ def _ensure_default_persona_files(persona_dir: Path) -> None:
             "- 计划落盘不占上下文：`requirement.md` / `design.md` / `task.md` 写在磁盘，按需读取\n"
             "- 临时脚本写在项目 `.scripts/` 下，用完可删\n"
             "- 搜索工具默认跳过 `dist/`、`node_modules/`、`.git/`、`build/`\n"
-            "- 会话过长（>15 轮或 >150k tokens）时，写状态文件后开新会话\n"
             "\n"
             "## 工作模式\n\n"
             "自动判断维度（前端/后端/数据库/第三方服务/部署/认证）：\n"
