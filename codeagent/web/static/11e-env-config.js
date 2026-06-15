@@ -60,6 +60,8 @@ async function loadChatEnvConfig() {
     }
     const inpRounds = document.getElementById('inpMaxToolRounds');
     if (inpRounds) inpRounds.value = _envVal(j, 'CODEAGENT_CHAT_MAX_TOOL_ROUNDS_DEFAULT', 'SEED_CHAT_MAX_TOOL_ROUNDS_DEFAULT', '16');
+    const inpMaxOut = document.getElementById('inpMaxOutputTokens');
+    if (inpMaxOut) inpMaxOut.value = _envVal(j, 'CODEAGENT_CHAT_MAX_TOKENS', 'SEED_LLM_MAX_TOKENS', '8192');
     const chkCompact = document.getElementById('chkContextCompact');
     if (chkCompact) chkCompact.checked = _envVal(j, 'CODEAGENT_CONTEXT_COMPACT', 'SEED_CONTEXT_COMPACT', '') === '1';
     const inpMinBytes = document.getElementById('inpCompactMinBytes');
@@ -121,6 +123,7 @@ document.addEventListener('change', function(ev) {
       var chkAuto = document.getElementById('chkAutoContinue');
       var inpSeg = document.getElementById('inpAutoContinueMax');
       var inpRounds = document.getElementById('inpMaxToolRounds');
+      var inpMaxOut = document.getElementById('inpMaxOutputTokens');
       var chkCompact = document.getElementById('chkContextCompact');
       var inpMinB = document.getElementById('inpCompactMinBytes');
       var inpSumMax = document.getElementById('inpCompactSummarizerMaxTokens');
@@ -128,6 +131,7 @@ document.addEventListener('change', function(ev) {
         CODEAGENT_CHAT_AUTO_CONTINUE_ON_LIMIT: chkAuto && chkAuto.checked ? '1' : '0',
         CODEAGENT_CHAT_AUTO_CONTINUE_MAX_SEGMENTS: String(parseInt(inpSeg && inpSeg.value, 10) || 0),
         CODEAGENT_CHAT_MAX_TOOL_ROUNDS_DEFAULT: String(parseInt(inpRounds && inpRounds.value, 10) || 16),
+        CODEAGENT_CHAT_MAX_TOKENS: String(parseInt(inpMaxOut && inpMaxOut.value, 10) || 8192),
         CODEAGENT_CONTEXT_COMPACT: chkCompact && chkCompact.checked ? '1' : '',
         CODEAGENT_CONTEXT_COMPACT_MIN_TOKENS: String(parseInt(inpMinB && inpMinB.value, 10) || 30000),
         CODEAGENT_CONTEXT_COMPACT_SUMMARIZER_BASEURL: sumBaseUrl,

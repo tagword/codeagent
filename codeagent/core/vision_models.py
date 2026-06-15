@@ -68,5 +68,26 @@ def resolve_main_llm(llm_id: Optional[str] = None):
 
         for p in load_presets():
             if str(p.get("id") or "").strip() == pid:
-                return llm_executor_from_resolved(p)
-    return llm_executor_from_resolved(resolve_preset(None))
+                preset = p
+                break
+        else:
+            preset = resolve_preset(None)
+    else:
+        preset = resolve_preset(None)
+
+    cfg = dict(preset)
+
+    # 会话级 max_tokens 覆盖（CODEAGENT_CHAT_MAX_TOKENS / SEED_LLM_MAX_TOKENS）
+    from codeagent.core import env as ca_env
+    from seed.core import env_access as _ea
+
+    mt_override = _ea.pick_nonempty(ca_env.CHAT_MAX_TOKENS)
+    if not mt_override:
+        mt_override = _ea.pick_nonempty(*_ea.LLM_MAX_TOKENS)
+    if mt_override:
+        try:
+            cfg["max_tokens"] = int(mt_override)
+        except (ValueError, TypeError):
+            pass
+
+    return llm_executor_from_resolved(cfg)
