@@ -10,7 +10,7 @@ def bridge_codeagent_env_to_seed() -> None:
     For each ``CODEAGENT_<SUFFIX>`` set in ``os.environ``, copy to ``SEED_<SUFFIX>``
     when the latter is not already defined.
 
-    Call after loading ``config/seed.env`` (or legacy ``codeagent.env``) and before
+    Call after loading ``config/env`` (or legacy ``config/seed.env`` / ``codeagent.env``) and before
     invoking Seed / seed-tools. Does not remove ``CODEAGENT_*`` keys.
     """
     for key, value in list(os.environ.items()):

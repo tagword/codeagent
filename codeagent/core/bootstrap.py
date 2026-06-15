@@ -131,7 +131,7 @@ def bootstrap_codeagent_runtime(base: Optional[Path] = None) -> Path:
     """
     1. Default data root ``~/.codeagent`` (or ``CODEAGENT_HOME``)
     2. Set ``SEED_PROJECT_ROOT`` so Seed / seed-tools use the same tree
-    3. Load ``config/seed.env`` + ``config/codeagent.env``
+    3. Load ``config/env`` (or legacy ``config/seed.env``) + ``config/codeagent.env``
     4. Bridge ``CODEAGENT_*`` → ``SEED_*`` for kernel env keys
     5. Write CodeAgent's bootstrap.md (overrides Seed's generic version)
     """
