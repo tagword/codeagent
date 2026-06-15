@@ -4,6 +4,8 @@
 # 用法:
 #   curl -fsSL https://raw.githubusercontent.com/tagword/codeagent/main/install.sh | bash
 #   或本地: bash install.sh
+#
+# 自动检测国内网络环境，使用 PyPI 镜像加速（如清华源）
 # ──────────────────────────────────────────────────────────────────────
 
 set -euo pipefail
@@ -15,6 +17,36 @@ info()  { echo -e "${CYAN}▶${NC} $1"; }
 ok()    { echo -e "${GREEN}✓${NC} $1"; }
 warn()  { echo -e "${YELLOW}⚠${NC} $1"; }
 err()   { echo -e "${RED}✗${NC} $1"; exit 1; }
+
+# ── 国内镜像检测 ──────────────────────────────────────────────────────
+USE_MIRROR=false
+PIP_MIRROR_URL="https://pypi.tuna.tsinghua.edu.cn/simple"
+PIP_MIRROR_FLAG=""
+
+info "检测网络环境..."
+if command -v curl &>/dev/null; then
+  if curl -s --connect-timeout 3 -o /dev/null --max-time 5 https://pypi.org/simple/ 2>/dev/null; then
+    ok "直连 PyPI 正常"
+  elif curl -s --connect-timeout 2 -o /dev/null --max-time 3 https://www.baidu.com 2>/dev/null; then
+    USE_MIRROR=true
+    ok "检测到国内网络 → 使用镜像: $PIP_MIRROR_URL"
+  else
+    warn "网络似乎不可达，继续直连尝试"
+  fi
+elif command -v wget &>/dev/null; then
+  if wget -q --timeout=5 -O /dev/null https://pypi.org/simple/ 2>/dev/null; then
+    ok "直连 PyPI 正常"
+  else
+    USE_MIRROR=true
+    warn "检测到国内网络 → 使用镜像: $PIP_MIRROR_URL"
+  fi
+else
+  warn "未检测到 curl 或 wget，跳过网络检测"
+fi
+
+if $USE_MIRROR; then
+  PIP_MIRROR_FLAG="-i $PIP_MIRROR_URL"
+fi
 
 # ── 检测系统 ──────────────────────────────────────────────────────────
 OS="$(uname -s)"
@@ -79,23 +111,30 @@ fi
 # ── 激活 & 升级 pip ─────────────────────────────────────────────────
 info "升级 pip..."
 source .venv/bin/activate
-pip install --upgrade pip -q
+pip install --upgrade pip -q $PIP_MIRROR_FLAG
 
 # ── 安装 CodeAgent ──────────────────────────────────────────────────
 info "安装 CodeAgent（默认包含 Starlette + Uvicorn + 代码检测/审计工具）..."
-pip install -e . -q
+pip install -e . $PIP_MIRROR_FLAG -q
 ok "CodeAgent 安装完成"
 
 # ── 可选: npm 前端构建 ──────────────────────────────────────────────
-WEBUI_DIR="$INSTALL_DIR/codeagent/webui"
+WEBUI_DIR="$INSTALL_DIR/webui-v2"
 if [ -f "$WEBUI_DIR/package.json" ] && [ ! -d "$WEBUI_DIR/dist" ]; then
   if command -v node &>/dev/null; then
     info "构建 Web UI 前端..."
     cd "$WEBUI_DIR"
-    npm install --silent 2>/dev/null && npm run build 2>/dev/null && ok "Web UI 构建完成" || warn "Web UI 构建跳过（可稍后手动构建）"
+    NPM_ARGS=""
+    if $USE_MIRROR; then
+      CURRENT_REGISTRY=$(npm config get registry 2>/dev/null || echo "")
+      if [[ "$CURRENT_REGISTRY" != *"taobao"* ]] && [[ "$CURRENT_REGISTRY" != *"npmmirror"* ]]; then
+        NPM_ARGS="--registry=https://registry.npmmirror.com"
+      fi
+    fi
+    npm install --silent $NPM_ARGS 2>/dev/null && npm run build 2>/dev/null && ok "Web UI 构建完成" || warn "Web UI 构建跳过（可稍后手动构建）"
     cd "$INSTALL_DIR"
   else
-    warn "未检测到 Node.js，Web UI 前端使用 CDN 模式也能正常运行"
+    warn "未检测到 Node.js，Web UI v2 前端跳过构建（将使用内置 UI 兜底）"
   fi
 fi
 
@@ -105,10 +144,11 @@ echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━
 echo -e "${GREEN}  CodeAgent 安装成功！${NC}"
 echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
-echo -e "  激活虚拟环境:"
-echo -e "    ${CYAN}source $INSTALL_DIR/.venv/bin/activate${NC}"
+echo -e "  一键运行:"
+echo -e "    ${CYAN}bash $INSTALL_DIR/run.sh${NC}"
 echo ""
-echo -e "  启动 Web UI:"
+echo -e "  或手动激活:"
+echo -e "    ${CYAN}source $INSTALL_DIR/.venv/bin/activate${NC}"
 echo -e "    ${CYAN}codeagent serve${NC}"
 echo ""
 echo -e "  浏览器打开:  ${CYAN}http://localhost:8765${NC}"
