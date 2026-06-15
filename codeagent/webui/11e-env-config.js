@@ -64,8 +64,6 @@ async function loadChatEnvConfig() {
     if (chkCompact) chkCompact.checked = _envVal(j, 'CODEAGENT_CONTEXT_COMPACT', 'SEED_CONTEXT_COMPACT', '') === '1';
     const inpMinBytes = document.getElementById('inpCompactMinBytes');
     if (inpMinBytes) inpMinBytes.value = _envVal(j, 'CODEAGENT_CONTEXT_COMPACT_MIN_TOKENS', 'SEED_CONTEXT_COMPACT_MIN_TOKENS', '30000');
-    const inpMinRounds = document.getElementById('inpCompactMinRounds');
-    if (inpMinRounds) inpMinRounds.value = _envVal(j, 'CODEAGENT_CONTEXT_COMPACT_MIN_ROUNDS', 'SEED_CONTEXT_COMPACT_MIN_ROUNDS', '0');
     const sel = document.getElementById('selCompactSummarizer');
     if (sel) {
       const matched = _matchSummarizerPreset(
@@ -125,7 +123,6 @@ document.addEventListener('change', function(ev) {
       var inpRounds = document.getElementById('inpMaxToolRounds');
       var chkCompact = document.getElementById('chkContextCompact');
       var inpMinB = document.getElementById('inpCompactMinBytes');
-      var inpMinR = document.getElementById('inpCompactMinRounds');
       var inpSumMax = document.getElementById('inpCompactSummarizerMaxTokens');
       var body = {
         CODEAGENT_CHAT_AUTO_CONTINUE_ON_LIMIT: chkAuto && chkAuto.checked ? '1' : '0',
@@ -133,7 +130,6 @@ document.addEventListener('change', function(ev) {
         CODEAGENT_CHAT_MAX_TOOL_ROUNDS_DEFAULT: String(parseInt(inpRounds && inpRounds.value, 10) || 16),
         CODEAGENT_CONTEXT_COMPACT: chkCompact && chkCompact.checked ? '1' : '',
         CODEAGENT_CONTEXT_COMPACT_MIN_TOKENS: String(parseInt(inpMinB && inpMinB.value, 10) || 30000),
-        CODEAGENT_CONTEXT_COMPACT_MIN_ROUNDS: String(parseInt(inpMinR && inpMinR.value, 10) || 0),
         CODEAGENT_CONTEXT_COMPACT_SUMMARIZER_BASEURL: sumBaseUrl,
         CODEAGENT_CONTEXT_COMPACT_SUMMARIZER_MODEL: sumModel,
         CODEAGENT_CONTEXT_COMPACT_SUMMARIZER_MAX_TOKENS: String(parseInt(inpSumMax && inpSumMax.value, 10) || 4096),

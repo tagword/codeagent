@@ -67,7 +67,7 @@ def test_image_generate_saves_attachment(agent_home, monkeypatch) -> None:
     mock_resp.json.return_value = {"data": [{"b64_json": b64}]}
 
     with patch("seed.core.model_providers.requests.post", return_value=mock_resp):
-        from seed_tools.image_gen_tools import image_generate
+        from seed_tools.image_gen import image_generate
 
         raw = asyncio.run(image_generate(prompt="a red circle on white background", n=1))
     payload = json.loads(raw)
@@ -116,7 +116,7 @@ def test_image_generate_minimax(agent_home_minimax) -> None:
     }
 
     with patch("seed.core.model_providers.requests.post", return_value=mock_resp) as post:
-        from seed_tools.image_gen_tools import image_generate
+        from seed_tools.image_gen import image_generate
 
         raw = asyncio.run(
             image_generate(prompt="女孩在图书馆", size="9:16", n=1)
@@ -170,7 +170,7 @@ def test_image_generate_volcengine(agent_home_volcengine) -> None:
     mock_resp.json.return_value = {"data": [{"b64_json": b64}]}
 
     with patch("seed.core.model_providers.requests.post", return_value=mock_resp) as post:
-        from seed_tools.image_gen_tools import image_generate
+        from seed_tools.image_gen import image_generate
 
         raw = asyncio.run(image_generate(prompt="一只猫", size="2K", n=1))
         body = post.call_args[1]["json"]
@@ -200,7 +200,7 @@ def test_image_generate_volcengine_i2i(agent_home_volcengine) -> None:
     mock_resp.json.return_value = {"data": [{"b64_json": b64}]}
 
     with patch("seed.core.model_providers.requests.post", return_value=mock_resp) as post:
-        from seed_tools.image_gen_tools import image_generate
+        from seed_tools.image_gen import image_generate
 
         asyncio.run(
             image_generate(

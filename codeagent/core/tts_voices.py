@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from seed.core.model_providers import list_models_for_provider
+from seed_model_providers import list_models_for_provider
 
 # https://platform.minimaxi.com/docs/faq/system-voice-id
 TTS_SYSTEM_VOICES: list[dict[str, str]] = [

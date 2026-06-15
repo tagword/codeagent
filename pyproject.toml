@@ -11,6 +11,7 @@ license = { text = "MIT" }
 requires-python = ">=3.9"
 dependencies = [
     "seed>=1.0.4",
+    "seed-model-providers>=1.0.0",
     "seed-tools[code]>=1.0.2",
     "uvicorn[standard]>=0.30.0",
     "starlette>=0.37.0"

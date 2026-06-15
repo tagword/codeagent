@@ -177,7 +177,7 @@ def _ensure_default_persona_files(persona_dir: Path) -> None:
             "# Tools / 能力边界\n\n"
             "你可以使用以下类别的工具：\n"
             "- **文件操作**: `file_read`, `file_write`, `file_edit_tool`, `file_search`, `glob_tool`, `grep_tool`\n"
-            "- **命令执行**: `bash_exec`, `bash_tool`\n"
+            "- **命令执行**: `bash`\n"
             "- **Web 交互**: `web_search_tool`, `web_fetch`, `browser_*`\n"
             "- **代码分析**: `code_check`, `code_analyze`, `project`, `refactor`, `test_gen`\n"
             "- **项目管理**: `todo_tool`, `diagram`, `deploy`, `deps_check`\n"

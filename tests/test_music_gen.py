@@ -70,7 +70,7 @@ def test_music_generate_saves_attachment(agent_home_minimax_music) -> None:
     }
 
     with patch("seed.core.model_providers.requests.post", return_value=mock_resp) as post:
-        from seed_tools.music_gen_tools import music_generate
+        from seed_tools.music_gen import music_generate
 
         raw = asyncio.run(
             music_generate(
@@ -107,7 +107,7 @@ def test_music_generate_instrumental(agent_home_minimax_music) -> None:
     }
 
     with patch("seed.core.model_providers.requests.post", return_value=mock_resp) as post:
-        from seed_tools.music_gen_tools import music_generate
+        from seed_tools.music_gen import music_generate
 
         raw = asyncio.run(
             music_generate(

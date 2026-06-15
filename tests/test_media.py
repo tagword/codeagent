@@ -97,8 +97,8 @@ def test_audio_transcribe_mock(agent_home) -> None:
     mock_resp.status_code = 200
     mock_resp.json.return_value = {"text": "hello world"}
 
-    with patch("seed_tools.media_tools.requests.post", return_value=mock_resp):
-        from seed_tools.media_tools import audio_transcribe
+    with patch("seed_tools.media.requests.post", return_value=mock_resp):
+        from seed_tools.media import audio_transcribe
 
         raw = asyncio.run(audio_transcribe(attachment_id=meta.id))
     payload = json.loads(raw)

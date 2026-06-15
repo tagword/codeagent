@@ -85,7 +85,7 @@ class TestTeamManager:
             "lead": {"id": "lead", "name": "Lead", "tools": ["file_read"]},
             "members": [
                 {"id": "w1", "name": "Worker 1", "tools": ["file_write"]},
-                {"id": "w2", "name": "Worker 2", "tools": ["bash_exec"]},
+                {"id": "w2", "name": "Worker 2", "tools": ["bash"]},
             ],
         }
         cfg_path = tmp_path / "team.json"

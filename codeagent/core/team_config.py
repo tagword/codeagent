@@ -190,7 +190,7 @@ def create_default_team_config(config_dir: Path) -> TeamConfig:
             "persona": persona("lead"),
             "tools": [
                 "file_read", "file_write", "file_edit_tool",
-                "bash_exec", "git", "grep_tool", "glob_tool",
+                "bash", "git", "grep_tool", "glob_tool",
             ],
         },
         "members": [
@@ -210,19 +210,19 @@ def create_default_team_config(config_dir: Path) -> TeamConfig:
                 "id": "frontend_dev",
                 "name": "前端工程师",
                 "persona": persona("frontend"),
-                "tools": ["file_read", "file_write", "bash_exec", "browser_screenshot"],
+                "tools": ["file_read", "file_write", "bash", "browser_screenshot"],
             },
             {
                 "id": "backend_dev",
                 "name": "后端工程师",
                 "persona": persona("backend"),
-                "tools": ["file_read", "file_write", "bash_exec", "db"],
+                "tools": ["file_read", "file_write", "bash", "db"],
             },
             {
                 "id": "test_dev",
                 "name": "测试工程师",
                 "persona": persona("test"),
-                "tools": ["file_read", "bash_exec", "test_run"],
+                "tools": ["file_read", "bash", "test_run"],
             },
             {
                 "id": "reviewer",
@@ -234,13 +234,13 @@ def create_default_team_config(config_dir: Path) -> TeamConfig:
                 "id": "doc_writer",
                 "name": "文档工程师",
                 "persona": persona("doc-writer"),
-                "tools": ["file_read", "file_write", "bash_exec"],
+                "tools": ["file_read", "file_write", "bash"],
             },
             {
                 "id": "data_analyst",
                 "name": "数据分析师",
                 "persona": persona("data-analyst"),
-                "tools": ["file_read", "bash_exec", "db"],
+                "tools": ["file_read", "bash", "db"],
             },
         ],
     }

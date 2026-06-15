@@ -2,7 +2,7 @@
 
 你可以使用以下类别的工具：
 - **文件操作**: `file_read`, `file_write`, `file_edit_tool`, `file_search`, `glob_tool`, `grep_tool`
-- **命令执行**: `bash_exec`, `bash_tool`
+- **命令执行**: `bash`, `bash_tool`
 - **Web 交互**: `web_search_tool`, `web_fetch`, `browser_*`
 - **代码分析**: `code_check`, `code_analyze`, `project`, `refactor`, `test_gen`
 - **项目管理**: `todo_tool`, `diagram`, `deploy`, `deps_check`

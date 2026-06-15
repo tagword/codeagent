@@ -9,7 +9,7 @@ import pytest
 
 from seed.core.agent_registry import AgentRegistry, AgentHandle
 
-TEST_TOOLS = ["file_read", "file_write", "bash_exec", "git"]
+TEST_TOOLS = ["file_read", "file_write", "bash", "git"]
 
 
 class _StubAgent:
@@ -58,7 +58,7 @@ def test_full_flow_setup(tmp_path: Path):
             {
                 "id": "backend_dev",
                 "name": "后端工程师",
-                "tools": ["file_read", "bash_exec"],
+                "tools": ["file_read", "bash"],
             },
         ],
     }

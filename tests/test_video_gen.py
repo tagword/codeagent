@@ -96,7 +96,7 @@ def test_video_generate_saves_attachment(agent_home_agnes_video) -> None:
     with patch("seed.core.model_providers.requests.post", side_effect=fake_post), patch(
         "seed.core.model_providers.requests.get", side_effect=fake_get
     ), patch("seed.core.model_providers.time.sleep"):
-        from seed_tools.video_gen_tools import video_generate
+        from seed_tools.video_gen import video_generate
 
         raw = asyncio.run(
             video_generate(
@@ -112,7 +112,7 @@ def test_video_generate_saves_attachment(agent_home_agnes_video) -> None:
 
 
 def test_normalize_video_num_frames() -> None:
-    from seed.core.model_providers import normalize_video_num_frames
+    from seed_model_providers import normalize_video_num_frames
 
     assert normalize_video_num_frames(121) == 121
     assert normalize_video_num_frames(125) == 121

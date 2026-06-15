@@ -99,34 +99,30 @@ _AUTO_CONTINUE_DOMAIN_PLAYBOOKS: dict[str, str] = {
     "browser_": (
         "上一段连续在 browser_* 域失败（调试超时 / 目标 ws 僵尸 / 405 /json/new）。"
         "**禁止**再对同一 target_ws_url 重试同一操作。请换一条思路继续完成用户原本的任务：\n"
-        "1) **回退到 HTTP 层验证**：用 `bash_exec` 执行 `curl.exe -sSi <url>` 或 `Invoke-WebRequest`，"
+        "1) **回退到 HTTP 层验证**：用 `bash` 执行 `curl.exe -sSi <url>` 或 `Invoke-WebRequest`，"
         "或调用 `web_fetch` 直接取 HTML/JSON，跳过浏览器层即可回答用户问题；\n"
         "2) **重建浏览器调试会话**：先调 `browser_targets` 查出现有 type=page 列表；"
         "若有其它存活目标，将 `target_ws_url` 改为 `'active'` 或该目标的 ws 再试一次；"
         "若没有，调 `browser_new_page`（已加 Target.createTarget 回退，可用）再做；\n"
-        "3) **退一步排查底层**：`bash_exec` 跑 `netstat -ano | findstr :<port>` 和 "
+        "3) **退一步排查底层**：`bash` 跑 `netstat -ano | findstr :<port>` 和 "
         "`tasklist | findstr <image>` 确认服务/端口/进程是否还活着，判明根因后再决定是否继续 UI 层调试。\n"
         "请在下一步里选上面任意一条执行；不要把前面已失败的调用再重复一遍。"
     ),
-    "bash_exec": (
-        "上一段连续在 bash_exec 域失败。请换思路：\n"
+    "bash": (
+        "上一段连续在 bash 域失败。请换思路：\n"
         "1) 若启动的是长驻服务，请在下一次调用里显式 `detach=true`；\n"
-        "2) 若是跨盘 `cd` / `&&` 失败，请使用 PowerShell 7 (pwsh) 语法，或改用分步多次 `bash_exec`；\n"
+        "2) 若是跨盘 `cd` / `&&` 失败，请使用 PowerShell 7 (pwsh) 语法，或改用分步多次 `bash`；\n"
         "3) 先 `tasklist` / `netstat` 查状态，再决定后续命令。"
-    ),
-    "bash_tool": (
-        "上一段连续在 bash_tool 域失败。请换思路：考虑改用 `bash_exec` 并显式声明 shell、timeout、detach，"
-        "或先查当前环境变量/可执行路径再执行。"
     ),
     "file_": (
         "上一段连续在 file_* 域失败。请换思路：\n"
         "1) 先 `file_read` 核对实际内容，确认 `old_text` 与文件现状逐字符匹配（空格/制表符/换行）；\n"
         "2) 必要时改用 `file_write_tool` 重写小文件；\n"
-        "3) 路径疑问用 `bash_exec` 先 `ls` / `Test-Path` 确认。"
+        "3) 路径疑问用 `bash` 先 `ls` / `Test-Path` 确认。"
     ),
     "web_": (
         "上一段连续在网络类工具失败。请换思路：\n"
-        "1) 改用 `bash_exec` 跑 `curl.exe -sSi` 看实际 HTTP 状态与 body；\n"
+        "1) 改用 `bash` 跑 `curl.exe -sSi` 看实际 HTTP 状态与 body；\n"
         "2) 若 401/403，检查是否缺 Authorization header / token；\n"
         "3) 若超时，先确认本地网络可达性（ping / Test-NetConnection）。"
     ),

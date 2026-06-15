@@ -61,7 +61,6 @@ def _env_chat_specs() -> list[tuple[tuple[str, ...], str]]:
         ((ca_env.CHAT_MAX_TOOL_ROUNDS_DEFAULT,), "16"),
         ((ca_env.CONTEXT_COMPACT,), ""),
         ((ca_env.CONTEXT_COMPACT_MIN_TOKENS,), "30000"),
-        ((ca_env.CONTEXT_COMPACT_MIN_ROUNDS,), "0"),
         ((ca_env.CONTEXT_COMPACT_SUMMARIZER_BASEURL,), ""),
         ((ca_env.CONTEXT_COMPACT_SUMMARIZER_MODEL,), ""),
         ((ca_env.CONTEXT_COMPACT_SUMMARIZER_MAX_TOKENS,), "4096"),
@@ -1442,7 +1441,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         return JSONResponse(tts_options_payload(configured=minimax_tts_configured(project_root)))
 
     async def api_llm_presets_get(_: Request) -> JSONResponse:
-        from seed.core.model_providers import enrich_presets_for_ui, list_provider_catalog
+        from seed_model_providers import enrich_presets_for_ui, list_provider_catalog
 
         default_ids = get_default_preset_ids()
         return JSONResponse(
@@ -1458,7 +1457,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         )
 
     async def api_llm_providers_get(_: Request) -> JSONResponse:
-        from seed.core.model_providers import list_provider_catalog
+        from seed_model_providers import list_provider_catalog
 
         return JSONResponse({"providers": list_provider_catalog()})
 
@@ -1467,7 +1466,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
             body = await request.json()
         except Exception:
             return JSONResponse({"detail": "invalid json"}, status_code=400)
-        from seed.core.model_providers import materialize_preset_from_form, provider_requires_api_key
+        from seed_model_providers import materialize_preset_from_form, provider_requires_api_key
 
         body = materialize_preset_from_form(body)
         err = _validate_preset(body)
@@ -1536,7 +1535,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
             body = await request.json()
         except Exception:
             return JSONResponse({"detail": "invalid json"}, status_code=400)
-        from seed.core.model_providers import materialize_preset_from_form
+        from seed_model_providers import materialize_preset_from_form
 
         body = materialize_preset_from_form(body)
         return await _llm_probe_response(body)
@@ -1944,14 +1943,12 @@ def build_webui_api_app(project_root: Path) -> Starlette:
             {
                 ca_env.CONTEXT_COMPACT: "1",
                 ca_env.CONTEXT_COMPACT_MIN_TOKENS: "30000",
-                ca_env.CONTEXT_COMPACT_MIN_ROUNDS: "0",
                 ca_env.CHAT_MAX_TOOL_ROUNDS_DEFAULT: "16",
             },
         )
         for k, v in {
             ca_env.CONTEXT_COMPACT: "1",
             ca_env.CONTEXT_COMPACT_MIN_TOKENS: "30000",
-            ca_env.CONTEXT_COMPACT_MIN_ROUNDS: "0",
             ca_env.CHAT_MAX_TOOL_ROUNDS_DEFAULT: "16",
         }.items():
             os.environ[k] = v
@@ -2016,7 +2013,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
                 "name": "调试专家",
                 "description": "诊断代码问题，定位根因",
                 "system_prompt": "你是调试专家。分析错误信息、日志和代码上下文，定位根因并给出修复方案。",
-                "tools": {"acquired": {"allow": ["file_read", "bash_exec", "grep_tool"]}},
+                "tools": {"acquired": {"allow": ["file_read", "bash", "grep_tool"]}},
             },
         ]
         return JSONResponse({"presets": presets})
@@ -2033,7 +2030,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
             tools = sorted(t.name for t in reg.list_all())
         except Exception:
             tools = [
-                "file_read", "file_write", "file_edit_tool", "bash_exec", "bash_tool",
+                "file_read", "file_write", "file_edit_tool", "bash",
                 "web_fetch", "web_search_tool", "code_check", "code_analyze",
                 "grep_tool", "glob_tool", "file_search",
                 "db", "git", "todo_tool", "tool_search_tool",

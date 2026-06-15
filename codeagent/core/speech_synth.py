@@ -291,7 +291,7 @@ def _minimax_credentials_from_llm_presets(base: Optional[Path] = None) -> Tuple[
     """Use MiniMax LLM preset api_key (e.g. MiniMax-M2.7 chat) for T2A — same platform key."""
     try:
         from seed.core.llm_presets import get_default_preset_id, load_presets
-        from seed.core.model_providers import resolve_provider_for_preset
+        from seed_model_providers import resolve_provider_for_preset
     except Exception:
         return "", "https://api.minimaxi.com"
 
