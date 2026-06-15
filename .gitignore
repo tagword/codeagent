@@ -57,3 +57,19 @@ credentials.json
 **/local.override.*
 webui-v2
 .codeagent/
+
+# Internal development docs — not published
+docs/design-codeagent-2.0.md
+docs/dev-discipline-codeagent-2.0.md
+docs/task-codeagent-2.0.md
+docs/requirement-codeagent-2.0.md
+docs/requirement-confirm-checklist.md
+docs/self-iteration.md
+docs/ux-design-review.md
+docs/agent-management-redesign.md
+docs/persona-拆分分析.md
+docs/task-路径管理体系落地.md
+docs/路径管理体系设计.md
+
+# Embedded game project (accidental gitlink)
+snake-game/
