@@ -32,6 +32,13 @@ codeagent-core = "codeagent.cli.main:main"
 where = ["."]
 include = ["codeagent*"]
 
+[tool.setuptools.package-data]
+codeagent = [
+    "web/**/*",
+    "server/icon.png",
+    "*.png",
+]
+
 # ──────────────────────────────────────────────────────────────────
 #  Tool configuration: pytest, bandit, ruff
 # ──────────────────────────────────────────────────────────────────
