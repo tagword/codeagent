@@ -1,6 +1,31 @@
 // ---------------- Config paths & allowlist ----------------
 // escapeHtml/escAttr 已统一在 00-utils.js（顶层声明）。
 
+var GIT_PROVIDER_HTTPS_HOST = {
+  github: 'https://github.com',
+  gitlab: 'https://gitlab.com',
+  gitee: 'https://gitee.com',
+  bitbucket: 'https://bitbucket.org',
+};
+
+var GIT_PROVIDER_SSH_HOST = {
+  github: 'git@github.com',
+  gitlab: 'git@gitlab.com',
+  gitee: 'git@gitee.com',
+  bitbucket: 'git@bitbucket.org',
+};
+
+function _gitProviderFromSelect(id) {
+  var el = document.getElementById(id);
+  return el ? String(el.value || 'github').trim() : 'github';
+}
+
+function _syncCredUrlFromProvider() {
+  var prov = _gitProviderFromSelect('selConfigCredProvider');
+  var inp = document.getElementById('inpConfigCredUrl');
+  if (inp) inp.value = GIT_PROVIDER_HTTPS_HOST[prov] || GIT_PROVIDER_HTTPS_HOST.github;
+}
+
 async function loadConfigPaths() {
   const display = document.getElementById('configPathsDisplay');
   if (!display) return;
@@ -211,7 +236,12 @@ async function _loadGitDefaults() {
     chk.checked = !!def.enabled;
     _toggleGitDefaultsForm(def.enabled);
 
-    if (def.provider) document.getElementById('selGitDefaultProvider').value = def.provider;
+    if (def.provider) {
+      document.getElementById('selGitDefaultProvider').value = def.provider;
+      var credProv = document.getElementById('selConfigCredProvider');
+      if (credProv) credProv.value = def.provider;
+      _syncCredUrlFromProvider();
+    }
     if (def.owner) document.getElementById('inpGitDefaultOwner').value = def.owner;
     if (def.protocol === 'https') {
       const el = document.querySelector('input[name="gitDefaultProtocol"][value="https"]');
@@ -226,6 +256,16 @@ async function _loadGitDefaults() {
     chk.addEventListener('change', function() {
       _toggleGitDefaultsForm(this.checked);
     });
+    var selProv = document.getElementById('selGitDefaultProvider');
+    if (selProv) {
+      selProv.addEventListener('change', function() {
+        var credProv = document.getElementById('selConfigCredProvider');
+        if (credProv) credProv.value = selProv.value;
+        _syncCredUrlFromProvider();
+        var sshBody = document.getElementById('gitConfigSshBody');
+        if (sshBody && sshBody.style.display === 'block') _refreshGitSshStatus();
+      });
+    }
     var gds = document.getElementById('btnGitDefaultsSave');
     if (gds) gds.addEventListener('click', _saveGitDefaults);
   }
@@ -295,33 +335,169 @@ async function _refreshGitSshStatus() {
     var r = await fetch('/api/ui/git', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ command: 'ssh', args: 'status' }),
+      body: JSON.stringify({
+        command: 'ssh',
+        args: 'status',
+        provider: _gitProviderFromSelect('selGitDefaultProvider'),
+      }),
     });
     var j = await r.json();
-    el.innerHTML = (j.result || '未知').replace(/\n/g, '<br>');
+    el.innerHTML = _renderGitSshStatus(j);
+    _applyGitSshActionState(j);
   } catch (e) { el.textContent = '❌ ' + String(e); }
 }
 
-async function _gitSshAction(action) {
+function _renderGitSshStatus(j) {
+  if (!j || typeof j !== 'object') return escHtml(String(j && j.result || '未知'));
+  var parts = [];
+  var connected = !!j.connected;
+  var recommendation = String(j.recommendation || '');
+  var title = connected
+    ? '✅ SSH 已可用'
+    : (recommendation === 'needs_platform_or_config'
+      ? '⚠️ 已检测到密钥，但当前平台未连通'
+      : (recommendation === 'generate_suggested' ? '❌ 未检测到可用 SSH 密钥' : '❔ 暂时无法判断 SSH 状态'));
+  var host = escHtml(j.ssh_host || '');
+  var auth = escHtml(j.auth_message || '');
+  var bannerBg = connected
+    ? 'rgba(34,197,94,0.12)'
+    : (recommendation === 'generate_suggested' ? 'rgba(239,68,68,0.12)' : 'rgba(234,179,8,0.12)');
+  var bannerIcon = connected ? '✅' : (recommendation === 'generate_suggested' ? '❌' : '⚠️');
+  parts.push(
+    '<div style="padding:6px 8px;border-radius:4px;background:' + bannerBg + ';margin-bottom:6px;">'
+    + '<div><strong>' + title + '</strong></div>'
+    + '<div style="margin-top:3px;">' + bannerIcon + ' <strong>' + host + '</strong>'
+    + (auth ? ' — ' + auth : '')
+    + '</div>'
+    + '</div>'
+  );
+  var ids = j.identities || [];
+  if (ids.length) {
+    parts.push('<div style="margin:4px 0;"><strong>实际会尝试的密钥</strong> <span style="color:var(--text-muted);">(ssh -G)</span></div>');
+    parts.push('<ul style="margin:0;padding-left:16px;">');
+    ids.forEach(function(row) {
+      var mark = row.private_exists ? '✓' : '✗';
+      var line = mark + ' <code style="font-size:10px;">' + escHtml(row.private || '') + '</code>';
+      if (row.public_exists) {
+        line += '<br><span style="color:var(--text-muted);padding-left:14px;">公钥: '
+          + escHtml(row.public || '') + '</span>';
+      }
+      parts.push('<li style="margin-bottom:4px;">' + line + '</li>');
+    });
+    parts.push('</ul>');
+  } else {
+    parts.push('<div style="color:var(--text-muted);">未解析到 identityfile（可能仅依赖 ssh-agent / 系统钥匙串）</div>');
+  }
+  var agent = j.agent_keys || [];
+  if (agent.length) {
+    parts.push('<div style="margin-top:6px;"><strong>ssh-agent</strong></div><ul style="margin:0;padding-left:16px;">');
+    agent.slice(0, 5).forEach(function(ln) {
+      parts.push('<li><code style="font-size:10px;">' + escHtml(ln) + '</code></li>');
+    });
+    parts.push('</ul>');
+  }
+  var rec = j.recommendation_text || j.result || '';
+  if (rec) {
+    var recStyle = connected
+      ? 'color:var(--text-muted);'
+      : (j.recommendation === 'generate_suggested' ? 'color:var(--text);' : 'color:#b45309;');
+    parts.push('<div style="margin-top:8px;font-size:11px;' + recStyle + '">' + escHtml(rec) + '</div>');
+  }
+  return parts.join('');
+}
+
+function _setBtnStyle(btn, isPrimary) {
+  if (!btn) return;
+  btn.classList.remove('btn--primary', 'btn--ghost');
+  btn.classList.add(isPrimary ? 'btn--primary' : 'btn--ghost');
+}
+
+function _applyGitSshActionState(j) {
+  var btnGen = document.getElementById('btnConfigSshGen');
+  var btnCat = document.getElementById('btnConfigSshCat');
+  var btnTest = document.getElementById('btnConfigSshTest');
+  if (!btnGen || !btnCat || !btnTest) return;
+
+  btnGen.style.display = '';
+  btnCat.style.display = '';
+  btnTest.style.display = '';
+  btnGen.textContent = '生成密钥';
+  btnCat.textContent = '查看公钥';
+  btnTest.textContent = '测试连接';
+
+  var connected = !!(j && j.connected);
+  var recommendation = String((j && j.recommendation) || '');
+  if (connected) {
+    _setBtnStyle(btnCat, true);
+    _setBtnStyle(btnTest, false);
+    _setBtnStyle(btnGen, false);
+    btnCat.textContent = '查看并复制公钥';
+    btnTest.textContent = '重新检测';
+    btnGen.textContent = '仍要生成新密钥';
+    return;
+  }
+  if (recommendation === 'needs_platform_or_config') {
+    _setBtnStyle(btnCat, true);
+    _setBtnStyle(btnTest, false);
+    _setBtnStyle(btnGen, false);
+    btnCat.textContent = '查看并复制公钥';
+    btnTest.textContent = '重新检测';
+    btnGen.style.display = 'none';
+    return;
+  }
+  if (recommendation === 'generate_suggested') {
+    _setBtnStyle(btnGen, true);
+    _setBtnStyle(btnTest, false);
+    _setBtnStyle(btnCat, false);
+    btnGen.textContent = '生成 ed25519 密钥';
+    btnTest.textContent = '重新检测';
+    btnCat.style.display = 'none';
+    return;
+  }
+  _setBtnStyle(btnTest, true);
+  _setBtnStyle(btnCat, false);
+  _setBtnStyle(btnGen, false);
+  btnTest.textContent = '重新检测';
+}
+
+async function _gitSshAction(action, opts) {
+  opts = opts || {};
   var output = document.getElementById('gitConfigSshOutput');
   if (!output) return;
-  if (action === 'generate' && !confirm('生成新的 SSH 密钥（ed25519）？已有密钥不会被覆盖。')) return;
+  var provider = _gitProviderFromSelect('selGitDefaultProvider');
+  if (action === 'generate' && !opts.force) {
+    if (!confirm('生成新的 SSH 密钥（ed25519）？已有 ~/.ssh/id_ed25519 不会被覆盖。')) return;
+  }
   output.textContent = '⏳ 执行中...';
   try {
+    var payload = { command: 'ssh', args: action, provider: provider };
+    if (action === 'generate' && opts.force) payload.force = true;
     var r = await fetch('/api/ui/git', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ command: 'ssh', args: action }),
+      body: JSON.stringify(payload),
     });
     var j = await r.json();
+    if (action === 'generate' && j.needs_confirm && !opts.force) {
+      var msg = j.result || '当前 SSH 已可用，仍要生成新密钥吗？';
+      if (confirm(msg)) {
+        return _gitSshAction('generate', { force: true });
+      }
+      output.textContent = '已取消';
+      return;
+    }
     output.textContent = j.result || j.error || '完成';
     if (action === 'generate' || action === 'test') _refreshGitSshStatus();
+    if (action === 'generate' && !j.error) {
+      await _gitSshAction('cat', { fromGenerate: true });
+    }
     if (action === 'cat' && j.result) {
-      // 尝试复制公钥
       var pubMatch = j.result.match(/(ssh-\S+)/);
-
       if (pubMatch) {
-        try { await navigator.clipboard.writeText(pubMatch[1]); output.textContent += '\n📋 公钥已复制！'; } catch(_) {}
+        try {
+          await navigator.clipboard.writeText(pubMatch[1]);
+          output.textContent += opts.fromGenerate ? '\n📋 已自动复制新公钥。' : '\n📋 公钥已复制！';
+        } catch (_) {}
       }
     }
   } catch (e) { output.textContent = '❌ ' + String(e); }
@@ -352,8 +528,14 @@ function _bindGitCredEvents() {
   var bClr = document.getElementById('btnConfigCredClear');
   if (bAdd) bAdd.addEventListener('click', function() {
     var f = document.getElementById('gitConfigCredForm');
+    var defProv = _gitProviderFromSelect('selGitDefaultProvider');
+    var credProv = document.getElementById('selConfigCredProvider');
+    if (credProv) credProv.value = defProv;
+    _syncCredUrlFromProvider();
     if (f) f.style.display = 'block';
   });
+  var credProvSel = document.getElementById('selConfigCredProvider');
+  if (credProvSel) credProvSel.addEventListener('change', _syncCredUrlFromProvider);
   if (bCan) bCan.addEventListener('click', function() {
     var f = document.getElementById('gitConfigCredForm');
     if (f) f.style.display = 'none';
@@ -371,9 +553,13 @@ async function _refreshGitCredStatus() {
     var r = await fetch('/api/ui/git', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ command: 'credential', args: 'show' }),
+      body: JSON.stringify({ command: 'credential', action: 'show' }),
     });
     var j = await r.json();
+    if (j.error && !j.result) {
+      el.textContent = '❌ ' + j.error;
+      return;
+    }
     el.innerHTML = (j.result || '未知').replace(/\n/g, '<br>');
   } catch (e) { el.textContent = '❌ ' + String(e); }
 }
@@ -382,7 +568,8 @@ async function _saveGitCred() {
   var url = document.getElementById('inpConfigCredUrl').value.trim();
   var user = document.getElementById('inpConfigCredUser').value.trim();
   var token = document.getElementById('inpConfigCredToken').value.trim();
-  if (!url || !user || !token) { alert('请填写 URL、用户名和 Token'); return; }
+  var provider = _gitProviderFromSelect('selConfigCredProvider');
+  if (!url || !user || !token) { alert('请填写平台、用户名和 Token'); return; }
   var status = document.getElementById('gitConfigCredStatus');
   if (!status) return;
   status.textContent = '保存中...';
@@ -390,12 +577,22 @@ async function _saveGitCred() {
     var r = await fetch('/api/ui/git', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ command: 'credential', args: 'store ' + url + ' ' + user + ' ' + token }),
+      body: JSON.stringify({
+        command: 'credential',
+        action: 'store',
+        url: url,
+        provider: provider,
+        username: user,
+        token: token,
+      }),
     });
     var j = await r.json();
+    if (j.error && !j.result) {
+      status.textContent = '❌ ' + j.error;
+      return;
+    }
     status.textContent = j.result || '✅ 已保存';
     document.getElementById('gitConfigCredForm').style.display = 'none';
-    document.getElementById('inpConfigCredUrl').value = '';
     document.getElementById('inpConfigCredUser').value = '';
     document.getElementById('inpConfigCredToken').value = '';
     setTimeout(function() { status.textContent = ''; }, 3000);
@@ -403,21 +600,11 @@ async function _saveGitCred() {
 }
 
 async function _showGitCred() {
-  var status = document.getElementById('gitConfigCredStatus');
-  if (!status) return;
-  try {
-    var r = await fetch('/api/ui/git', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ command: 'credential', args: 'show' }),
-    });
-    var j = await r.json();
-    status.innerHTML = (j.result || '无').replace(/\n/g, '<br>');
-  } catch (e) { status.textContent = '❌ ' + String(e); }
+  await _refreshGitCredStatus();
 }
 
 async function _clearGitCred() {
-  if (!confirm('确定清除所有 Git 凭据吗？')) return;
+  if (!confirm('确定清除已配置的 Git HTTPS 凭据吗？')) return;
   var status = document.getElementById('gitConfigCredStatus');
   if (!status) return;
   status.textContent = '清除中...';
@@ -425,10 +612,10 @@ async function _clearGitCred() {
     var r = await fetch('/api/ui/git', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ command: 'credential', args: 'clear' }),
+      body: JSON.stringify({ command: 'credential', action: 'clear' }),
     });
     var j = await r.json();
-    status.textContent = j.result || '✅ 已清除';
+    status.textContent = j.result || j.error || '✅ 已清除';
     setTimeout(function() { status.textContent = ''; }, 3000);
   } catch (e) { status.textContent = '❌ ' + String(e); }
 }

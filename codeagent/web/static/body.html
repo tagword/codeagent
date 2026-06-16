@@ -418,13 +418,6 @@
               </div>
             </div>
 
-            <!-- 上下文窗口硬边界 -->
-            <div class="form-row">
-              <label class="form-label" for="inpContextLimit">上下文窗口上限 (context_limit)</label>
-              <input type="number" id="inpContextLimit" class="form-input-sm" min="1000" max="1000000" step="1000" placeholder="留空自动"/>
-              <span class="form-hint">模型上下文窗口硬上限（0/留空=自动检测）。仅用于 compact 边界判断，不影响指示器百分比。</span>
-            </div>
-
             <!-- 上下文压缩 -->
             <label class="checkbox-row">
               <input type="checkbox" id="chkContextCompact"/>
@@ -515,12 +508,15 @@
             <h3 class="section__title">🔗 Git 远程仓库</h3>
           </div>
           <p class="section__desc">
-            管理 SSH 密钥、HTTPS 凭据和 Git 代理。设置默认值后，新建项目时会自动预填。
+            分三块，互不相同：<strong>默认远程</strong>只影响「新建项目」对话框预填；<strong>SSH</strong> 用于 <code>git@host:…</code>；<strong>HTTPS Token</strong> 写入系统凭据助手，供 <code>https://…</code> 拉取/推送。
           </p>
 
-          <!-- 默认远程配置 -->
+          <!-- 默认远程配置（仅新建项目预填） -->
           <div id="gitDefaultsSection" style="margin-bottom:var(--sp-3);padding:var(--sp-3);border:1px solid var(--border);border-radius:6px;">
-            <div style="font-weight:500;font-size:12px;margin-bottom:var(--sp-2);">📋 默认远程配置</div>
+            <div style="font-weight:500;font-size:12px;margin-bottom:var(--sp-2);">📋 新建项目默认远程（不修改全局 git）</div>
+            <p style="font-size:11px;color:var(--text-muted);margin:0 0 var(--sp-2);">
+              勾选后，在<strong>新建空白/模板项目</strong>时预填平台、所有者、协议。克隆已有 URL 的项目不会用到此项。
+            </p>
             <label class="checkbox-row" style="margin-bottom:var(--sp-2);">
               <input type="checkbox" id="chkGitDefaultEnabled"/>
               <span>新建项目时默认启用远程仓库</span>
@@ -568,7 +564,10 @@
               <span id="gitConfigSshIcon" style="font-size:10px;color:var(--text-muted);">▶</span>
             </div>
             <div id="gitConfigSshBody" style="display:none;padding:0 var(--sp-3) var(--sp-3);">
-              <div id="gitConfigSshStatus" style="font-size:11px;color:var(--text-muted);padding:4px 0;">检查中...</div>
+              <p style="font-size:11px;color:var(--text-muted);margin:0 0 var(--sp-2);">
+                新建项目选 <strong>SSH</strong> 协议时使用。检测目标与上方「默认远程」平台一致，密钥列表来自 <code>ssh -G</code>（与 <code>git push</code> 实际行为一致），连通性 ✅ 即表示可用。
+              </p>
+              <div id="gitConfigSshStatus" style="font-size:11px;color:var(--text-muted);padding:4px 0;">展开后检查</div>
               <div style="display:flex;gap:4px;flex-wrap:wrap;">
                 <button type="button" class="btn btn--ghost btn--xs" id="btnConfigSshGen">生成密钥</button>
                 <button type="button" class="btn btn--ghost btn--xs" id="btnConfigSshCat">查看公钥</button>
@@ -585,11 +584,24 @@
               <span id="gitConfigCredIcon" style="font-size:10px;color:var(--text-muted);">▶</span>
             </div>
             <div id="gitConfigCredBody" style="display:none;padding:0 var(--sp-3) var(--sp-3);">
-              <div id="gitConfigCredStatus" style="font-size:11px;color:var(--text-muted);padding:4px 0;">检查中...</div>
+              <p style="font-size:11px;color:var(--text-muted);margin:0 0 var(--sp-2);">
+                仅在选择 <strong>HTTPS</strong> 协议时需要。Token 存入 <code>git credential</code>（如 macOS 钥匙串），与上方「默认远程」里的平台/所有者无关。
+              </p>
+              <div id="gitConfigCredStatus" style="font-size:11px;color:var(--text-muted);padding:4px 0;">展开后查看状态</div>
               <div id="gitConfigCredForm" style="display:none;margin-bottom:var(--sp-2);">
                 <div class="form-row">
-                  <label class="form-label" for="inpConfigCredUrl">URL</label>
-                  <input type="text" id="inpConfigCredUrl" class="form-input-sm" placeholder="https://github.com" style="max-width:250px;">
+                  <label class="form-label" for="selConfigCredProvider">平台</label>
+                  <select id="selConfigCredProvider" class="md-select" style="max-width:160px;">
+                    <option value="github">GitHub</option>
+                    <option value="gitlab">GitLab</option>
+                    <option value="gitee">Gitee</option>
+                    <option value="bitbucket">Bitbucket</option>
+                  </select>
+                </div>
+                <div class="form-row">
+                  <label class="form-label" for="inpConfigCredUrl">凭据主机 URL</label>
+                  <input type="text" id="inpConfigCredUrl" class="form-input-sm" placeholder="https://github.com" style="max-width:250px;" readonly/>
+                  <span class="form-hint">由平台自动填充，对应 git 凭据里的 host</span>
                 </div>
                 <div class="form-row">
                   <label class="form-label" for="inpConfigCredUser">用户名</label>
@@ -610,6 +622,7 @@
                 <button type="button" class="btn btn--ghost btn--xs" id="btnConfigCredClear">清除所有</button>
               </div>
             </div>
+          </div>
 
           <!-- Git 代理设置 -->
           <div style="margin-bottom:var(--sp-3);padding:var(--sp-3);border:1px solid var(--border);border-radius:6px;">

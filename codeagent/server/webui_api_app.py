@@ -16,6 +16,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Any, Dict
+from urllib.parse import urlparse
 
 from starlette.applications import Starlette
 from starlette.requests import Request
@@ -65,8 +66,6 @@ def _env_chat_specs() -> list[tuple[tuple[str, ...], str]]:
         ((ca_env.CONTEXT_COMPACT_SUMMARIZER_MODEL,), ""),
         ((ca_env.CONTEXT_COMPACT_SUMMARIZER_MAX_TOKENS,), "4096"),
         ((ca_env.CHAT_MAX_TOKENS,), "8192"),
-        # 保留空串默认值以表示"未配置"，但 api_env_chat_post 会跳过空值写入
-        ((ca_env.LLM_CONTEXT_SIZE,), ""),
     ]
 
 
@@ -202,6 +201,319 @@ def _split_git_args(args: Any) -> list[str]:
     if not s:
         return []
     return shlex.split(s, posix=os.name != "nt")
+
+
+_GIT_PROVIDER_HTTPS_HOST: dict[str, str] = {
+    "github": "github.com",
+    "gitlab": "gitlab.com",
+    "gitee": "gitee.com",
+    "bitbucket": "bitbucket.org",
+}
+
+_GIT_PROVIDER_SSH_HOST: dict[str, str] = {
+    "github": "git@github.com",
+    "gitlab": "git@gitlab.com",
+    "gitee": "git@gitee.com",
+    "bitbucket": "git@bitbucket.org",
+}
+
+
+def _git_host_from_url(url: str) -> tuple[str, str]:
+    raw = (url or "").strip()
+    if not raw:
+        return "https", ""
+    if "://" not in raw:
+        raw = "https://" + raw.lstrip("/")
+    parsed = urlparse(raw)
+    host = (parsed.netloc or parsed.path.split("/")[0] or "").strip().lower()
+    scheme = (parsed.scheme or "https").strip().lower()
+    return scheme, host
+
+
+def _git_provider_host(provider: str, *, root: Path | None = None) -> str:
+    pid = str(provider or "").strip().lower()
+    if not pid and root is not None:
+        p = _git_defaults_path(root)
+        if p.is_file():
+            with contextlib.suppress(Exception):
+                data = json.loads(p.read_text(encoding="utf-8"))
+                if isinstance(data, dict):
+                    pid = str(data.get("provider") or "").strip().lower()
+    return _GIT_PROVIDER_HTTPS_HOST.get(pid, "github.com")
+
+
+async def _git_credential_pipe(subcmd: str, payload: str) -> tuple[int, str, str]:
+    proc = await asyncio.create_subprocess_exec(
+        "git",
+        "credential",
+        subcmd,
+        stdin=asyncio.subprocess.PIPE,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    out_b, err_b = await proc.communicate(input=(payload + "\n\n").encode("utf-8"))
+    out = (out_b or b"").decode(errors="replace").strip()
+    err = (err_b or b"").decode(errors="replace").strip()
+    return int(proc.returncode or 0), out, err
+
+
+async def _git_credential_show(root: Path) -> str:
+    lines: list[str] = []
+    proc = await asyncio.create_subprocess_exec(
+        "git",
+        "config",
+        "--global",
+        "--get-regexp",
+        r"^credential\.",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    out_b, err_b = await proc.communicate()
+    cfg = (out_b or b"").decode(errors="replace").strip()
+    if cfg:
+        lines.append("credential.helper 配置：")
+        lines.extend("  " + ln for ln in cfg.splitlines())
+    else:
+        lines.append("未设置全局 credential.helper（将使用系统默认，如 osxkeychain）")
+    for prov, host in _GIT_PROVIDER_HTTPS_HOST.items():
+        rc, fill_out, fill_err = await _git_credential_pipe(
+            "fill",
+            f"protocol=https\nhost={host}\n",
+        )
+        if rc == 0 and fill_out.strip():
+            lines.append(f"✅ {prov} ({host}): 已配置 HTTPS 凭据")
+        elif fill_err:
+            lines.append(f"○ {prov} ({host}): 未检测到凭据")
+    return "\n".join(lines)
+
+
+async def _git_credential_store(url: str, username: str, token: str) -> tuple[bool, str]:
+    scheme, host = _git_host_from_url(url)
+    if not host:
+        return False, "无效的 URL / host"
+    if not username or not token:
+        return False, "用户名和 Token 不能为空"
+    payload = f"protocol={scheme}\nhost={host}\nusername={username}\npassword={token}"
+    rc, _out, err = await _git_credential_pipe("approve", payload)
+    if rc != 0:
+        return False, err or "git credential approve 失败"
+    return True, f"✅ 已保存 {scheme}://{host} 的 HTTPS 凭据"
+
+
+async def _git_credential_clear() -> str:
+    cleared: list[str] = []
+    for host in _GIT_PROVIDER_HTTPS_HOST.values():
+        rc, _out, err = await _git_credential_pipe(
+            "reject",
+            f"protocol=https\nhost={host}\n",
+        )
+        if rc == 0:
+            cleared.append(host)
+        elif err and "unknown" not in err.lower():
+            logger.debug("credential reject %s: %s", host, err)
+    if cleared:
+        return "✅ 已清除: " + ", ".join(cleared)
+    return "○ 未找到可清除的 HTTPS 凭据（可能未存储或 helper 不支持 reject）"
+
+
+def _ssh_provider_target(provider: str) -> tuple[str, str]:
+    pid = str(provider or "").strip().lower() or "github"
+    ssh_host = _GIT_PROVIDER_SSH_HOST.get(pid, "git@github.com")
+    return pid, ssh_host
+
+
+async def _ssh_g_options(ssh_host: str) -> dict[str, list[str]]:
+    proc = await asyncio.create_subprocess_exec(
+        "ssh",
+        "-G",
+        ssh_host,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    out_b, err_b = await proc.communicate()
+    if proc.returncode != 0:
+        logger.debug("ssh -G %s failed: %s", ssh_host, (err_b or b"").decode(errors="replace"))
+        return {}
+    out: dict[str, list[str]] = {}
+    for line in (out_b or b"").decode(errors="replace").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split(None, 1)
+        if len(parts) != 2:
+            continue
+        key, val = parts[0].lower(), parts[1].strip()
+        out.setdefault(key, []).append(val)
+    return out
+
+
+async def _ssh_resolve_identities(ssh_host: str) -> list[dict[str, Any]]:
+    opts = await _ssh_g_options(ssh_host)
+    rows: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for raw in opts.get("identityfile", []):
+        expanded = os.path.expanduser(str(raw).strip())
+        if not expanded or expanded in seen:
+            continue
+        seen.add(expanded)
+        priv = Path(expanded)
+        pub = priv if priv.suffix == ".pub" else Path(f"{priv}.pub")
+        rows.append(
+            {
+                "private": str(priv),
+                "public": str(pub),
+                "private_exists": priv.is_file(),
+                "public_exists": pub.is_file(),
+                "source": "ssh -G",
+            }
+        )
+    return rows
+
+
+async def _ssh_agent_fingerprints() -> list[str]:
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "ssh-add",
+            "-l",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+    except FileNotFoundError:
+        return []
+    out_b, err_b = await proc.communicate()
+    if proc.returncode != 0:
+        return []
+    return [ln.strip() for ln in (out_b or b"").decode(errors="replace").splitlines() if ln.strip()]
+
+
+async def _ssh_probe(ssh_host: str) -> tuple[bool, str]:
+    proc = await asyncio.create_subprocess_exec(
+        "ssh",
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "StrictHostKeyChecking=accept-new",
+        "-T",
+        ssh_host,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    out_b, err_b = await proc.communicate()
+    text = ((out_b or b"") + (err_b or b"")).decode(errors="replace").strip()
+    first = text.split("\n")[0].strip() if text else "无响应"
+    ok = "successfully authenticated" in text.lower()
+    return ok, first[:200]
+
+
+async def _ssh_build_status(provider: str) -> dict[str, Any]:
+    pid, ssh_host = _ssh_provider_target(provider)
+    connected, auth_message = await _ssh_probe(ssh_host)
+    identities = await _ssh_resolve_identities(ssh_host)
+    agent_keys = await _ssh_agent_fingerprints()
+    ssh_dir = Path.home() / ".ssh"
+    pub_names: list[str] = []
+    if ssh_dir.is_dir():
+        pub_names = sorted(
+            p.name
+            for p in ssh_dir.glob("*.pub")
+            if not p.name.endswith("-cert.pub")
+        )
+    effective_pubs = {Path(row["public"]).name for row in identities if row.get("public_exists")}
+    if connected:
+        recommendation = "ok_no_action"
+        recommendation_text = "该平台 SSH 已可用，通常无需再「生成密钥」。"
+    elif identities or agent_keys:
+        recommendation = "needs_platform_or_config"
+        recommendation_text = (
+            "本机已有密钥或 agent 条目，但未连通该平台。"
+            "请把对应公钥加到 Git 平台，或检查 ~/.ssh/config 的 Host/IdentityFile。"
+        )
+    else:
+        recommendation = "generate_suggested"
+        recommendation_text = "未检测到可用密钥，可在此生成默认 id_ed25519，或继续用你现有的 SSH 工具配置。"
+
+    lines: list[str] = []
+    if connected:
+        lines.append(f"✅ {ssh_host} — {auth_message}")
+    else:
+        lines.append(f"○ {ssh_host} — {auth_message or '未连通'}")
+    lines.append("")
+    lines.append("OpenSSH 实际会尝试的密钥（ssh -G，与 git push 一致）：")
+    if identities:
+        for row in identities:
+            mark = "✓" if row["private_exists"] else "✗"
+            lines.append(f"  {mark} {row['private']}")
+            if row["public_exists"]:
+                lines.append(f"      公钥: {row['public']}")
+    else:
+        lines.append("  （未解析到 identityfile，可能仅依赖 ssh-agent / 系统钥匙串）")
+    if agent_keys:
+        lines.append("")
+        lines.append("ssh-agent 已加载：")
+        for ln in agent_keys[:5]:
+            lines.append(f"  {ln}")
+    other_pubs = [n for n in pub_names if n not in effective_pubs]
+    if other_pubs:
+        lines.append("")
+        lines.append("~/.ssh 内其它公钥（未列入上方优先级）：")
+        for nm in other_pubs[:6]:
+            lines.append(f"  {nm}")
+        if len(other_pubs) > 6:
+            lines.append(f"  … 另有 {len(other_pubs) - 6} 个")
+    lines.append("")
+    lines.append(recommendation_text)
+    return {
+        "provider": pid,
+        "ssh_host": ssh_host,
+        "connected": connected,
+        "auth_message": auth_message,
+        "identities": identities,
+        "agent_keys": agent_keys,
+        "public_keys_in_ssh_dir": pub_names,
+        "recommendation": recommendation,
+        "recommendation_text": recommendation_text,
+        "result": "\n".join(lines),
+    }
+
+
+async def _ssh_read_public_keys(provider: str) -> tuple[str, str]:
+    """Return (text, error). Prefer keys ssh would use for this host."""
+    _pid, ssh_host = _ssh_provider_target(provider)
+    identities = await _ssh_resolve_identities(ssh_host)
+    chunks: list[str] = []
+    for row in identities:
+        pub = Path(str(row["public"]))
+        if pub.is_file():
+            try:
+                chunks.append(f"# {pub}\n{pub.read_text(encoding='utf-8').strip()}\n")
+            except OSError as e:
+                return "", str(e)
+    if chunks:
+        return "\n".join(chunks).strip() + "\n", ""
+    agent = await _ssh_agent_fingerprints()
+    if agent:
+        return "", (
+            "当前连接可能仅使用 ssh-agent / 系统钥匙串中的密钥，无法在此导出公钥文本。"
+            "请在终端运行: ssh-add -L"
+        )
+    ssh_dir = Path.home() / ".ssh"
+    for nm in ("id_ed25519.pub", "id_rsa.pub"):
+        p = ssh_dir / nm
+        if p.is_file():
+            try:
+                return p.read_text(encoding="utf-8"), ""
+            except OSError as e:
+                return "", str(e)
+    pubs = sorted(ssh_dir.glob("*.pub")) if ssh_dir.is_dir() else []
+    if len(pubs) == 1:
+        try:
+            return pubs[0].read_text(encoding="utf-8"), ""
+        except OSError as e:
+            return "", str(e)
+    if pubs:
+        names = ", ".join(p.name for p in pubs[:8])
+        return "", f"未确定该平台使用哪把钥；~/.ssh 内有: {names}。请配置 ~/.ssh/config 或指定 Host 后再试。"
+    return "", "未找到公钥文件；若尚未配置 SSH，可点击「生成密钥」。"
 
 
 def _locate_session_file(
@@ -1794,29 +2106,39 @@ def build_webui_api_app(project_root: Path) -> Starlette:
             return JSONResponse({"result": out or err, "error": err if rc != 0 else ""})
 
         if cmd == "ssh":
-            ssh_dir = Path.home() / ".ssh"
             arg = str(args or "").strip()
+            provider = str(body.get("provider") or "").strip().lower()
+            force_generate = bool(body.get("force"))
             if arg == "status":
-                lines = []
-                for nm in ("id_ed25519.pub", "id_rsa.pub"):
-                    p = ssh_dir / nm
-                    lines.append(f"{nm}: {'存在' if p.is_file() else '缺失'}")
-                return JSONResponse({"result": "\n".join(lines)})
+                status = await _ssh_build_status(provider)
+                return JSONResponse(status)
             if arg == "cat":
-                pub = ssh_dir / "id_ed25519.pub"
-                if not pub.is_file():
-                    pub = ssh_dir / "id_rsa.pub"
-                if not pub.is_file():
-                    return JSONResponse({"result": "", "error": "未找到公钥"})
-                try:
-                    return JSONResponse({"result": pub.read_text(encoding="utf-8")})
-                except OSError as e:
-                    return JSONResponse({"error": str(e)})
+                text, err = await _ssh_read_public_keys(provider)
+                if err:
+                    return JSONResponse({"result": "", "error": err})
+                return JSONResponse({"result": text})
             if arg == "generate":
+                st = await _ssh_build_status(provider)
+                if st.get("connected") and not force_generate:
+                    return JSONResponse(
+                        {
+                            "result": (
+                                "当前平台 SSH 已可用，通常无需生成新密钥。\n"
+                                "若仍要创建 ~/.ssh/id_ed25519，请再次确认。"
+                            ),
+                            "needs_confirm": True,
+                            "recommendation": st.get("recommendation"),
+                        }
+                    )
+                ssh_dir = Path.home() / ".ssh"
                 ssh_dir.mkdir(parents=True, exist_ok=True)
                 key_path = ssh_dir / "id_ed25519"
                 if key_path.is_file():
-                    return JSONResponse({"result": "已有 id_ed25519，跳过生成"})
+                    pub = ssh_dir / "id_ed25519.pub"
+                    hint = pub.read_text(encoding="utf-8") if pub.is_file() else ""
+                    return JSONResponse(
+                        {"result": "已有 ~/.ssh/id_ed25519。\n" + (hint or ""), "already_exists": True}
+                    )
                 proc = await asyncio.create_subprocess_exec(
                     "ssh-keygen",
                     "-t",
@@ -1830,22 +2152,36 @@ def build_webui_api_app(project_root: Path) -> Starlette:
                 )
                 out_b, err_b = await proc.communicate()
                 text = (out_b or b"").decode() + (err_b or b"").decode()
+                pub = ssh_dir / "id_ed25519.pub"
+                if pub.is_file():
+                    text = (text.strip() + "\n\n" + pub.read_text(encoding="utf-8")).strip()
                 return JSONResponse({"result": text.strip() or "完成"})
             if arg == "test":
-                proc = await asyncio.create_subprocess_exec(
-                    "ssh",
-                    "-o",
-                    "BatchMode=yes",
-                    "-o",
-                    "StrictHostKeyChecking=accept-new",
-                    "-T",
-                    "git@github.com",
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                )
-                out_b, err_b = await proc.communicate()
-                text = (out_b or b"").decode() + (err_b or b"").decode()
-                return JSONResponse({"result": text.strip() or "完成"})
+                _pid, ssh_host = _ssh_provider_target(provider)
+                ok, first = await _ssh_probe(ssh_host)
+                label = _pid or "github"
+                prefix = "✅" if ok else "○"
+                return JSONResponse({"result": f"[{label} → {ssh_host}]\n{prefix} {first}"})
+
+        if cmd == "credential":
+            action = str(body.get("action") or "").strip().lower()
+            if not action and args:
+                action = str(args).split()[0].strip().lower()
+            if action == "store":
+                url = str(body.get("url") or "").strip()
+                user = str(body.get("username") or "").strip()
+                token = str(body.get("token") or "").strip()
+                ok, msg = await _git_credential_store(url, user, token)
+                if not ok:
+                    return JSONResponse({"error": msg})
+                return JSONResponse({"result": msg})
+            if action == "show":
+                text = await _git_credential_show(project_root)
+                return JSONResponse({"result": text})
+            if action == "clear":
+                text = await _git_credential_clear()
+                return JSONResponse({"result": text})
+            return JSONResponse({"detail": "credential action: store|show|clear"}, status_code=400)
 
         # ---- 核心 git 命令：log / diff / status / commit / branch / push / pull ----
         if cmd == "log":
