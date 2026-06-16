@@ -19,13 +19,52 @@ from codeagent.core.paths import codeagent_home
 
 logger = logging.getLogger(__name__)
 
-SELF_HEALING_ENABLED = os.environ.get("CODEAGENT_SELF_HEALING_ENABLED", "1") == "1"
-HEARTBEAT_TIMEOUT = int(os.environ.get("CODEAGENT_HEARTBEAT_TIMEOUT", "180"))
-WATCHDOG_INTERVAL = int(os.environ.get("CODEAGENT_WATCHDOG_INTERVAL", "10"))
+_DEFAULT_SELF_HEALING_ENABLED = True
+_DEFAULT_HEARTBEAT_TIMEOUT = 180
+_DEFAULT_WATCHDOG_INTERVAL = 10
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    v = str(raw).strip().lower()
+    if v in ("1", "true", "yes", "on"):
+        return True
+    if v in ("0", "false", "no", "off"):
+        return False
+    return default
+
+
+def _env_int(name: str, default: int, *, min_value: int, max_value: int) -> int:
+    raw = os.environ.get(name)
+    try:
+        value = int(str(raw).strip()) if raw is not None else default
+    except (TypeError, ValueError):
+        value = default
+    return max(min_value, min(value, max_value))
+
+
+def _heartbeat_timeout() -> int:
+    return _env_int(
+        "CODEAGENT_HEARTBEAT_TIMEOUT",
+        _DEFAULT_HEARTBEAT_TIMEOUT,
+        min_value=10,
+        max_value=3600,
+    )
+
+
+def watchdog_interval() -> int:
+    return _env_int(
+        "CODEAGENT_WATCHDOG_INTERVAL",
+        _DEFAULT_WATCHDOG_INTERVAL,
+        min_value=1,
+        max_value=600,
+    )
 
 
 def is_enabled() -> bool:
-    return SELF_HEALING_ENABLED
+    return _env_bool("CODEAGENT_SELF_HEALING_ENABLED", _DEFAULT_SELF_HEALING_ENABLED)
 
 
 def get_heartbeat_path() -> Path:
@@ -46,13 +85,14 @@ def heartbeat_age() -> float:
 
 def check_health() -> dict:
     """Return health status dict."""
+    timeout = _heartbeat_timeout()
     age = heartbeat_age()
-    status = "alive" if 0 < age < HEARTBEAT_TIMEOUT else ("stuck" if age >= HEARTBEAT_TIMEOUT else "unknown")
+    status = "alive" if 0 < age < timeout else ("stuck" if age >= timeout else "unknown")
     return {
         "status": status,
         "heartbeat_age": round(age, 1) if age >= 0 else None,
-        "timeout": HEARTBEAT_TIMEOUT,
-        "healing_enabled": SELF_HEALING_ENABLED,
+        "timeout": timeout,
+        "healing_enabled": is_enabled(),
     }
 
 
