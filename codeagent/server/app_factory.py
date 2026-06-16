@@ -98,7 +98,10 @@ def create_app():
     async def api_chat(request: Request) -> JSONResponse:
         from seed.core.agent_context import set_active_llm_session
         from seed.core.agent_runtime import (
+            apply_context_usage_metadata,
             build_api_projection_messages,
+            build_context_usage_from_run,
+            build_context_usage_snapshot,
             maybe_compact_context_messages,
             merge_llm_tail_into_full,
             persist_compact_summary,
@@ -333,11 +336,9 @@ def create_app():
                 _prev_cu = chat_sess.metadata.get("context_usage")
                 if isinstance(_prev_cu, dict):
                     _api_pt = int(_prev_cu.get("prompt_tokens") or 0) or None
-            compact_result = await asyncio.to_thread(maybe_compact_context_messages, api_msgs, llm, api_prompt_tokens=_api_pt)
-            persist_compact_summary(chat_sess.messages, compact_result)
-            strip_ephemeral_message_fields(api_msgs)
             if not isinstance(chat_sess.metadata, dict):
                 chat_sess.metadata = {}
+            # episodic 在 compact 前注入，使 compact 判断与 LLM 实际输入一致
             await asyncio.to_thread(
                 finalize_episodic_for_llm,
                 api_msgs,
@@ -345,8 +346,35 @@ def create_app():
                 agent_id=agent_id,
                 session_id=session_id,
                 project_id=project_id or None,
-                compact_happened=compact_result is not None,
+                compact_happened=False,
             )
+            _compact_meta = (
+                {"usage": {"prompt_tokens": _api_pt}} if _api_pt else None
+            )
+            _compact_ctx = build_context_usage_snapshot(
+                api_msgs,
+                _compact_meta,
+                model_name=getattr(llm, "model", None),
+            )
+            _compact_pt = int(_compact_ctx.get("prompt_tokens") or 0) or None
+            compact_result = await asyncio.to_thread(
+                maybe_compact_context_messages,
+                api_msgs,
+                llm,
+                api_prompt_tokens=_compact_pt,
+            )
+            persist_compact_summary(chat_sess.messages, compact_result)
+            if compact_result:
+                await asyncio.to_thread(
+                    finalize_episodic_for_llm,
+                    api_msgs,
+                    chat_sess.metadata,
+                    agent_id=agent_id,
+                    session_id=session_id,
+                    project_id=project_id or None,
+                    compact_happened=True,
+                )
+            strip_ephemeral_message_fields(api_msgs)
 
             # ── WS 广播回调 ──
             from seed.core.chat_events import reset_chat_event_emitter, set_chat_event_emitter
@@ -499,6 +527,7 @@ def create_app():
                     _final_meta: dict = {}
                     _acc_usage: dict = {}
                     _seg_last_meta: dict = {}
+                    _peak_across_segments = 0
                     from seed.core.usage_accumulator import (
                         begin_usage_accumulation,
                         end_usage_accumulation,
@@ -533,6 +562,10 @@ def create_app():
                         if _seg_reply:
                             _final_reply = _seg_reply
                         _final_meta = _seg_meta or {}
+                        _peak_across_segments = max(
+                            _peak_across_segments,
+                            int((_seg_meta or {}).get("peak_prompt_tokens") or 0),
+                        )
                         # 累加每个 segment 的 usage
                         if _seg_usage:
                             for _k in ("prompt_tokens", "completion_tokens", "total_tokens",
@@ -569,6 +602,11 @@ def create_app():
                     tool_trace = _all_trace
                     _loop_meta = _final_meta
                     _last_meta = _seg_last_meta or {}
+                    if _peak_across_segments > 0:
+                        _loop_meta["peak_prompt_tokens"] = max(
+                            int(_loop_meta.get("peak_prompt_tokens") or 0),
+                            _peak_across_segments,
+                        )
                     if _acc_usage:
                         _loop_meta["usage_summary"] = _acc_usage
                 else:
@@ -630,6 +668,51 @@ def create_app():
                     )
 
                 tail = merge_llm_tail_into_full(chat_sess.messages, api_msgs, n_before_ref[0])
+                _model_name = getattr(llm, "model", "")
+                _ctx: dict[str, Any] = {}
+                # 先写入 context_usage（含 peak），避免后续异步 persist 落盘旧值
+                try:
+                    _proj_ctx = build_api_projection_messages(
+                        chat_sess.messages,
+                        skills_suffix=_skills_suffix,
+                        **_kwargs,
+                    )
+                    await asyncio.to_thread(
+                        finalize_episodic_for_llm,
+                        _proj_ctx,
+                        chat_sess.metadata,
+                        agent_id=agent_id,
+                        session_id=session_id,
+                        project_id=project_id or None,
+                        compact_happened=False,
+                    )
+                    _ctx = build_context_usage_from_run(
+                        _proj_ctx,
+                        loop_meta=_loop_meta,
+                        last_meta=_last_meta if isinstance(_last_meta, dict) else None,
+                        model_name=_model_name,
+                    )
+                except Exception:
+                    logger.exception("build context_usage snapshot failed")
+                    with contextlib.suppress(Exception):
+                        _ctx = build_context_usage_from_run(
+                            api_msgs,
+                            loop_meta=_loop_meta,
+                            last_meta=_last_meta if isinstance(_last_meta, dict) else None,
+                            model_name=_model_name,
+                        )
+                try:
+                    if isinstance(_ctx, dict) and _ctx:
+                        if not isinstance(chat_sess.metadata, dict):
+                            chat_sess.metadata = {}
+                        apply_context_usage_metadata(
+                            chat_sess.metadata,
+                            _ctx,
+                            updated_at=chat_sess.updated_at or "",
+                        )
+                        persist_chat_session(chat_sess, agent_id)
+                except Exception:
+                    logger.exception("persist context_usage failed")
                 try:
                     loop = asyncio.get_running_loop()
                     loop.run_in_executor(None, persist_chat_session, chat_sess, agent_id)
@@ -682,8 +765,6 @@ def create_app():
                 _cost_info = {}
                 _total_cost_info = {}
                 _api_usage = {}
-                _ctx: dict[str, Any] = {}
-                _model_name = getattr(llm, "model", "")
                 try:
                     from codeagent.core.usage_billing import merge_accumulated_usage
 
@@ -694,18 +775,15 @@ def create_app():
                         _prev, _model_name, _api_usage
                     )
                     chat_sess.metadata["accumulated_usage"] = _acc
-
-                    # 5. 构造 WS 事件
                     from seed.core.agent_runtime import _get_compact_min_tokens as _get_cmt
                     _ctx_pt = int(_ctx.get("prompt_tokens") or 0)
-                    _ctx_est = int(_ctx.get("estimated_tokens") or 0)
                     _ws_evt = {
                         "type": "context_usage",
                         "session_id": session_id,
                         "agent_id": agent_id,
                         "prompt_tokens": _ctx_pt,
+                        "peak_prompt_tokens": int(_ctx.get("peak_prompt_tokens") or _ctx_pt),
                         "context_limit": _ctx.get("context_limit", 0),
-                        "estimated_tokens": _ctx_est if _ctx_pt <= 0 else 0,
                         "compact_min_tokens": _get_cmt(),
                         "message_count": _ctx.get("message_count", 0),
                         "token_usage": _api_usage,
@@ -718,26 +796,13 @@ def create_app():
                         _broadcast_session_event(agent_id, session_id, _ws_evt), main_loop
                     )
                 except Exception:
+                    logger.exception("merge accumulated usage failed")
                     _api_usage = {}
                     _cost_info = {}
-                # 持久化当前 context_usage 到 session 元数据，刷新页面后可立即恢复
                 try:
-                    if isinstance(_ctx, dict) and _ctx:
-                        if not isinstance(chat_sess.metadata, dict):
-                            chat_sess.metadata = {}
-                        _snap = {
-                            "prompt_tokens": int(_ctx.get("prompt_tokens") or 0),
-                            "context_limit": int(_ctx.get("context_limit") or 0),
-                            "compact_min_tokens": int(_ctx.get("compact_min_tokens") or 0),
-                            "message_count": int(_ctx.get("message_count") or 0),
-                            "estimated_tokens": int(_ctx.get("estimated_tokens") or 0),
-                            "updated_at": chat_sess.updated_at or "",
-                        }
-                        chat_sess.metadata["context_usage"] = _snap
-                        from seed.core.llm_sess import persist_chat_session
-                        persist_chat_session(chat_sess, agent_id)
+                    persist_chat_session(chat_sess, agent_id)
                 except Exception:
-                    logger.exception("persist context_usage failed")
+                    logger.exception("persist session after billing failed")
 
                 return JSONResponse(
                     {

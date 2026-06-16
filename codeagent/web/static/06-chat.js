@@ -223,7 +223,9 @@ async function submitChatMessage() {
   } finally {
     var ctx = window._lastContextUsage;
     if (ctx && typeof updateTokenUsage === 'function') {
-      updateTokenUsage(ctx);
+      var ctxPt = (typeof pickContextUsageTokens === 'function')
+        ? pickContextUsageTokens(ctx) : (Number(ctx.prompt_tokens) || 0);
+      if (ctxPt > 0) updateTokenUsage(ctx);
       window._lastContextUsage = null;
     } else if (typeof recalcTokenUsageFromDom === 'function') {
       setTimeout(recalcTokenUsageFromDom, 50);

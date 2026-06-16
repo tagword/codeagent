@@ -87,23 +87,16 @@ async function loadOlderSessionHistoryChunk() {
 
 async function loadSessionHistoryIntoLog(skipTreeRefresh) {
   try {
+    if (typeof resetTokenUsageCache === 'function') resetTokenUsageCache();
     // 立即用持久化的 context_usage 恢复指示器，避免在历史加载完成前变成 1% 误显示
     try {
       const cuRow = (lastSessionsCache || []).find((r) => r.session_id === sessionId);
       const cu = cuRow && cuRow.context_usage;
       if (cu && typeof updateTokenUsage === 'function') {
-        if (Number(cu.prompt_tokens) > 0) {
-          updateTokenUsage({
-            prompt_tokens: cu.prompt_tokens,
-            compact_min_tokens: cu.compact_min_tokens,
-            context_limit: cu.context_limit,
-          });
-        } else if (Number(cu.estimated_tokens) > 0) {
-          updateTokenUsage({
-            estimated_tokens: cu.estimated_tokens,
-            compact_min_tokens: cu.compact_min_tokens,
-            context_limit: cu.context_limit,
-          });
+        var cuPt = (typeof pickContextUsageTokens === 'function')
+          ? pickContextUsageTokens(cu) : (Number(cu.prompt_tokens) || 0);
+        if (cuPt > 0) {
+          updateTokenUsage({ prompt_tokens: cuPt, peak_prompt_tokens: cu.peak_prompt_tokens });
         }
       }
     } catch (_) {}
@@ -141,20 +134,10 @@ async function loadSessionHistoryIntoLog(skipTreeRefresh) {
     try {
       const cu = j && j.context_usage;
       if (cu && typeof updateTokenUsage === 'function') {
-        if (Number(cu.prompt_tokens) > 0) {
-          updateTokenUsage({
-            prompt_tokens: cu.prompt_tokens,
-            compact_min_tokens: cu.compact_min_tokens,
-            context_limit: cu.context_limit,
-          });
-        } else if (Number(cu.estimated_tokens) > 0) {
-          updateTokenUsage({
-            estimated_tokens: cu.estimated_tokens,
-            compact_min_tokens: cu.compact_min_tokens,
-            context_limit: cu.context_limit,
-          });
-        } else if (typeof recalcTokenUsageFromDom === 'function') {
-          setTimeout(recalcTokenUsageFromDom, 100);
+        var histPt = (typeof pickContextUsageTokens === 'function')
+          ? pickContextUsageTokens(cu) : (Number(cu.prompt_tokens) || 0);
+        if (histPt > 0) {
+          updateTokenUsage({ prompt_tokens: histPt, peak_prompt_tokens: cu.peak_prompt_tokens });
         }
       } else if (typeof recalcTokenUsageFromDom === 'function') {
         setTimeout(recalcTokenUsageFromDom, 100);

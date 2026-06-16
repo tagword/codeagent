@@ -79,6 +79,10 @@ async function loadChatEnvConfig() {
     const inpSumMax = document.getElementById('inpCompactSummarizerMaxTokens');
     if (inpSumMax) inpSumMax.value = _envVal(j, 'CODEAGENT_CONTEXT_COMPACT_SUMMARIZER_MAX_TOKENS', 'SEED_CONTEXT_COMPACT_SUMMARIZER_MAX_TOKENS', '4096');
     toggleCompactSubRows();
+    if (inpMinBytes && typeof setTokenContextMax === 'function') {
+      var loadedMin = parseInt(inpMinBytes.value, 10) || 0;
+      if (loadedMin > 0) setTokenContextMax(loadedMin);
+    }
     status.textContent = '';
     status.classList.remove('is-err');
   } catch (e) { status.classList.add('is-err'); status.textContent = '加载失败：' + String(e); }
@@ -151,10 +155,15 @@ document.addEventListener('change', function(ev) {
       if (!r.ok) throw new Error(j.detail || r.statusText);
       status.textContent = j.hint || '已保存';
       status.classList.remove('is-err');
-      // 指示器分母已改为 compact_min_tokens（压缩阈值），
-      // 不再用 context_limit 做分母，此处保留向后兼容
-      var cl = parseInt(inpCtxLimit && inpCtxLimit.value, 10) || 0;
-      if (cl > 0 && typeof setTokenContextMax === 'function') setTokenContextMax(cl);
+      // 同步指示器分母为 compact 触发阈值
+      var minTok = parseInt(inpMinB && inpMinB.value, 10) || 0;
+      if (minTok > 0 && typeof setTokenContextMax === 'function') setTokenContextMax(minTok);
+      fetch('/api/ui/compact-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ compact_min_tokens: minTok }),
+        credentials: 'same-origin',
+      }).catch(function () {});
     } catch (e) {
       status.classList.add('is-err');
       status.textContent = '保存失败：' + String(e);

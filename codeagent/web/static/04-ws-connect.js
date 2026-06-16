@@ -1,8 +1,21 @@
 // ── Token 用量更新（DeepSeek 精确计数） ─────────────────────────
 let _tokenContextMax = 200000; // 默认 200k tokens
+let _lastKnownPromptTokens = 0; // 末次有效分子，避免运行结束后被空 payload 清零
+
+/** 从持久化/WS payload 取 API 分子（peak 优先于末轮 prompt_tokens） */
+function pickContextUsageTokens(cu) {
+  if (!cu || typeof cu !== 'object') return 0;
+  var peak = Number(cu.peak_prompt_tokens) || 0;
+  var pt = Number(cu.prompt_tokens) || 0;
+  return Math.max(peak, pt);
+}
 
 function setTokenContextMax(maxTokens) {
   _tokenContextMax = maxTokens > 0 ? maxTokens : 200000;
+}
+
+function resetTokenUsageCache() {
+  _lastKnownPromptTokens = 0;
 }
 
 /** 更新 token 用量指示器（仅 token 用量，不含费用）
@@ -17,24 +30,23 @@ function updateTokenUsage(curOrUsage, compactMinTokens) {
   var curTokens = 0;
   var maxTokens = _tokenContextMax;
   if (typeof curOrUsage === 'object' && curOrUsage !== null) {
-    // prompt_tokens (API 精确) > estimated_tokens (服务端估算) > total_tokens (DOM 回退)
-    if (curOrUsage.prompt_tokens != null && Number(curOrUsage.prompt_tokens) > 0) {
-      curTokens = Number(curOrUsage.prompt_tokens);
-    } else if (curOrUsage.estimated_tokens != null && Number(curOrUsage.estimated_tokens) > 0) {
-      curTokens = Number(curOrUsage.estimated_tokens);
-    } else {
-      curTokens = curOrUsage.total_tokens || 0;
+    var picked = pickContextUsageTokens(curOrUsage);
+    if (picked > 0) {
+      curTokens = picked;
+    } else if (curOrUsage.total_tokens != null && Number(curOrUsage.total_tokens) > 0) {
+      curTokens = Number(curOrUsage.total_tokens);
     }
-    // compact_min_tokens = 压缩触发阈值，指示器用它做分母
-    // 百分比含义：距离下次压缩还有多少空间（100% = 触发压缩）
-    if (curOrUsage.compact_min_tokens) maxTokens = Number(curOrUsage.compact_min_tokens);
-    else if (curOrUsage.context_limit) maxTokens = curOrUsage.context_limit;
+    // 分母只用 compact 触发阈值；不用 context_limit（模型窗口）
+    if (curOrUsage.compact_min_tokens != null && Number(curOrUsage.compact_min_tokens) > 0) {
+      maxTokens = Number(curOrUsage.compact_min_tokens);
+    }
   } else {
     curTokens = Math.round((curOrUsage || 0) / 4);
     if (compactMinTokens > 0) maxTokens = compactMinTokens;
   }
   if (curTokens <= 0) {
-    // 不隐藏 — 工具执行期间可能短暂为 0，保持可见
+    // 无有效分子时不覆盖已有读数（运行结束后的空 WS/空 ctx 不应把指示器清零）
+    if (_lastKnownPromptTokens > 0) return;
     el.style.display = 'inline-flex';
     for (var si = 0; si < segEls.length; si++) {
       segEls[si].classList.toggle('is-on', false);
@@ -46,6 +58,7 @@ function updateTokenUsage(curOrUsage, compactMinTokens) {
     el.classList.remove('is-warm', 'is-hot');
     return;
   }
+  _lastKnownPromptTokens = curTokens;
   el.style.display = 'inline-flex';
   var pct = maxTokens > 0 ? Math.round(Math.min((curTokens / maxTokens) * 100, 100)) : 0;
   var filled = pct > 0 ? Math.min(5, Math.ceil((pct / 100) * 5)) : 0;
@@ -123,7 +136,7 @@ function recalcTokenUsageFromDom() {
   });
   // 每条消息系统开销（role 标记等）
   totalTokens += bubbles.length * 4;
-  updateTokenUsage({ total_tokens: totalTokens, context_limit: _tokenContextMax });
+  updateTokenUsage({ total_tokens: totalTokens });
 }
 
 function connectWs() {
@@ -189,7 +202,6 @@ function handleWsContextCompact(j) {
   if (j.prompt_tokens_after != null && Number(j.prompt_tokens_after) > 0) {
     updateTokenUsage({
       prompt_tokens: Number(j.prompt_tokens_after),
-      context_limit: j.context_limit,
       compact_min_tokens: j.compact_min_tokens,
     });
   }
@@ -198,25 +210,22 @@ function handleWsContextCompact(j) {
 /** context_usage：统一入口（prompt_tokens 来自 LLM API，最精确） */
 function handleWsContextUsage(j) {
   if (j.session_id && j.session_id !== sessionId) return;
-  var cu = {
-    context_limit: j.context_limit,
-    compact_min_tokens: j.compact_min_tokens,
-  };
-  if (j.prompt_tokens != null && Number(j.prompt_tokens) > 0) {
-    cu.prompt_tokens = Number(j.prompt_tokens);
-  } else if (j.estimated_tokens != null && Number(j.estimated_tokens) > 0) {
-    cu.estimated_tokens = Number(j.estimated_tokens);
-  } else if (j.token_usage) {
-    updateTokenUsage(Object.assign({}, j.token_usage, {
-      compact_min_tokens: j.compact_min_tokens,
-      context_limit: j.context_limit,
-    }));
+  var cu = { compact_min_tokens: j.compact_min_tokens };
+  var picked = pickContextUsageTokens(j);
+  if (picked > 0) {
+    cu.prompt_tokens = picked;
+    if (j.peak_prompt_tokens != null && Number(j.peak_prompt_tokens) > 0) {
+      cu.peak_prompt_tokens = Number(j.peak_prompt_tokens);
+    }
+  } else if (j.token_usage && typeof j.token_usage === 'object') {
+    var tu = Object.assign({}, j.token_usage, { compact_min_tokens: j.compact_min_tokens });
+    var tuPt = pickContextUsageTokens(tu) || Number(tu.total_tokens) || 0;
+    if (tuPt > 0) updateTokenUsage(Object.assign({}, tu, { prompt_tokens: tuPt }));
     if (j.accumulated_usage && typeof updateSidebarCost === 'function') {
       updateSidebarCost(j.accumulated_usage);
     }
     return;
   } else {
-    updateTokenUsage(0, Number(j.compact_min_tokens || 0));
     if (j.accumulated_usage && typeof updateSidebarCost === 'function') {
       updateSidebarCost(j.accumulated_usage);
     }
@@ -268,11 +277,11 @@ function handleWsReply(j) {
   } else {
     bubble('agent', j.text || '', { at: Date.now(), toolTrace: j.tool_trace || [] });
   }
-  if (typeof recalcTokenUsageFromDom === 'function') recalcTokenUsageFromDom();
   if (webuiSessionsEnabled) refreshSessionList().catch(function() {});
 }
 
 function reconnectWsForSession() {
+  resetTokenUsageCache();
   pauseWsReconnect = true;
   if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
   if (ws) { try { ws.close(); } catch (e) {} ws = undefined; }
@@ -293,7 +302,7 @@ try {
 
 // ── Compact 阈值输入框（tokens） ────────────────────────────
 function initCompactMinInput() {
-  var inp = document.getElementById('inpCompactMinTokens');
+  var inp = document.getElementById('inpCompactMinBytes');
   if (!inp) return;
   // 加载当前值
   fetch('/api/ui/compact-config').then(r => r.json()).then(d => {
