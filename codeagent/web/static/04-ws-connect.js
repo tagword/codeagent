@@ -206,7 +206,10 @@ function handleWsContextUsage(j) {
   } else if (j.estimated_tokens != null && Number(j.estimated_tokens) > 0) {
     cu.estimated_tokens = Number(j.estimated_tokens);
   } else if (j.token_usage) {
-    updateTokenUsage(j.token_usage, j.compact_min_tokens);
+    updateTokenUsage(Object.assign({}, j.token_usage, {
+      compact_min_tokens: j.compact_min_tokens,
+      context_limit: j.context_limit,
+    }));
     if (j.accumulated_usage && typeof updateSidebarCost === 'function') {
       updateSidebarCost(j.accumulated_usage);
     }
