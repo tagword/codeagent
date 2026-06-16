@@ -4,7 +4,7 @@ Architecture:
   Heartbeat (every 5s) → Watchdog (scans every 10s) → SelfHealer (decides action)
   → Supervisor (diagnose + fix) → Recovery (restart agents / skip tasks / notify)
 
-Config can be toggled via environment variable SELF_HEALING_ENABLED (default: 1).
+Config can be toggled via environment variable CODEAGENT_SELF_HEALING_ENABLED (default: 1).
 """
 
 from __future__ import annotations
@@ -19,9 +19,9 @@ from codeagent.core.paths import codeagent_home
 
 logger = logging.getLogger(__name__)
 
-SELF_HEALING_ENABLED = os.environ.get("SELF_HEALING_ENABLED", "1") == "1"
-HEARTBEAT_TIMEOUT = int(os.environ.get("HEARTBEAT_TIMEOUT", "180"))
-WATCHDOG_INTERVAL = int(os.environ.get("WATCHDOG_INTERVAL", "10"))
+SELF_HEALING_ENABLED = os.environ.get("CODEAGENT_SELF_HEALING_ENABLED", "1") == "1"
+HEARTBEAT_TIMEOUT = int(os.environ.get("CODEAGENT_HEARTBEAT_TIMEOUT", "180"))
+WATCHDOG_INTERVAL = int(os.environ.get("CODEAGENT_WATCHDOG_INTERVAL", "10"))
 
 
 def is_enabled() -> bool:
