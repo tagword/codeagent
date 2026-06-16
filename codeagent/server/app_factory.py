@@ -133,7 +133,6 @@ def create_app():
         from seed.core.env_access import (
             CHAT_AUTO_CONTINUE_MAX_SEGMENTS,
             CHAT_AUTO_CONTINUE_ON_LIMIT,
-            CHAT_USER_ROUNDS,
             MAX_TOOL_ROUNDS,
             env_truthy,
             pick_int,
@@ -253,7 +252,6 @@ def create_app():
 
             chat_sess.messages.append(user_msg)
 
-            max_hist = pick_int(12, *CHAT_USER_ROUNDS)
             max_rounds = pick_int(24, *MAX_TOOL_ROUNDS)
 
             llm = resolve_main_llm(llm_id or None)
@@ -329,7 +327,6 @@ def create_app():
             )
             api_msgs = build_api_projection_messages(
                 chat_sess.messages,
-                max_user_rounds=max_hist,
                 skills_suffix=_skills_suffix,
                 **_kwargs,
             )
@@ -702,7 +699,6 @@ def create_app():
 
                     _proj_ctx = build_api_projection_messages(
                         chat_sess.messages,
-                        max_user_rounds=max_hist,
                         skills_suffix=_skills_suffix,
                         **_kwargs,
                     )
@@ -760,7 +756,6 @@ def create_app():
                         _ctx = estimate_context_usage(
                             build_api_projection_messages(
                                 chat_sess.messages,
-                                max_user_rounds=max_hist,
                                 skills_suffix=_skills_suffix,
                                 **_kwargs,
                             )
@@ -1003,7 +998,6 @@ def create_app():
         from seed.core.env_access import (
             CHAT_AUTO_CONTINUE_MAX_SEGMENTS,
             CHAT_AUTO_CONTINUE_ON_LIMIT,
-            CHAT_USER_ROUNDS,
             MAX_TOOL_ROUNDS,
             env_truthy,
             pick_int,

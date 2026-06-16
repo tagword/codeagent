@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from seed.core.agent_context import set_active_llm_session
@@ -20,7 +19,6 @@ from seed.core.llm_exec import LLMError
 from seed.core.llm_presets import llm_executor_from_resolved, resolve_preset
 from seed.core.llm_sess import load_or_create_chat_session, merge_fresh_system, persist_chat_session
 from seed.core.mem_bridge import finalize_episodic_for_llm
-from codeagent.core import env as ca_env
 
 from codeagent.runtime.prompt_enrichment import build_skills_suffix, fresh_system_prompt, get_cached_system_prompt
 from codeagent.tools.agent_tools import get_tools_for_agent
@@ -32,9 +30,6 @@ class LLMWorker:
 
     agent_id: str = "default"
     project_id: str = ""
-    max_user_rounds: int = field(
-        default_factory=lambda: ca_env.pick_int(12, ca_env.CHAT_USER_ROUNDS)
-    )
 
     def run(
         self,
@@ -62,7 +57,6 @@ class LLMWorker:
         skills_suffix = build_skills_suffix(aid, user_text=user_text)
         api_msgs = build_api_projection_messages(
             chat_sess.messages,
-            max_user_rounds=self.max_user_rounds,
             skills_suffix=skills_suffix,
         )
         compact_result = maybe_compact_context_messages(api_msgs, llm)

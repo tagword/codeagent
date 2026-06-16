@@ -721,13 +721,11 @@ def _cmd_chat_llm(args):
 
         chat_sess.messages.append(user_msg)
         user_text = str(user_msg.get('content') or '')
-        max_hist = ca_env.pick_int(12, ca_env.CHAT_USER_ROUNDS)
         from codeagent.core.attachments import content_text_for_skills
 
         _skills_suffix = build_skills_suffix(agent_id, user_text=content_text_for_skills(user_text))
         api_msgs = build_api_projection_messages(
             chat_sess.messages,
-            max_user_rounds=max_hist,
             skills_suffix=_skills_suffix,
         )
         compact_result = maybe_compact_context_messages(api_msgs, llm)
