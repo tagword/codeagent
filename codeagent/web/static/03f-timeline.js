@@ -2,12 +2,12 @@
  * 渲染助手消息，但将 toolTrace 中的每个工具调用渲染为独立元素，
  * 而不是全部塞在一个气泡里。用于转录加载时保持与实时执行一致的展示。
  */
-function bubbleAgentWithSplitToolTrace(text, toolTrace, reasoningContent, opts) {
+function bubbleAgentWithSplitToolTrace(text, toolTrace, opts) {
   opts = opts || {};
   const at = opts.at;
   const tt = Array.isArray(toolTrace) ? toolTrace : [];
 
-  // 1. 文本内容气泡（reasoning_content 不展现给用户）
+  // 1. 文本内容气泡（reasoning_content 由 opts.reasoningContent 传入，暂不展现）
   const cleanText = stripOaToolOrphans(normReply(text || ''));
   if (cleanText) {
     const wrap = document.createElement('div');

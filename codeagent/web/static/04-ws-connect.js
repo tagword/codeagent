@@ -243,7 +243,7 @@ function handleWsTextDone(j) {
       remainingText = _streamDeltaText(j.text || '');
     }
     if (remainingText && typeof bubbleAgentWithSplitToolTrace === 'function') {
-      bubbleAgentWithSplitToolTrace(remainingText, [], null, { at: Date.now(), skipScroll: true });
+      bubbleAgentWithSplitToolTrace(remainingText, [], { at: Date.now(), skipScroll: true });
     }
   }
   if (typeof _advanceStreamConsumedLen === 'function') _advanceStreamConsumedLen(j.text || '');
@@ -262,7 +262,7 @@ function handleWsReply(j) {
   // 15s 内已收到相同正文（streaming 'text_done' 已写过）→ 去重
   if (t === lastLocalAgentReplyNorm && (Date.now() - lastLocalAgentReplyAt) < 15000) return;
   if (typeof bubbleAgentWithSplitToolTrace === 'function') {
-    bubbleAgentWithSplitToolTrace(j.text || '', j.tool_trace || [], null, { at: Date.now() });
+    bubbleAgentWithSplitToolTrace(j.text || '', j.tool_trace || [], { at: Date.now() });
   } else {
     bubble('agent', j.text || '', { at: Date.now(), toolTrace: j.tool_trace || [] });
   }

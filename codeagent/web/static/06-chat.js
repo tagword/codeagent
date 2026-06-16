@@ -30,7 +30,7 @@
       if (r.ok && j.reply && sessionId === replySid) {
         rememberLocalAgentReply(j.reply);
         if (typeof bubbleAgentWithSplitToolTrace === 'function') {
-          bubbleAgentWithSplitToolTrace(j.reply, j.tool_trace || [], null, { at: Date.now() });
+          bubbleAgentWithSplitToolTrace(j.reply, j.tool_trace || [], { at: Date.now() });
         } else {
           bubble('agent', j.reply, { at: Date.now(), toolTrace: j.tool_trace || [] });
         }
@@ -172,7 +172,7 @@ async function submitChatMessage() {
       const traceLen = (j.tool_trace || []).length;
       if (!hadWsTextDone && (reply || traceLen) && !hadLiveProgress) {
         if (typeof bubbleAgentWithSplitToolTrace === 'function') {
-          bubbleAgentWithSplitToolTrace(reply, j.tool_trace || [], null, { at: Date.now() });
+          bubbleAgentWithSplitToolTrace(reply, j.tool_trace || [], { at: Date.now() });
         } else {
           bubble('agent', reply, { at: Date.now(), toolTrace: j.tool_trace || [] });
         }
@@ -188,7 +188,7 @@ async function submitChatMessage() {
             remainingDelta = _streamDeltaText(reply);
           }
           if (!finalized && remainingDelta && typeof bubbleAgentWithSplitToolTrace === 'function') {
-            bubbleAgentWithSplitToolTrace(remainingDelta, [], null, { at: Date.now(), skipScroll: true });
+            bubbleAgentWithSplitToolTrace(remainingDelta, [], { at: Date.now(), skipScroll: true });
           }
           if (typeof _advanceStreamConsumedLen === 'function') {
             _advanceStreamConsumedLen(reply);

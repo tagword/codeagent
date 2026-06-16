@@ -70,7 +70,7 @@ async function loadOlderSessionHistoryChunk() {
         var fn = (typeof bubbleAgentWithSplitToolTrace === 'function')
           ? bubbleAgentWithSplitToolTrace : bubble;
         if (fn !== bubble) {
-          fn(m.content || '', m.tool_trace || [], null, o);
+          fn(m.content || '', m.tool_trace || [], o);
         } else {
           bubble('agent', m.content || '', Object.assign({ toolTrace: m.tool_trace || [] }, o));
         }
@@ -130,7 +130,7 @@ async function loadSessionHistoryIntoLog(skipTreeRefresh) {
         var fn2 = (typeof bubbleAgentWithSplitToolTrace === 'function')
           ? bubbleAgentWithSplitToolTrace : bubble;
         if (fn2 !== bubble) {
-          fn2(m.content || '', m.tool_trace || [], null, skip);
+          fn2(m.content || '', m.tool_trace || [], skip);
         } else {
           bubble('agent', m.content || '', Object.assign({ toolTrace: m.tool_trace || [] }, skip));
         }
