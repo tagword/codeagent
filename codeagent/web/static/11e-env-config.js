@@ -151,7 +151,8 @@ document.addEventListener('change', function(ev) {
       if (!r.ok) throw new Error(j.detail || r.statusText);
       status.textContent = j.hint || '已保存';
       status.classList.remove('is-err');
-      // 同步更新 context_limit 指示器分母
+      // 指示器分母已改为 compact_min_tokens（压缩阈值），
+      // 不再用 context_limit 做分母，此处保留向后兼容
       var cl = parseInt(inpCtxLimit && inpCtxLimit.value, 10) || 0;
       if (cl > 0 && typeof setTokenContextMax === 'function') setTokenContextMax(cl);
     } catch (e) {

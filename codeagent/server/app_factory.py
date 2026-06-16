@@ -99,8 +99,6 @@ def create_app():
         from seed.core.agent_context import set_active_llm_session
         from seed.core.agent_runtime import (
             build_api_projection_messages,
-            build_context_usage_snapshot,
-            estimate_context_usage,
             maybe_compact_context_messages,
             merge_llm_tail_into_full,
             persist_compact_summary,
@@ -697,19 +695,7 @@ def create_app():
                     )
                     chat_sess.metadata["accumulated_usage"] = _acc
 
-                    _proj_ctx = build_api_projection_messages(
-                        chat_sess.messages,
-                        skills_suffix=_skills_suffix,
-                        **_kwargs,
-                    )
-                    _ctx = build_context_usage_snapshot(
-                        _proj_ctx,
-                        _last_meta if isinstance(_last_meta, dict) else None,
-                        model_name=_model_name,
-                    )
-                    # 5. 构造 WS 事件（prompt_tokens = LLM API 精确值或服务端估算）
-                    # NOTE: _ctx 来自 build_context_usage_snapshot，prompt_tokens
-                    #       优先使用 API usage.prompt_tokens，无 API 时 fallback 估算。
+                    # 5. 构造 WS 事件
                     from seed.core.agent_runtime import _get_compact_min_tokens as _get_cmt
                     _ctx_pt = int(_ctx.get("prompt_tokens") or 0)
                     _ctx_est = int(_ctx.get("estimated_tokens") or 0)
@@ -752,15 +738,7 @@ def create_app():
                         persist_chat_session(chat_sess, agent_id)
                 except Exception:
                     logger.exception("persist context_usage failed")
-                if not _ctx:
-                    with contextlib.suppress(Exception):
-                        _ctx = estimate_context_usage(
-                            build_api_projection_messages(
-                                chat_sess.messages,
-                                skills_suffix=_skills_suffix,
-                                **_kwargs,
-                            )
-                        )
+
                 return JSONResponse(
                     {
                         "reply": reply,

@@ -25,10 +25,10 @@ function updateTokenUsage(curOrUsage, compactMinTokens) {
     } else {
       curTokens = curOrUsage.total_tokens || 0;
     }
-    // context_limit = 模型上下文窗口（如 200k），是百分比计算的正確分母
-    // compact_min_tokens = 压缩触发阈值（如 30k），不作为分母使用
-    if (curOrUsage.context_limit) maxTokens = curOrUsage.context_limit;
-    else if (curOrUsage.compact_min_tokens) maxTokens = Number(curOrUsage.compact_min_tokens);
+    // compact_min_tokens = 压缩触发阈值，指示器用它做分母
+    // 百分比含义：距离下次压缩还有多少空间（100% = 触发压缩）
+    if (curOrUsage.compact_min_tokens) maxTokens = Number(curOrUsage.compact_min_tokens);
+    else if (curOrUsage.context_limit) maxTokens = curOrUsage.context_limit;
   } else {
     curTokens = Math.round((curOrUsage || 0) / 4);
     if (compactMinTokens > 0) maxTokens = compactMinTokens;
