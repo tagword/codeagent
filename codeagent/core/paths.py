@@ -3,15 +3,10 @@
 from __future__ import annotations
 
 import contextlib
-import json
-import logging
-import os
 from pathlib import Path
 
 from codeagent.core.env import product_home
 from seed.core.config_plane import project_root as _kernel_project_root
-
-logger = logging.getLogger(__name__)
 
 
 def codeagent_home() -> Path:
@@ -149,176 +144,9 @@ _DEFAULT_PERSONA_FILENAMES = [
     "user.md",
 ]
 
-# ─── External persona loading ───────────────────────────────
-
-_PERSONA_ENV_VAR = "CODEAGENT_PERSONA_PATH"
-_PERSONA_VERSION = "1.0"  # persona schema version this codeagent expects
-_PERSONA_COMPAT_FILE = "codeagent-compat.json"
-_PERSONA_VERSION_FILE = "VERSION"
-
-
-def _load_persona_from_external(persona_dir: Path) -> bool:
-    """Load persona from ``$CODEAGENT_PERSONA_PATH`` into ``persona_dir``.
-
-    Returns ``True`` if external persona was loaded, ``False`` if not
-    (no env var set, path missing, or version incompatible).
-    """
-    repo_path_str = os.environ.get(_PERSONA_ENV_VAR, "").strip()
-    if not repo_path_str:
-        return False
-
-    repo_path = Path(repo_path_str).resolve()
-    if not repo_path.is_dir():
-        logger.warning(
-            "PERSONA: %s=%s is not a directory, falling back to built-in defaults",
-            _PERSONA_ENV_VAR,
-            repo_path_str,
-        )
-        return False
-
-    # Version compatibility check
-    ok, msg = _check_persona_compat(repo_path)
-    if not ok:
-        logger.warning(
-            "PERSONA: version check failed (%s), falling back to built-in defaults",
-            msg,
-        )
-        return False
-
-    # Copy persona files from repo → persona_dir
-    src = repo_path / "persona"
-    if not src.is_dir():
-        logger.warning(
-            "PERSONA: %s/persona/ not found, falling back to built-in defaults",
-            repo_path,
-        )
-        return False
-
-    copied = 0
-    for fname in _DEFAULT_PERSONA_FILENAMES:
-        src_file = src / fname
-        if not src_file.is_file():
-            logger.warning("PERSONA: missing %s, skipped", fname)
-            continue
-        try:
-            dst = persona_dir / fname
-            # Only copy if target doesn't exist yet (does not overwrite user edits)
-            if not dst.is_file():
-                dst.write_text(src_file.read_text(encoding="utf-8"), encoding="utf-8")
-                copied += 1
-        except OSError as e:
-            logger.warning("PERSONA: failed to copy %s: %s", fname, e)
-
-    if copied > 0:
-        logger.info(
-            "PERSONA: loaded %d files from %s (v%s)",
-            copied, repo_path, _read_persona_version(repo_path),
-        )
-    return copied > 0
-
-
-def _check_persona_compat(repo_path: Path) -> tuple[bool, str]:
-    """Check if the persona repo version is compatible with this codeagent version.
-
-    Returns ``(True, "")`` on success, ``(False, reason)`` on failure.
-    """
-    compat_file = repo_path / _PERSONA_COMPAT_FILE
-    if not compat_file.is_file():
-        return False, f"missing {_PERSONA_COMPAT_FILE}"
-
-    try:
-        compat = json.loads(compat_file.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError) as e:
-        return False, f"invalid {_PERSONA_COMPAT_FILE}: {e}"
-
-    persona_ver = _read_persona_version(repo_path)
-    if not persona_ver:
-        return False, f"missing or empty {_PERSONA_VERSION_FILE}"
-
-    # Check codeagent's own version against the compat matrix
-    from codeagent import __version__ as ca_version
-
-    compat_list = compat.get("compat", [])
-    for entry in compat_list:
-        ca_range = entry.get("codeagent", "")
-        persona_pattern = entry.get("persona", "")
-        if _ver_in_range(ca_version, ca_range) and _ver_matches_pattern(persona_ver, persona_pattern):
-            return True, ""
-
-    return False, (
-        f"codeagent v{ca_version} + persona v{persona_ver} not in compat matrix; "
-        f"see {_PERSONA_COMPAT_FILE}"
-    )
-
-
-def _read_persona_version(repo_path: Path) -> str:
-    ver_file = repo_path / _PERSONA_VERSION_FILE
-    if ver_file.is_file():
-        return ver_file.read_text(encoding="utf-8").strip()
-    return ""
-
-
-def _ver_in_range(ver: str, range_spec: str) -> bool:
-    """Simple semver range check: ``>=X.Y,<Z.W`` or ``==X.Y``."""
-    try:
-        ver_tuple = tuple(int(x) for x in ver.split("."))
-    except (ValueError, IndexError):
-        return True  # can't parse, be permissive
-
-    try:
-        clauses = [c.strip() for c in range_spec.split(",")]
-        for clause in clauses:
-            if clause.startswith(">="):
-                min_v = tuple(int(x) for x in clause[2:].strip().split("."))
-                if ver_tuple < min_v:
-                    return False
-            elif clause.startswith("<="):
-                max_v = tuple(int(x) for x in clause[2:].strip().split("."))
-                if ver_tuple > max_v:
-                    return False
-            elif clause.startswith(">"):
-                min_v = tuple(int(x) for x in clause[1:].strip().split("."))
-                if ver_tuple <= min_v:
-                    return False
-            elif clause.startswith("<"):
-                max_v = tuple(int(x) for x in clause[1:].strip().split("."))
-                if ver_tuple >= max_v:
-                    return False
-            elif clause.startswith("=="):
-                eq_v = tuple(int(x) for x in clause[2:].strip().split("."))
-                if ver_tuple != eq_v:
-                    return False
-        return True
-    except (ValueError, IndexError):
-        return True
-
-
-def _ver_matches_pattern(ver: str, pattern: str) -> bool:
-    """Match persona version against a pattern like ``1.x``, ``1.1.x``, ``*``."""
-    if pattern == "*":
-        return True
-    pattern_parts = pattern.split(".")
-    ver_parts = ver.split(".")
-    for i, pp in enumerate(pattern_parts):
-        if pp == "x" or pp == "X":
-            return True
-        if i >= len(ver_parts):
-            return False
-        if pp != ver_parts[i]:
-            return False
-    return True
-
 
 def _ensure_default_persona_files(persona_dir: Path) -> None:
-    """Create default persona *.md files if they do not exist (does not overwrite).
-
-    Priority:
-    1. ``$CODEAGENT_PERSONA_PATH`` — external repo (version-checked)
-    2. Built-in defaults (inline in this file)
-    """
-    # Try external persona first
-    if _load_persona_from_external(persona_dir):
-        return
+    """Create default persona *.md files if they do not exist (does not overwrite)."""
     defaults = {
         "agent.md": (
             "# Agent\n\n"
