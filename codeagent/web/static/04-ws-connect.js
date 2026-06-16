@@ -162,11 +162,11 @@ const WS_HANDLERS = {
   tool_output:  handleProgressEvent,
   tool_end:     handleProgressEvent,
   chat_stop_requested: function (j) {
-    if (j.session_id === sessionId) systemMsg('info', '已请求停止当前执行；当前工具若支持中断，会尽快停止。');
+    if (j.session_id === sessionId) systemMsg('info', '⏳ 正在完成本轮回答…');
   },
   chat_cancelled: function (j) {
     if (j.session_id) setSessionRunning(j.session_id, false);
-    if (j.session_id === sessionId) systemMsg('info', '当前执行已停止。');
+    if (j.session_id === sessionId) systemMsg('info', '✅ 已停止。');
   },
   run_started: function (j) {
     if (j.session_id) setSessionRunning(j.session_id, true);

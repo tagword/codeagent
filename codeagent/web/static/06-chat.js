@@ -55,7 +55,7 @@ async function stopActiveChat() {
     if (!r.ok) throw new Error(j.detail || r.statusText);
     if (sessionId === requestSid) {
       if (j.cancelled) {
-        systemMsg('info', '已请求停止当前执行；当前工具若支持中断，会尽快停止。');
+        systemMsg('info', '⏳ 正在完成本轮回答…');
       } else {
         systemMsg('info', '当前会话没有正在运行的 agent。');
         setSessionRunning(requestSid, false);
@@ -203,7 +203,7 @@ async function submitChatMessage() {
         systemMsg('tools', '工具：' + j.tools_used.join(', '));
       }
       if (j.cancelled && sessionId === requestSid) {
-        systemMsg('info', '当前执行已停止。');
+        systemMsg('info', '✅ 已停止。');
       }
     }
 

@@ -77,8 +77,9 @@ function updateComposerButtons() {
   if (typeof stopBtn !== 'undefined' && stopBtn) stopBtn.disabled = !active;
   if (sendBtn) {
     sendBtn.classList.toggle('is-stop', showStop);
+    sendBtn.classList.toggle('is-finishing', active && composeHasSendPayload());
     sendBtn.title = showStop
-      ? '停止'
+      ? '停止（等待本轮回答完成）'
       : (active ? '发送补充消息 (Enter)' : '发送 (Enter)');
     const sendIcon = sendBtn.querySelector('.compose__send-icon');
     const stopIcon = sendBtn.querySelector('.compose__stop-icon');
