@@ -65,6 +65,7 @@ def _env_chat_specs() -> list[tuple[tuple[str, ...], str]]:
         ((ca_env.CONTEXT_COMPACT_SUMMARIZER_MODEL,), ""),
         ((ca_env.CONTEXT_COMPACT_SUMMARIZER_MAX_TOKENS,), "4096"),
         ((ca_env.CHAT_MAX_TOKENS,), "8192"),
+        # 保留空串默认值以表示"未配置"，但 api_env_chat_post 会跳过空值写入
         ((ca_env.LLM_CONTEXT_SIZE,), ""),
     ]
 
@@ -1457,7 +1458,10 @@ def build_webui_api_app(project_root: Path) -> Starlette:
 
         _write_env_file_merge(project_root / "config" / ENV_FILENAME, updates)
         for k, v in updates.items():
-            os.environ[k] = v
+            if v:
+                os.environ[k] = v
+            else:
+                os.environ.pop(k, None)
         from codeagent.core.seed_bridge import bridge_codeagent_env_to_seed
 
         bridge_codeagent_env_to_seed()
@@ -1485,14 +1489,22 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         p = project_root / "config" / ENV_FILENAME
         _write_env_file_merge(p, updates)
         for k, v in updates.items():
-            os.environ[k] = v
+            if v:
+                os.environ[k] = v
+            else:
+                # 空值表示"取消设置"，避免下游 pick_default("262144", ...) 读到空串 -> int('') 崩溃
+                os.environ.pop(k, None)
         from codeagent.core.seed_bridge import bridge_codeagent_env_to_seed
 
         bridge_codeagent_env_to_seed()
         # bridge 只设 SEED_* 未定义的情况；显式保存时强制覆盖
         for k, v in updates.items():
-            if k.startswith("CODEAGENT_"):
-                os.environ["SEED_" + k[len("CODEAGENT_") :]] = v
+            sk = "SEED_" + k[len("CODEAGENT_") :] if k.startswith("CODEAGENT_") else None
+            if sk:
+                if v:
+                    os.environ[sk] = v
+                else:
+                    os.environ.pop(sk, None)
         return JSONResponse({"ok": True, "hint": "已写入 config/env；内核项已同步 SEED_*。"})
 
     async def api_tts_options(_: Request) -> JSONResponse:
