@@ -65,6 +65,7 @@ def _env_chat_specs() -> list[tuple[tuple[str, ...], str]]:
         ((ca_env.CONTEXT_COMPACT_SUMMARIZER_MODEL,), ""),
         ((ca_env.CONTEXT_COMPACT_SUMMARIZER_MAX_TOKENS,), "4096"),
         ((ca_env.CHAT_MAX_TOKENS,), "8192"),
+        ((ca_env.LLM_CONTEXT_SIZE,), ""),
     ]
 
 

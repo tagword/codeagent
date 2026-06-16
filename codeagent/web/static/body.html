@@ -418,6 +418,13 @@
               </div>
             </div>
 
+            <!-- 上下文窗口硬边界 -->
+            <div class="form-row">
+              <label class="form-label" for="inpContextLimit">上下文窗口上限 (context_limit)</label>
+              <input type="number" id="inpContextLimit" class="form-input-sm" min="1000" max="1000000" step="1000" placeholder="留空自动"/>
+              <span class="form-hint">模型上下文窗口硬上限（0/留空=自动检测）。指示器以此计算百分比。</span>
+            </div>
+
             <!-- 上下文压缩 -->
             <label class="checkbox-row">
               <input type="checkbox" id="chkContextCompact"/>

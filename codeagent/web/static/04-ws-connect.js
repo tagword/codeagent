@@ -25,8 +25,10 @@ function updateTokenUsage(curOrUsage, compactMinTokens) {
     } else {
       curTokens = curOrUsage.total_tokens || 0;
     }
-    if (curOrUsage.compact_min_tokens) maxTokens = Number(curOrUsage.compact_min_tokens);
-    else if (curOrUsage.context_limit) maxTokens = curOrUsage.context_limit;
+    // context_limit = 模型上下文窗口（如 200k），是百分比计算的正確分母
+    // compact_min_tokens = 压缩触发阈值（如 30k），不作为分母使用
+    if (curOrUsage.context_limit) maxTokens = curOrUsage.context_limit;
+    else if (curOrUsage.compact_min_tokens) maxTokens = Number(curOrUsage.compact_min_tokens);
   } else {
     curTokens = Math.round((curOrUsage || 0) / 4);
     if (compactMinTokens > 0) maxTokens = compactMinTokens;
@@ -121,7 +123,7 @@ function recalcTokenUsageFromDom() {
   });
   // 每条消息系统开销（role 标记等）
   totalTokens += bubbles.length * 4;
-  updateTokenUsage({ total_tokens: totalTokens, compact_min_tokens: _tokenContextMax });
+  updateTokenUsage({ total_tokens: totalTokens, context_limit: _tokenContextMax });
 }
 
 function connectWs() {
