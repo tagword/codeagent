@@ -742,6 +742,7 @@ def create_app():
                         _snap = {
                             "prompt_tokens": int(_ctx.get("prompt_tokens") or 0),
                             "context_limit": int(_ctx.get("context_limit") or 0),
+                            "compact_min_tokens": int(_ctx.get("compact_min_tokens") or 0),
                             "message_count": int(_ctx.get("message_count") or 0),
                             "estimated_tokens": int(_ctx.get("estimated_tokens") or 0),
                             "updated_at": chat_sess.updated_at or "",
