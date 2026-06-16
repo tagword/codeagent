@@ -121,8 +121,7 @@ function recalcTokenUsageFromDom() {
   });
   // 每条消息系统开销（role 标记等）
   totalTokens += bubbles.length * 4;
-  var compactMinTokens = _tokenContextMax;
-  updateTokenUsage({ total_tokens: totalTokens }, compactMinTokens);
+  updateTokenUsage({ total_tokens: totalTokens, compact_min_tokens: _tokenContextMax });
 }
 
 function connectWs() {
