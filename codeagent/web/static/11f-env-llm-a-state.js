@@ -71,7 +71,7 @@ function providerNeedsManualConnection(providerId) {
 
 function listProviderModelsGrouped(providerId, useType) {
   const entry = getProviderEntry(providerId);
-  if (!entry || !Array.isArray(entry.models)) return [];
+  if (!entry || !entry.models || typeof entry.models !== 'object') return [];
   const ut = (useType || 'chat').trim();
   const groups = entry.models[ut] || entry.models.chat || entry.models.default || [];
   if (!Array.isArray(groups)) return [];
