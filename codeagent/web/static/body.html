@@ -468,30 +468,14 @@
         <fieldset class="section" id="fieldsetMcp">
           <div class="section__header">
             <h3 class="section__title">MCP 服务</h3>
-            <div class="row-actions" style="display:flex;gap:var(--sp-2);margin:0;">
+            <div class="row-actions" style="display:flex;gap:var(--sp-2);margin:0;align-items:center;">
+              <button type="button" class="btn btn--primary btn--sm" id="btnMcpAdd">+ 新增</button>
               <button type="button" class="btn btn--ghost btn--sm" id="btnMcpEnvRefresh">刷新</button>
-              <button type="button" class="btn btn--primary btn--sm" id="btnMcpEnvSave">保存全部</button>
             </div>
           </div>
-          <p class="section__desc">
-            管理 Model Context Protocol 服务。支持 <strong>stdio</strong>（本地子进程）和 <strong>SSE</strong>（远程 HTTP）两种传输协议。
-            Agent 通过 <code>mcp__服务ID__工具名</code> 调用（需开启「注册给 Agent」）。
-          </p>
-          <label class="checkbox-row">
-            <input type="checkbox" id="chkMcpEnabled" checked/>
-            <span>启用 MCP 工具桥接（SEED_MCP_ENABLED）</span>
-          </label>
-          <label class="checkbox-row">
-            <input type="checkbox" id="chkMcpRegisterTools" checked/>
-            <span>将 MCP 工具注册给 Agent 直接调用（SEED_MCP_REGISTER_TOOLS）</span>
-          </label>
           <p class="form-hint" id="mcpUvxHint" style="margin:var(--sp-2) 0;"></p>
           <p class="form-hint" style="margin:0 0 var(--sp-3);">配置文件：<code id="mcpConfigPath"></code></p>
           <div id="mcpServerBoard" class="mcp-board"></div>
-          <div class="mcp-board-toolbar row-actions" style="margin:var(--sp-3) 0 var(--sp-2);">
-            <select id="selMcpTemplate" class="md-select" style="max-width:220px;" title="添加模板"></select>
-            <button type="button" class="btn btn--primary btn--sm" id="btnMcpAdd">+ 添加 MCP</button>
-          </div>
           <div id="mcpEnvStatus" class="status-line"></div>
         </fieldset>
 

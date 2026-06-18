@@ -38,9 +38,9 @@ function mcpGenericFormHtml(cfg, opts) {
     '<div class="form-row">' +
     '<label class="form-label">传输协议</label>' +
     '<select class="mcp-fld-transport form-input-sm mcp-transport-sel" onchange="mcpToggleTransport(this)">' +
-    '<option value="stdio"' + stdioSel + '>stdio（本地进程）</option>' +
-    '<option value="sse"' + sseSel + '>SSE（已废弃，建议迁移到 Streamable HTTP）</option>' +
-    '<option value="streamable-http"' + streamableSel + '>Streamable HTTP（推荐远程）</option>' +
+    '<option value="stdio"' + stdioSel + '>stdio（uvx / npx / 本地进程）</option>' +
+    '<option value="streamable-http"' + streamableSel + '>HTTP（Streamable HTTP，推荐远程）</option>' +
+    '<option value="sse"' + sseSel + '>SSE（旧版远程）</option>' +
     '</select></div>' +
 
     // ---- stdio 字段组 ----
@@ -49,7 +49,7 @@ function mcpGenericFormHtml(cfg, opts) {
     '<label class="form-label">Command</label>' +
     '<input class="mcp-fld-command form-input-sm" type="text" placeholder="uvx / npx / /path/to/bin" value="' + c(cfg.command || '') + '"/>' +
     '<label class="form-label">Args</label>' +
-    '<input class="mcp-fld-args form-input-sm" type="text" placeholder="pkg -y 或 JSON 数组" value="' + c(formatArgsList(cfg.args)) + '"/>' +
+    '<input class="mcp-fld-args form-input-sm" type="text" placeholder="例如：your-mcp-package -y，或 JSON 数组" value="' + c(formatArgsList(cfg.args)) + '"/>' +
     '<label class="form-label">工作目录 cwd（可选）</label>' +
     '<input class="mcp-fld-cwd form-input-sm" type="text" value="' + c(cfg.cwd || '') + '"/>' +
     '</div>' +

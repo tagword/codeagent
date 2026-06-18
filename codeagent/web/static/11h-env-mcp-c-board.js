@@ -95,6 +95,11 @@ function buildMcpServerCard(serverId, cfg, status, meta) {
     testMcpCard(wrap, meta);
   });
 
+  const btnToggle = document.createElement('button');
+  btnToggle.type = 'button';
+  btnToggle.className = 'btn btn--ghost btn--xs';
+  btnToggle.textContent = cfg.enabled === false ? '启用' : '停用';
+
   const btnDel = document.createElement('button');
   btnDel.type = 'button';
   btnDel.className = 'btn btn--ghost btn--xs mcp-del';
@@ -109,12 +114,13 @@ function buildMcpServerCard(serverId, cfg, status, meta) {
     saveMcpEnvAndConfig().catch(function(e) {
       if (statusEl) {
         statusEl.classList.add('is-err');
-        statusEl.textContent = '删除成功但保存失败：' + String(e.message || e) + '，请点击「保存全部」重试。';
+        statusEl.textContent = '删除成功但保存失败：' + String(e.message || e) + '，请刷新后重试。';
       }
     });
   });
 
   actions.appendChild(btnTest);
+  actions.appendChild(btnToggle);
   actions.appendChild(btnDel);
 
   header.appendChild(info);
@@ -133,6 +139,11 @@ function buildMcpServerCard(serverId, cfg, status, meta) {
     editWrap.innerHTML = '<input type="hidden" class="mcp-fld-kind" value="generic"/>' +
       mcpGenericFormHtml(cfg, { serverId: serverId, idReadonly: true });
   }
+
+  btnToggle.addEventListener('click', function(ev) {
+    ev.stopPropagation();
+    toggleMcpCardEnabled(wrap, cfg.enabled === false, serverId);
+  });
 
   // 内联操作栏：保存 + 测试 + 删除
   const editActions = document.createElement('div');
@@ -213,6 +224,28 @@ function applyMcpCard(wrap, meta) {
   }
 }
 
+function toggleMcpCardEnabled(wrap, nextEnabled, serverId) {
+  const chk = wrap.querySelector('.mcp-fld-enabled');
+  const statusEl = mcpDom.status || wrap.querySelector('.mcp-edit-wrap .status-line');
+  const prevEnabled = chk ? !!chk.checked : !nextEnabled;
+  if (chk) chk.checked = !!nextEnabled;
+  if (statusEl) {
+    statusEl.classList.remove('is-err');
+    statusEl.textContent = (nextEnabled ? '正在启用' : '正在停用') + '「' + serverId + '」…';
+  }
+  saveMcpEnvAndConfig({ throwOnError: true }).then(function() {
+    if (mcpDom.status) {
+      mcpDom.status.textContent = '✅ 已' + (nextEnabled ? '启用' : '停用') + '「' + serverId + '」。';
+    }
+  }).catch(function(e) {
+    if (chk) chk.checked = prevEnabled;
+    if (statusEl) {
+      statusEl.classList.add('is-err');
+      statusEl.textContent = '❌ ' + String(e.message || e);
+    }
+  });
+}
+
 /* ---- 渲染 ---- */
 
 function renderMcpServerBoard(servers, statusRows, meta) {
@@ -241,7 +274,7 @@ function updateMcpBoardEmptyState() {
   if (!board.querySelector('.mcp-board-empty')) {
     const p = document.createElement('p');
     p.className = 'mcp-board-empty';
-    p.textContent = '尚未添加 MCP 服务。可从上方的模板选择器添加 MiniMax、uvx/npx 包、自建 stdio 或 SSE 远程服务。';
+    p.textContent = '尚未添加 MCP 服务。点击「新增」后选择 stdio、HTTP 或 SSE。stdio 可填写 uvx / npx / 本地二进制。';
     board.appendChild(p);
   }
 }
@@ -272,8 +305,12 @@ async function testMcpCard(wrap, meta) {
     const payload = Object.assign({ id: row.id }, row.config);
     const j = await testMcpServerPayload(payload);
     const tools = (j.tools || []).join('、');
-    if (statusEl) statusEl.textContent = tools ? ('✅ 测试通过：' + tools) : '✅ 测试通过';
-    await loadMcpEnvConfig();
+    const skills = (j.skills || []).join('、');
+    const details = [];
+    if (tools) details.push('工具：' + tools);
+    if (skills) details.push('skills：' + skills);
+    if (statusEl) statusEl.textContent = details.length ? ('✅ 测试通过：' + details.join('；')) : '✅ 测试通过';
+    if (!wrap.classList.contains('is-new')) await loadMcpEnvConfig();
   } catch (e) {
     if (statusEl) {
       statusEl.classList.add('is-err');
@@ -290,7 +327,9 @@ function showNewMcpServerForm(templateId) {
   const existing = board.querySelector('.mcp-card-wrap.is-new');
   if (existing) existing.remove();
 
-  const tpl = MCP_TEMPLATES.find(function(t) { return t.id === templateId; }) || MCP_TEMPLATES[MCP_TEMPLATES.length - 1];
+  const tpl = MCP_TEMPLATES.find(function(t) { return t.id === templateId; })
+    || MCP_TEMPLATES.find(function(t) { return t.id === 'custom'; })
+    || MCP_TEMPLATES[MCP_TEMPLATES.length - 1];
   const wrap = document.createElement('div');
   wrap.className = 'mcp-card-wrap is-new';
 
@@ -301,7 +340,7 @@ function showNewMcpServerForm(templateId) {
   // 新表单自带一个较大的 header 说明
   const hintBar = document.createElement('div');
   hintBar.style.cssText = 'padding:var(--sp-1) var(--sp-2);background:var(--accent-dim,#e8f0fe);border-radius:var(--r-md) var(--r-md) 0 0;font-size:var(--fs-sm);color:var(--accent,#1a73e8);';
-  hintBar.textContent = '添加新 MCP 服务：' + tpl.label;
+  hintBar.textContent = '添加新 MCP 服务';
 
   const editStatus = document.createElement('div');
   editStatus.className = 'status-line';
@@ -317,7 +356,7 @@ function showNewMcpServerForm(templateId) {
   actions.className = 'row-actions';
   actions.style.marginTop = 'var(--sp-2)';
   actions.innerHTML =
-    '<button type="button" class="btn btn--primary btn--sm mcp-new-save">添加</button>' +
+    '<button type="button" class="btn btn--primary btn--sm mcp-new-save">添加并保存</button>' +
     '<button type="button" class="btn btn--ghost btn--sm mcp-new-test">测试</button>' +
     '<button type="button" class="btn btn--subtle btn--sm mcp-new-cancel">取消</button>';
   editWrap.appendChild(actions);
@@ -333,23 +372,26 @@ function showNewMcpServerForm(templateId) {
   actions.querySelector('.mcp-new-cancel').addEventListener('click', function() { wrap.remove(); updateMcpBoardEmptyState(); });
   actions.querySelector('.mcp-new-test').addEventListener('click', function() { testMcpCard(wrap, window._mcpMeta || {}); });
   actions.querySelector('.mcp-new-save').addEventListener('click', function() {
+    var saveBtn = actions.querySelector('.mcp-new-save');
     try {
       const row = collectServerFromWrap(wrap, window._mcpMeta || {});
       if (!row) throw new Error('请填写完整配置');
       if (board.querySelector('.mcp-card-wrap[data-server-id="' + row.id + '"]')) {
         throw new Error('服务 ID「' + row.id + '」已存在');
       }
+      if (saveBtn) saveBtn.disabled = true;
       const empty = board.querySelector('.mcp-board-empty');
       if (empty) empty.remove();
       const card = buildMcpServerCard(row.id, row.config, null, window._mcpMeta || {});
       board.appendChild(card);
       wrap.remove();
       editStatus.textContent = '已添加，正在保存…';
-      saveMcpEnvAndConfig().then(function() {
-        editStatus.textContent = '✅ 已添加并保存。';
+      saveMcpEnvAndConfig({ throwOnError: true }).then(function() {
+        if (mcpDom.status) mcpDom.status.textContent = '✅ 已添加并保存。';
       }).catch(function(e) {
+        if (saveBtn) saveBtn.disabled = false;
         editStatus.classList.add('is-err');
-        editStatus.textContent = '❌ 添加成功但保存失败：' + String(e.message || e) + '，请点击「保存全部」重试。';
+        editStatus.textContent = '❌ 添加成功但保存失败：' + String(e.message || e) + '，请刷新后重试。';
       });
     } catch (e) {
       editStatus.classList.add('is-err');
@@ -382,9 +424,6 @@ async function loadMcpEnvConfig() {
     const envJ = await envR.json();
     const mcpJ = await mcpR.json();
 
-    if (mcpDom.chkOn) mcpDom.chkOn.checked = _mcpEnvVal(envJ, 'SEED_MCP_ENABLED', '1') === '1';
-    if (mcpDom.chkReg) mcpDom.chkReg.checked = _mcpEnvVal(envJ, 'SEED_MCP_REGISTER_TOOLS', '1') === '1';
-
     if (mcpDom.pathEl) mcpDom.pathEl.textContent = mcpJ.path || '';
 
     const uvxEl = mcpDom.uvxEl;
@@ -412,15 +451,16 @@ async function loadMcpEnvConfig() {
   }
 }
 
-async function saveMcpEnvAndConfig() {
+async function saveMcpEnvAndConfig(opts) {
+  opts = opts || {};
   const status = mcpDom.status;
   if (!status) return;
   status.textContent = '保存中…';
   status.classList.remove('is-err');
   try {
     const envBody = {
-      SEED_MCP_ENABLED: ((mcpDom.chkOn || {}).checked) ? '1' : '0',
-      SEED_MCP_REGISTER_TOOLS: ((mcpDom.chkReg || {}).checked) ? '1' : '0',
+      SEED_MCP_ENABLED: '1',
+      SEED_MCP_REGISTER_TOOLS: '1',
     };
     const envR = await fetch('/api/ui/env/mcp', {
       method: 'POST',
@@ -451,6 +491,7 @@ async function saveMcpEnvAndConfig() {
   } catch (e) {
     status.classList.add('is-err');
     status.textContent = '❌ ' + String(e.message || e);
+    if (opts.throwOnError) throw e;
   }
 }
 
@@ -460,14 +501,11 @@ async function saveMcpEnvAndConfig() {
   [
     ['board',   'mcpServerBoard'],
     ['status',  'mcpEnvStatus'],
-    ['chkOn',   'chkMcpEnabled'],
-    ['chkReg',  'chkMcpRegisterTools'],
     ['pathEl',  'mcpConfigPath'],
     ['uvxEl',   'mcpUvxHint'],
     ['btn',     'btnMcpEnvSave'],
     ['ref',     'btnMcpEnvRefresh'],
     ['addBtn',  'btnMcpAdd'],
-    ['tplSel',  'selMcpTemplate'],
   ].forEach(function(pair) {
     mcpDom[pair[0]] = document.getElementById(pair[1]);
   });
@@ -481,17 +519,7 @@ async function saveMcpEnvAndConfig() {
 
   if (mcpDom.addBtn) {
     mcpDom.addBtn.addEventListener('click', function() {
-      showNewMcpServerForm((mcpDom.tplSel && mcpDom.tplSel.value) || 'custom');
-    });
-  }
-
-  if (mcpDom.tplSel) {
-    mcpDom.tplSel.innerHTML = '';
-    MCP_TEMPLATES.forEach(function(t) {
-      const o = document.createElement('option');
-      o.value = t.id;
-      o.textContent = t.label;
-      mcpDom.tplSel.appendChild(o);
+      showNewMcpServerForm('custom');
     });
   }
 

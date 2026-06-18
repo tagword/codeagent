@@ -203,6 +203,32 @@ def create_app():
             if project_id == "__unassigned__":
                 project_id = ""
 
+            _forced_mcp_skill_suffix = ""
+            if message.startswith("/skill") or (message.startswith("/") and ":" in message.split(None, 1)[0]):
+                from codeagent.server.webui_api_app import _parse_mcp_skill_slash_command
+                from seed_tools.mcp import mcp_skill_handler
+
+                try:
+                    _mcp_sid, _mcp_skill, _mcp_args = _parse_mcp_skill_slash_command(message)
+                except ValueError as e:
+                    return JSONResponse({"detail": str(e)}, status_code=400)
+                _mcp_skill_text = await asyncio.to_thread(
+                    mcp_skill_handler,
+                    _mcp_sid,
+                    _mcp_skill,
+                    _mcp_args,
+                )
+                if len(_mcp_skill_text) > 30000:
+                    _mcp_skill_text = _mcp_skill_text[:30000] + "\n\n[已截断：MCP skill 输出超过 30000 字符]"
+                _forced_mcp_skill_suffix = (
+                    "\n\n## MCP Skill\n\n"
+                    f"本轮已显式加载 MCP skill `{_mcp_sid}/{_mcp_skill}`。"
+                    "请按该 skill 的内容处理用户请求。\n\n"
+                    f"{_mcp_skill_text}\n"
+                )
+                message = f"请使用 MCP skill `{_mcp_sid}/{_mcp_skill}` 处理本轮请求。"
+                user_msg["content"] = message
+
             # ── 同 session 并发注入 ──
             # 仅当 session 确实在跑时才入队；否则清掉残留 queue 并正常发起新 run
             if not _running_contains(_run_mkey):
@@ -326,6 +352,8 @@ def create_app():
                 user_text=content_text_for_skills(message),
                 workspace_suffix=_work_dir_suffix,
             )
+            if _forced_mcp_skill_suffix:
+                _skills_suffix = (_skills_suffix or "").rstrip() + _forced_mcp_skill_suffix
             api_msgs = build_api_projection_messages(
                 chat_sess.messages,
                 skills_suffix=_skills_suffix,

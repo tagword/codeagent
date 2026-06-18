@@ -654,6 +654,37 @@ def _session_history_json_for_session(
     )
 
 
+def _parse_mcp_skill_slash_command(text: str) -> tuple[str, str, str]:
+    raw = str(text or "").strip()
+    if raw.startswith("/skill"):
+        rest = raw[len("/skill"):].strip()
+        if not rest:
+            raise ValueError("usage: /skill <server_id> <skill_name> [json_arguments]")
+        parts = rest.split(None, 2)
+        if len(parts) == 1 and "/" in parts[0]:
+            server_id, _, skill_name = parts[0].partition("/")
+            args = "{}"
+        elif len(parts) >= 2:
+            server_id = parts[0]
+            skill_name = parts[1]
+            args = parts[2].strip() if len(parts) > 2 else "{}"
+        else:
+            raise ValueError("usage: /skill <server_id> <skill_name> [json_arguments]")
+    elif raw.startswith("/") and ":" in raw:
+        head, _, tail = raw[1:].partition(":")
+        server_id = head.strip()
+        skill_part, _, arg_part = tail.strip().partition(" ")
+        skill_name = skill_part.strip()
+        args = arg_part.strip() or "{}"
+    else:
+        raise ValueError("usage: /<server_id>:<skill_name> [json_arguments]")
+    server_id = server_id.strip()
+    skill_name = skill_name.strip()
+    if not server_id or not skill_name:
+        raise ValueError("server_id and skill_name are required")
+    return server_id, skill_name, args
+
+
 def _agents_dir() -> Path:
     """Return the agents root directory (~/.codeagent/agents)."""
     from codeagent.core.paths import codeagent_home
@@ -991,6 +1022,67 @@ def build_webui_api_app(project_root: Path) -> Starlette:
                 status_code=502,
             )
         return JSONResponse({"ok": True, **result})
+
+    async def api_mcp_skills(request: Request) -> JSONResponse:
+        from seed.integrations.mcp_client import MCPError, get_mcp_manager
+
+        sid = str(request.query_params.get("server_id") or "").strip()
+        if not sid:
+            return JSONResponse({"detail": "server_id required"}, status_code=400)
+        try:
+            skills = get_mcp_manager().get_session(sid).list_skills()
+        except MCPError as e:
+            return JSONResponse({"detail": str(e)}, status_code=502)
+        return JSONResponse(
+            {
+                "server_id": sid,
+                "skills": [
+                    {
+                        "name": s.name,
+                        "description": s.description,
+                        "arguments": s.arguments,
+                    }
+                    for s in skills
+                ],
+            }
+        )
+
+    async def api_mcp_skill(request: Request) -> JSONResponse:
+        from seed_tools.mcp import mcp_skill_handler
+
+        try:
+            body = await request.json()
+        except Exception:
+            return JSONResponse({"detail": "invalid json"}, status_code=400)
+        if not isinstance(body, dict):
+            return JSONResponse({"detail": "invalid body"}, status_code=400)
+        command = str(body.get("command") or "").strip()
+        if command:
+            try:
+                sid, skill_name, args = _parse_mcp_skill_slash_command(command)
+            except ValueError as e:
+                return JSONResponse({"detail": str(e)}, status_code=400)
+        else:
+            sid = str(body.get("server_id") or "").strip()
+            skill_name = str(body.get("skill_name") or body.get("name") or "").strip()
+            raw_args = body.get("arguments", {})
+            if isinstance(raw_args, str):
+                args = raw_args.strip() or "{}"
+            elif isinstance(raw_args, dict):
+                args = json.dumps(raw_args, ensure_ascii=False)
+            else:
+                return JSONResponse({"detail": "arguments must be object or JSON string"}, status_code=400)
+        if not sid or not skill_name:
+            return JSONResponse({"detail": "server_id and skill_name required"}, status_code=400)
+        result = await asyncio.to_thread(mcp_skill_handler, sid, skill_name, args)
+        return JSONResponse(
+            {
+                "ok": True,
+                "server_id": sid,
+                "skill_name": skill_name,
+                "result": result,
+            }
+        )
 
     async def api_md_get(request: Request) -> JSONResponse:
         name = (request.path_params.get("name") or "").strip()
@@ -2455,7 +2547,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
                 "vision_analyze", "vision_analyze_directory",
                 "image_generate", "music_generate", "video_generate",
                 "attachment_resolve_path", "audio_transcribe", "video_analyze",
-                "mcp_servers", "mcp_list_tools", "mcp_call",
+                "mcp_servers", "mcp_list_tools", "mcp_call", "mcp_list_skills", "mcp_skill",
                 "seed_cron_path", "seed_cron_reload", "seed_cron_apply",
                 "hub_send", "instruction_read",
                 "whoami", "calculate", "counter", "workspace_verify",
@@ -2833,6 +2925,8 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         Route("/mcp", api_mcp_get, methods=["GET"]),
         Route("/mcp", api_mcp_post, methods=["POST"]),
         Route("/mcp/test", api_mcp_test, methods=["POST"]),
+        Route("/mcp/skills", api_mcp_skills, methods=["GET"]),
+        Route("/mcp/skill", api_mcp_skill, methods=["POST"]),
         Route("/hooks", api_hooks_get, methods=["GET"]),
         Route("/hooks", api_hooks_post, methods=["POST"]),
         Route("/md/{name}", api_md_get, methods=["GET"]),

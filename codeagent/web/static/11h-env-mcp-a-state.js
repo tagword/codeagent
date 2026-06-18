@@ -45,7 +45,7 @@ var MCP_TEMPLATES = [
   },
   {
     id: 'custom',
-    label: '自定义 stdio',
+    label: '自定义 MCP',
     serverId: '',
     kind: 'generic',
     config: {
@@ -55,7 +55,7 @@ var MCP_TEMPLATES = [
       args: [],
       env: {},
     },
-    hint: '填写 command、args 与环境变量',
+    hint: '选择传输协议；stdio 可填写 uvx / npx / 本地二进制，HTTP / SSE 填写远程 URL。',
   },
   {
     id: 'sse',
@@ -150,6 +150,9 @@ function mcpStatusLine(status) {
     parts.push('已连接');
     if (status.tools && status.tools.length) {
       parts.push(status.tools.length + ' 工具');
+    }
+    if (status.skills && status.skills.length) {
+      parts.push(status.skills.length + ' skills');
     }
     return parts.join(' · ');
   }
