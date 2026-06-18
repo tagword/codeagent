@@ -41,10 +41,16 @@ function buildMcpServerCard(serverId, cfg, status, meta) {
 
   const tTag = document.createElement('span');
   tTag.className = 'mcp-card__transport';
-  tTag.textContent = transport === 'sse' ? 'SSE' : 'stdio';
-  tTag.style.cssText = transport === 'sse'
-    ? 'font-size:11px;padding:1px 6px;border-radius:var(--r-sm);background:var(--accent-dim, #e8f0fe);color:var(--accent,#1a73e8);font-weight:500;'
-    : 'font-size:11px;padding:1px 6px;border-radius:var(--r-sm);background:var(--bg-2,#eee);color:var(--fg-2,#666);font-weight:500;';
+  if (transport === 'sse') {
+    tTag.textContent = 'SSE';
+    tTag.style.cssText = 'font-size:11px;padding:1px 6px;border-radius:var(--r-sm);background:#fff3e0;color:#e65100;font-weight:500;';
+  } else if (transport === 'streamable-http') {
+    tTag.textContent = 'Streamable HTTP';
+    tTag.style.cssText = 'font-size:11px;padding:1px 6px;border-radius:var(--r-sm);background:var(--accent-dim, #e8f0fe);color:var(--accent,#1a73e8);font-weight:500;';
+  } else {
+    tTag.textContent = 'stdio';
+    tTag.style.cssText = 'font-size:11px;padding:1px 6px;border-radius:var(--r-sm);background:var(--bg-2,#eee);color:var(--fg-2,#666);font-weight:500;';
+  }
 
   const badge = document.createElement('span');
   badge.className = 'mcp-card__badge' + (status && status.connected ? ' mcp-card__badge--ok' : '');
@@ -57,7 +63,7 @@ function buildMcpServerCard(serverId, cfg, status, meta) {
   // 第二行：详情（command / url）
   const detail = document.createElement('div');
   detail.className = 'mcp-card__detail';
-  if (transport === 'sse') {
+  if (transport === 'sse' || transport === 'streamable-http') {
     detail.textContent = '→ ' + (cfg.url || '未配置 URL');
   } else {
     detail.textContent = '$ ' + (cfg.command || '') + (cfg.args && cfg.args.length ? ' ' + formatArgsList(cfg.args) : '');

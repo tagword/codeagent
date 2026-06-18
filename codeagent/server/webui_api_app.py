@@ -982,6 +982,8 @@ def build_webui_api_app(project_root: Path) -> Starlette:
             return JSONResponse({"detail": "command required"}, status_code=400)
         if cfg.transport == "sse" and not cfg.url:
             return JSONResponse({"detail": "url required"}, status_code=400)
+        if cfg.transport == "streamable-http" and not cfg.url:
+            return JSONResponse({"detail": "url required"}, status_code=400)
         result = probe_mcp_server_config(cfg)
         if not result.get("ok"):
             return JSONResponse(

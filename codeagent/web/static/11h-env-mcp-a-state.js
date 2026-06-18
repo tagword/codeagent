@@ -70,6 +70,20 @@ var MCP_TEMPLATES = [
     },
     hint: '填写 SSE endpoint URL（如 http://host:port/sse）',
   },
+  {
+    id: 'streamable-http',
+    label: 'Streamable HTTP',
+    serverId: '',
+    kind: 'generic',
+    config: {
+      enabled: true,
+      transport: 'streamable-http',
+      url: '',
+      headers: {},
+      env: {},
+    },
+    hint: 'Streamable HTTP MCP 服务（MCP Spec 2025-06-18 标准）；填写 URL 及可选请求头',
+  },
 ];
 
 window._mcpConfigCache = { servers: {} };

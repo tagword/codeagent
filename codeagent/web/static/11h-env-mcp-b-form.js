@@ -12,12 +12,17 @@ function mcpGenericFormHtml(cfg, opts) {
   cfg = cfg || {};
   const idReadonly = opts.idReadonly ? ' readonly' : '';
   const transport = cfg.transport || 'stdio';
-  const sseSel = transport === 'sse' ? ' selected' : '';
   const stdioSel = transport === 'stdio' ? ' selected' : '';
-  const sseVis = transport === 'sse' ? '' : ' style="display:none;"';
+  const sseSel = transport === 'sse' ? ' selected' : '';
+  const streamableSel = transport === 'streamable-http' ? ' selected' : '';
   const stdioVis = transport === 'stdio' ? '' : ' style="display:none;"';
+  const sseVis = transport === 'sse' ? '' : ' style="display:none;"';
+  const streamableVis = transport === 'streamable-http' ? '' : ' style="display:none;"';
+  const remoteVis = (transport === 'sse' || transport === 'streamable-http') ? '' : ' style="display:none;"';
 
   const c = function(v) { return escAttr(v || ''); };
+  const isStreamable = transport === 'streamable-http';
+  const isSse = transport === 'sse';
 
   return (
     // ---- 基础信息 ----
@@ -34,7 +39,8 @@ function mcpGenericFormHtml(cfg, opts) {
     '<label class="form-label">传输协议</label>' +
     '<select class="mcp-fld-transport form-input-sm mcp-transport-sel" onchange="mcpToggleTransport(this)">' +
     '<option value="stdio"' + stdioSel + '>stdio（本地进程）</option>' +
-    '<option value="sse"' + sseSel + '>SSE（远程 HTTP）</option>' +
+    '<option value="sse"' + sseSel + '>SSE（已废弃，建议迁移到 Streamable HTTP）</option>' +
+    '<option value="streamable-http"' + streamableSel + '>Streamable HTTP（推荐远程）</option>' +
     '</select></div>' +
 
     // ---- stdio 字段组 ----
@@ -48,11 +54,20 @@ function mcpGenericFormHtml(cfg, opts) {
     '<input class="mcp-fld-cwd form-input-sm" type="text" value="' + c(cfg.cwd || '') + '"/>' +
     '</div>' +
 
-    // ---- SSE 字段组 ----
-    '<div class="mcp-sse-fields mcp-field-group"' + sseVis + '>' +
+    // ---- 远程连接字段组（SSE + Streamable HTTP 共用 URL 与 headers） ----
+    '<div class="mcp-remote-fields mcp-field-group"' + remoteVis + '>' +
     '<div class="mcp-field-group__label">远程连接配置</div>' +
-    '<label class="form-label">SSE Endpoint URL</label>' +
-    '<input class="mcp-fld-url form-input-sm" type="text" placeholder="http://host:port/sse" value="' + c(cfg.url || '') + '"/>' +
+    '<label class="form-label">Endpoint URL</label>' +
+    '<input class="mcp-fld-url form-input-sm" type="text" placeholder="http://host:port/mcp" value="' + c(cfg.url || '') + '"/>' +
+    '<label class="form-label">Headers <span class="form-hint">（每行 KEY=value，用于 Authorization 等认证）</span></label>' +
+    '<textarea class="mcp-fld-headers form-input-sm" rows="3" placeholder="Authorization=Bearer xxx&#10;X-API-Key=yyy" style="font-family:var(--font-mono);font-size:var(--fs-sm);">' + c(formatEnvLines(cfg.headers)) + '</textarea>' +
+    '<div class="form-hint" style="margin-top:var(--sp-1);">' +
+      (isSse
+        ? '⚠ SSE 协议已废弃（Spec 2024-11-05），建议改用 Streamable HTTP（Spec 2025-06-18）。'
+        : (isStreamable
+          ? 'Streamable HTTP 自动携带 <code>MCP-Protocol-Version: 2025-11-25</code> 头，无需手动填写。'
+          : '')) +
+    '</div>' +
     '</div>' +
 
     // ---- 环境变量 ----
@@ -118,19 +133,20 @@ function mcpMinimaxFormHtml(cfg, meta) {
 
 /* ---- Transport 切换 ---- */
 
-/** Toggle stdio/sse field visibility + update hint. */
+/** Toggle stdio/sse/streamable-http field visibility + update hint. */
 function mcpToggleTransport(sel) {
   var wrap = sel.closest('.mcp-card-wrap') || sel.closest('.mcp-edit-wrap');
   if (!wrap) return;
   var stdioFields = wrap.querySelector('.mcp-stdio-fields');
-  var sseFields = wrap.querySelector('.mcp-sse-fields');
-  if (!stdioFields || !sseFields) return;
-  if (sel.value === 'sse') {
-    stdioFields.style.display = 'none';
-    sseFields.style.display = '';
-  } else {
+  var remoteFields = wrap.querySelector('.mcp-remote-fields');
+  if (!stdioFields || !remoteFields) return;
+  if (sel.value === 'stdio') {
     stdioFields.style.display = '';
-    sseFields.style.display = 'none';
+    remoteFields.style.display = 'none';
+  } else {
+    // 'sse' or 'streamable-http'
+    stdioFields.style.display = 'none';
+    remoteFields.style.display = '';
   }
 }
 
@@ -143,11 +159,14 @@ function collectGenericServerFromWrap(wrap) {
   const transport = (wrap.querySelector('.mcp-fld-transport') || {}).value || 'stdio';
   const env = parseEnvLines((wrap.querySelector('.mcp-fld-env') || {}).value);
 
-  if (transport === 'sse') {
+  if (transport === 'sse' || transport === 'streamable-http') {
     const url = (wrap.querySelector('.mcp-fld-url') || {}).value.trim();
-    if (enabled && !url) throw new Error('服务「' + id + '」：SSE 模式请填写 URL');
+    const headers = parseEnvLines((wrap.querySelector('.mcp-fld-headers') || {}).value);
+    if (enabled && !url) throw new Error('服务「' + id + '」：' + transport + ' 模式请填写 URL');
     if (!enabled && !url) return null;
-    return { id: id, config: { enabled: enabled, transport: 'sse', url: url, env: env } };
+    const row = { enabled: enabled, transport: transport, url: url, env: env };
+    if (Object.keys(headers).length > 0) row.headers = headers;
+    return { id: id, config: row };
   }
 
   // stdio
