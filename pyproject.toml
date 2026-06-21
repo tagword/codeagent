@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "codeagent"
-version = "1.1.1"
+version = "1.1.2"
 description = "LLM agent with Markdown config, tool loop, Web UI, sessions, memory, and webhooks"
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.9"
 dependencies = [
-    "seed>=1.0.4",
+    "seed>=1.0.6",
     "seed-model-providers>=1.0.0",
     "seed-tools[code]>=1.0.2",
     "uvicorn[standard]>=0.30.0",
