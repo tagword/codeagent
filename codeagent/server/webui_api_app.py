@@ -62,6 +62,10 @@ def _env_chat_specs() -> list[tuple[tuple[str, ...], str]]:
         ((ca_env.CHAT_MAX_TOOL_ROUNDS_DEFAULT,), "16"),
         ((ca_env.CONTEXT_COMPACT,), ""),
         ((ca_env.CONTEXT_COMPACT_MIN_TOKENS,), "30000"),
+        ((ca_env.CONTEXT_COMPACT_KEEP_USER_ROUNDS,), "2"),
+        ((ca_env.CONTEXT_COMPACT_MID_LOOP,), "1"),
+        ((ca_env.CONTEXT_COMPACT_ADAPTIVE_KEEP,), "0"),
+        ((ca_env.CONTEXT_COMPACT_SUMMARIZER_PROMPT_FILE,), ""),
         ((ca_env.CONTEXT_COMPACT_SUMMARIZER_BASEURL,), ""),
         ((ca_env.CONTEXT_COMPACT_SUMMARIZER_MODEL,), ""),
         ((ca_env.CONTEXT_COMPACT_SUMMARIZER_MAX_TOKENS,), "4096"),
@@ -2441,19 +2445,21 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         marker = cfg / "setup.json"
         marker.write_text(json.dumps({"done": True}, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
         # Sensible defaults for new installs (context compact uses tokens, not bytes).
-        _write_env_file_merge(
-            cfg / ENV_FILENAME,
-            {
-                ca_env.CONTEXT_COMPACT: "1",
-                ca_env.CONTEXT_COMPACT_MIN_TOKENS: "30000",
-                ca_env.CHAT_MAX_TOOL_ROUNDS_DEFAULT: "16",
-            },
-        )
-        for k, v in {
+        from codeagent.runtime.compact_prompt import default_summarizer_prompt_path
+
+        _setup_env: dict[str, str] = {
             ca_env.CONTEXT_COMPACT: "1",
             ca_env.CONTEXT_COMPACT_MIN_TOKENS: "30000",
+            ca_env.CONTEXT_COMPACT_KEEP_USER_ROUNDS: "2",
+            ca_env.CONTEXT_COMPACT_MID_LOOP: "1",
             ca_env.CHAT_MAX_TOOL_ROUNDS_DEFAULT: "16",
-        }.items():
+        }
+        if default_summarizer_prompt_path().is_file():
+            _setup_env[ca_env.CONTEXT_COMPACT_SUMMARIZER_PROMPT_FILE] = str(
+                default_summarizer_prompt_path()
+            )
+        _write_env_file_merge(cfg / ENV_FILENAME, _setup_env)
+        for k, v in _setup_env.items():
             os.environ[k] = v
         bridge_codeagent_env_to_seed()
         return JSONResponse({"webui_token": tok})

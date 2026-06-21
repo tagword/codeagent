@@ -146,6 +146,18 @@ def bootstrap_codeagent_runtime(base: Optional[Path] = None) -> Path:
 
     apply_seed_env_from_config(None)
     bridge_codeagent_env_to_seed()
+
+    from codeagent.runtime.compact_prompt import default_summarizer_prompt_path
+
+    if default_summarizer_prompt_path().is_file():
+        os.environ.setdefault(
+            "CODEAGENT_CONTEXT_COMPACT_SUMMARIZER_PROMPT_FILE",
+            str(default_summarizer_prompt_path()),
+        )
+    os.environ.setdefault("CODEAGENT_CONTEXT_COMPACT_MID_LOOP", "1")
+    os.environ.setdefault("CODEAGENT_CONTEXT_COMPACT_KEEP_USER_ROUNDS", "2")
+    bridge_codeagent_env_to_seed()
+
     _ensure_codeagent_bootstrap_md(home)
 
     # ── Team config: load if exists ──

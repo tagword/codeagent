@@ -163,12 +163,18 @@ Web UI **配置 → MCP 服务** 中 MiniMax 卡片可填「朗读 API Key（开
 
 ### Preset 字段 `provider`
 
+完整 Chat 协议、usage 归一化、OpenRouter 头与 2026-06-16 catalog 更新见 **[`MODEL_PROVIDERS.md`](MODEL_PROVIDERS.md)** 与 [`seed-model-providers/docs/PROVIDER_PROTOCOLS.md`](../../seed-model-providers/docs/PROVIDER_PROTOCOLS.md)。
+
 | 值 | 聊天协议 | 生图协议（勾选 supports_image_gen 时） |
 |----|----------|----------------------------------------|
 | `volcengine` | OpenAI 兼容 `/v1/chat/completions` | `volcengine_images` → Seedream `/images/generations` |
+| `dashscope` | **`dashscope`**（enable_thinking + preserve_thinking） | 无内置生图 |
+| `moonshot` | **`moonshot`**（thinking.type；K2.6+ keep=all） | 无 |
+| `zhipu` | **`zhipu`**（thinking + clear_thinking=false） | 无 |
 | `agnes` | OpenAI 兼容 `/v1/chat/completions`（对话/识图） | 视频：`agnes_video` → `POST/GET /v1/videos`（见 [`AGNES_API.md`](AGNES_API.md)） |
 | `minimax` | OpenAI 兼容 `/v1/chat/completions` | `minimax_image` → `POST /v1/image_generation`，模型如 `image-01` |
 | `deepseek` | DeepSeek thinking + reasoning_content | OpenAI `/images/generations`（需自建网关） |
+| `openrouter` | OpenAI 兼容 + 自动 Referer/Title | `openai_images` |
 | `openai` / `openai_compatible` | 标准 OpenAI 兼容 | `openai_images` |
 | `sglang` | SGLang separate_reasoning | `openai_images`（若网关支持） |
 | `custom` / 空 | 按 URL 推断 | 同上 |
@@ -176,6 +182,17 @@ Web UI **配置 → MCP 服务** 中 MiniMax 卡片可填「朗读 API Key（开
 统一参数与图生图规则见 `codeagent/docs/IMAGE_GEN_PROVIDERS.md`。
 
 内置目录：`GET /api/ui/llm/providers` 或 `GET /api/ui/llm/presets` 响应中的 `providers`。
+
+**OpenRouter / 思考模式 / usage**
+
+| 变量 | 说明 |
+|------|------|
+| `CODEAGENT_LLM_HTTP_REFERER` | OpenRouter `HTTP-Referer`（bridge → `SEED_LLM_HTTP_REFERER`） |
+| `CODEAGENT_LLM_APP_TITLE` | OpenRouter 应用名 |
+| `CODEAGENT_LLM_ENABLE_THINKING` | 全局思考开关 |
+| `CODEAGENT_LLM_EXTRA_BODY` | 额外 JSON 请求体 |
+
+详见 [`MODEL_PROVIDERS.md`](MODEL_PROVIDERS.md)。
 
 ## 视频 / 音频（audio_transcribe / video_analyze）
 

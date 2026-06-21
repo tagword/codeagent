@@ -106,6 +106,10 @@ WS 事件到达后
 | `codeagent/webui/06-chat.js` | 紧凑完成后的视图刷新 |
 | `seed/core/agent_runtime.py` | `_get_compact_min_tokens()` / `set_compact_min_tokens()` |
 
+## 问题排查
+
+指示器显示异常（0%、频繁涨跌、刷新后不对）时，参见 **[DEBUG_CONTEXT_INDICATOR.md](./DEBUG_CONTEXT_INDICATOR.md)**：含 **§0.0 底层逻辑（三条公理）**、元认知与元知识、具体操作步骤与回归自检。
+
 ## 开发注意事项
 
 ### denominator 覆盖路径（三路，易遗漏）

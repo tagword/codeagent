@@ -105,6 +105,7 @@ def create_app():
             maybe_compact_context_messages,
             merge_llm_tail_into_full,
             persist_compact_summary,
+            resolve_compact_trigger_tokens,
             run_llm_tool_loop,
             strip_ephemeral_message_fields,
         )
@@ -360,10 +361,11 @@ def create_app():
                 **_kwargs,
             )
             _api_pt = None
+            _prev_cu = None
             if isinstance(chat_sess.metadata, dict):
                 _prev_cu = chat_sess.metadata.get("context_usage")
                 if isinstance(_prev_cu, dict):
-                    _api_pt = int(_prev_cu.get("prompt_tokens") or 0) or None
+                    _api_pt = resolve_compact_trigger_tokens(persisted=_prev_cu) or None
             if not isinstance(chat_sess.metadata, dict):
                 chat_sess.metadata = {}
             # episodic 在 compact 前注入，使 compact 判断与 LLM 实际输入一致
@@ -376,23 +378,24 @@ def create_app():
                 project_id=project_id or None,
                 compact_happened=False,
             )
-            _compact_meta = (
-                {"usage": {"prompt_tokens": _api_pt}} if _api_pt else None
-            )
-            _compact_ctx = build_context_usage_snapshot(
-                api_msgs,
-                _compact_meta,
-                model_name=getattr(llm, "model", None),
-            )
-            _compact_pt = int(_compact_ctx.get("prompt_tokens") or 0) or None
             compact_result = await asyncio.to_thread(
                 maybe_compact_context_messages,
                 api_msgs,
                 llm,
-                api_prompt_tokens=_compact_pt,
+                api_prompt_tokens=_api_pt,
+                persisted_context_usage=_prev_cu if isinstance(_prev_cu, dict) else None,
             )
             persist_compact_summary(chat_sess.messages, compact_result)
+            strip_ephemeral_message_fields(api_msgs)
+
+            from codeagent.runtime.compact_state import inject_state_into_system
+
             if compact_result:
+                await asyncio.to_thread(
+                    inject_state_into_system,
+                    api_msgs,
+                    agent_id,
+                )
                 await asyncio.to_thread(
                     finalize_episodic_for_llm,
                     api_msgs,
@@ -402,7 +405,12 @@ def create_app():
                     project_id=project_id or None,
                     compact_happened=True,
                 )
-            strip_ephemeral_message_fields(api_msgs)
+
+            def _on_mid_compact(compact_result: dict | None) -> None:
+                if not compact_result:
+                    return
+                persist_compact_summary(chat_sess.messages, compact_result)
+                inject_state_into_system(api_msgs, agent_id)
 
             # ── WS 广播回调 ──
             from seed.core.chat_events import reset_chat_event_emitter, set_chat_event_emitter
@@ -576,6 +584,7 @@ def create_app():
                                 on_check_pending_messages=_drain_pending_injections,
                                 enable_thinking=chat_enable_thinking,
                                 reasoning_effort=chat_reasoning_effort,
+                                on_compact=_on_mid_compact,
                             )
                         except Exception:
                             reset_usage_accumulation(_seg_token)
@@ -613,6 +622,31 @@ def create_app():
 
                         # Reset per-segment markers for next loop
                         _last_trace_len[0] = 0
+                        _seg_peak = int((_seg_meta or {}).get("peak_prompt_tokens") or 0)
+                        _seg_compact = await asyncio.to_thread(
+                            maybe_compact_context_messages,
+                            api_msgs,
+                            llm,
+                            api_prompt_tokens=_seg_peak or None,
+                            loop_meta=_seg_meta if isinstance(_seg_meta, dict) else None,
+                        )
+                        persist_compact_summary(chat_sess.messages, _seg_compact)
+                        if _seg_compact:
+                            strip_ephemeral_message_fields(api_msgs)
+                            await asyncio.to_thread(
+                                inject_state_into_system,
+                                api_msgs,
+                                agent_id,
+                            )
+                            await asyncio.to_thread(
+                                finalize_episodic_for_llm,
+                                api_msgs,
+                                chat_sess.metadata,
+                                agent_id=agent_id,
+                                session_id=session_id,
+                                project_id=project_id or None,
+                                compact_happened=True,
+                            )
                         # Inject nudge as user message to continue
                         # n_before_ref deliberately NOT reset — nudge must be
                         # picked up by _on_tool_round_persist in the next segment
@@ -657,6 +691,7 @@ def create_app():
                             on_check_pending_messages=_drain_pending_injections,
                             enable_thinking=chat_enable_thinking,
                             reasoning_effort=chat_reasoning_effort,
+                            on_compact=_on_mid_compact,
                         )
                         _last_meta = _meta or {}
                     except Exception:
