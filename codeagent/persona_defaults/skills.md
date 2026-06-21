@@ -35,7 +35,7 @@
 
 #### Phase 1: 需求沟通 → `$DOCS/requirement.md`
 
-1. **理解范围**：用 `project(summary)`、`file_search`、`git(log)` 快速了解项目现状
+1. **理解范围**：用 `project(command="summary", path=".")`、`file_search`、`git(command="log", args="-10")` 快速了解项目现状
 2. **写 requirement.md**：
 
 ```markdown
@@ -148,9 +148,9 @@ project/
 
 4. **排序**：Wave 间按依赖排列，Wave 内任务无依赖可任意排序，高风险项优先做
 
-5. **初始化 git（新项目）**：`git(init)` → `.gitignore`（含 `$SCRIPTS/`、`$TMP/`）→ `git(commit, message="chore: init")`
+5. **初始化 git（新项目）**：`git(command="init")` → `.gitignore`（含 `$SCRIPTS/`、`$TMP/`）→ `git(command="commit", message="chore: init")`
 
-6. **用 `todo_tool` 同步创建 TODO**，使用 `[W1.1]` 前缀格式
+6. **用 `todo` 同步创建待办**，content 使用 `[W1.1]` 前缀格式
 
 #### Phase 4: 执行
 
@@ -160,7 +160,7 @@ project/
 ① 写代码前
    ├── memory_search 查同类教训
    ├── 读现有代码结构，确认模块边界
-   └── 已有模块 → git(log) 看历史
+   └── 已有模块 → `git(command="log", args="-10")` 看历史
 
 ② 写代码中
    ├── 遵守文件上限（前300/后400/组件200行）
@@ -178,16 +178,15 @@ project/
    │   ├── [ops] 配置外部化？有日志？
    │   └── [pm] todo 状态更新了？
    └── 步骤3: 经验记录
-       ├── self_reflect("这次学到了什么")
-       └── 有价值模式 → 写入 memory.md 的 Know-How 区
+       └── `self_reflect(summary="...", lesson="...")`
 
 ④ 通过后
-   ├── git(add) + git(commit) — commit message 写清楚（feat/fix/refactor/plan）
-   └── todo_tool(update, status="completed")
+   ├── `git(command="commit", message="feat|fix|refactor: ...")`（commit 会自动 git add -A）
+   └── `todo(operation="update", todo_id="...", status="completed")`
 
 ⑤ 卡住
    ├── 尝试不同方案（最多2次）
-   ├── 仍卡住 → status="blocked" 写明原因
+   ├── 仍卡住 → todo 保持 `in_progress`，content 前缀 `[blocked]` 并写明原因（或写入 `$DOCS/task.md`）
    └── 换另一个 todo
 ```
 
@@ -263,38 +262,35 @@ project/
 
 ## Skill: 交付审计
 
-交付前执行「五维全量扫描」，确保不遗漏任何一个维度。
+交付前执行「五维全量扫描」，确保不遗漏任何一个维度：
 
-详见 skill `delivery-audit`，检查维度：
-- [pm] 项目完整性：todo清零、清理临时产物、文档归档
-- [dev] 代码质量：lint、test、行数限制
-- [arch] 架构健康：git log审计、补丁链检测
-- [des] 交互体验：UI截图、四种状态、风格一致
-- [ops] 运维检查：配置外部化、依赖、启动、日志
+- [pm] 项目完整性：todo 清零、清理 `$TMP/` 与 `$SCRIPTS/` 一次性脚本、文档归档
+- [dev] 代码质量：`code_check`、test、行数限制
+- [arch] 架构健康：`git(command="log")` 审计、补丁链检测
+- [des] 交互体验：UI 截图、四种状态、风格一致
+- [ops] 运维检查：配置外部化、`deps_check`、启动正常、日志
 
-**交付前必须跑一遍交付审计**，不通过不交付。
+**交付前必须跑一遍上述清单**，不通过不交付。
 
 ---
 
 ## Skill: 错误调试全流程
 
-从复现 → 定位根因 → 写回归测试 → 修复 → 验证 → 防复发。
+从复现 → 定位根因 → 写回归测试 → 修复 → 验证 → 防复发。关键步骤：
 
-详见 skill `error-debugging`，关键步骤：
 1. **复现**：缩到最小复现步骤，产物是一条可执行的测试用例
-2. **定位**：症状 vs 根因，二分法 / git bisect
+2. **定位**：症状 vs 根因，二分法 / `git(command="log")` / bisect via `bash`
 3. **回归测试**：先写测试暴露 bug，再修复，测试永远留在测试集里
 4. **修复**：最小改动 + 检查同类 + 补全边界
-5. **验证**：自问"这个问题还会出现吗？"→ 再提交
-6. **补丁链警告**：2次同类修补 → 底层设计问题，停手重构
+5. **验证**：自问「这个问题还会出现吗？」→ 再提交
+6. **补丁链警告**：2 次同类修补 → 底层设计问题，停手重构
 
 ---
 
 ## Skill: 结构化重构流程
 
-检测到补丁链/文件严重超限/模块职责模糊时的重构方法论。
+检测到补丁链/文件严重超限/模块职责模糊时的重构方法论。关键原则：
 
-详见 skill `refactoring-workflow`，关键原则：
 - 重构不加功能，先补测试再动手
 - 小步提交：每次重构后都能跑
 - 有回滚方案（分支或 tag）
@@ -304,12 +300,11 @@ project/
 
 ## Skill: 技术债登记与管理
 
-登记"知道有问题但当前不修"的事项，设到期时间，跟踪还债进度。
+登记「知道有问题但当前不修」的事项，设到期时间，跟踪还债进度。关键机制：
 
-详见 skill `technical-debt-registry`，关键机制：
-- 债务文件: `$PLANS/debt-registry.md`（自动创建）
+- 债务文件: `$PLANS/debt-registry.md`（首次登记时创建）
 - 登记时机: 临时方案/补丁链/设计缺陷/交付遗留
-- 还债时机: 涉及同模块的新功能/到期触发重构/P0优先
+- 还债时机: 涉及同模块的新功能/到期触发重构/P0 优先
 - 债务状态: 🔴 critical / 🟡 open / ⬜ resolved / ❌ wontfix
 
 ---
@@ -325,8 +320,6 @@ project/
 | `$AGENT_STATE` | 会话接力 | 覆写，保持精简 |
 | `$SESSION_LOG/` | 运行日志 | 追加，给人看 |
 
-> 完整规则见 skill `project-docs-layout`。
-
 ## 其他 skill
 
-场景化 skill（项目文件布局、代码目录与拆分、自主项目 cron、ast-grep、Web 搭建、pipeline、错误调试、代码审查、数据库、复盘、大文件写入、macOS 打包、记忆整理等）存放在 `$AGENT_SKILLS/`，系统会根据当前任务自动匹配注入。
+场景化补充 skill（cron、ast-grep、Web 搭建、代码审查、数据库、复盘、macOS 打包、记忆整理等）可放在 `$AGENT_SKILLS/`，系统会根据任务自动匹配注入；未安装时以本节与 `agent.md` 工作流为准。

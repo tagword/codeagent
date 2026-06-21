@@ -10,12 +10,12 @@
 对话上下文是有限资源，必须精打细算：
 
 - **大段内容不要留在对话里**：长日志、完整配置文件、大段代码 → 写入 `$SESSIONS_ARTIFACTS/` 或项目文件，对话中只引用路径+摘要
-- **计划落盘不占上下文**：`requirement.md` / `design.md` / `task.md` 写在磁盘，需要时 `file_read` 按需读取，而不是让它在对话里一直占位置
+- **计划落盘不占上下文**：`$DOCS/requirement.md` / `$DOCS/design.md` / `$DOCS/task.md` 写在磁盘，需要时 `file_read` 按需读取，而不是让它在对话里一直占位置
 - **临时脚本落盘**：一次性测试/构建/调试脚本写在项目 `$SCRIPTS/` 下（如 `build-xxx.py`、`test-xxx.py`），**禁止**写 `/tmp/`；用完可删
 - **周期性地给对话"瘦身"**：当一轮对话工具调用较多时（>8 轮），可将历史关键状态归纳写入临时文件，后续步骤从中读取
 - **优先用工具读文件**：需要回顾之前写的内容时，用 `file_read` 按行/范围读取，不要依赖自己前面说了什么
 - **每轮对话注意累积长度**：如果感觉上下文已经很长了，主动把非核心内容外迁到文件
-- **搜索工具纪律**：`grep_tool` / `glob_tool` / `file_search` 默认跳过 `dist/`、`node_modules/`、`.git/`、`build/` 等目录；不要手动去搜打包产物或依赖树
+- **搜索工具纪律**：`grep` / `glob` / `file_search` 默认跳过 `dist/`、`node_modules/`、`.git/`、`build/` 等目录；不要手动去搜打包产物或依赖树
 - **会话过长时开新 session**：单 session 工具轮次 >15 或 context 估计 >150k tokens 时，把状态写入 `$AGENT_STATE` 后开新会话继续，避免 context 爆炸
 
 > 原则：对话窗口留给**思考、决策、关键的中间结果**；其余全部落盘。
@@ -209,7 +209,7 @@ project/
 ① 写代码前
    ├── memory_search 查同类教训
    ├── 读现有代码结构，确认模块边界
-   └── 已有模块 → git(log) 看历史
+   └── 已有模块 → `git(command="log", args="-10")` 看历史
 
 ② 写代码中
    ├── 遵守文件上限（前300/后400/组件200行）
@@ -230,8 +230,8 @@ project/
        └── self_reflect
 
 ④ 通过后
-   ├── git(add) + git(commit)
-   └── todo_tool(update, status="completed")
+   ├── `git(command="add")` + `git(command="commit", message="...")`
+   └── `todo(operation="update", status="completed")`
 
 ⑤ 卡住
    ├── 尝试不同方案（最多2次）
@@ -278,12 +278,12 @@ project/
 1. 先读 `$AGENT_STATE`（如有）— 上次进度
 2. 读 `$DOCS/task.md` — 当前 Wave 和任务状态
 3. 读 `$DOCS/requirement.md`（如有）— 需求上下文
-4. `todo_tool(operation="list")` 看当前待办
+4. `todo(operation="list")` 看当前待办
 5. `git(command="log", args="-10")` 看最近开发脉络
 6. 不依赖上一轮对话的记忆
 
 **跨项目切换**：
-1. `todo_tool(operation="list", scope="project")` 查各项目待办状态
+1. `todo(operation="list", scope="project")` 查各项目待办状态
 2. `file_read` 对应项目的 `task.md`，快速恢复上下文
 3. 切走前将 Wave 状态写入 `<项目>/$AGENT_STATE`
 
@@ -339,14 +339,14 @@ project/
 每个项目/功能完成后：
 
 1. **Wave 验收**：对照每个 Wave 的验收条件逐一确认
-2. **todo 清零**：全量 list，确认没有遗漏的 pending/blocked 项
-3. **根因审查**：git log 回顾，检查有无 hotfix/workaround/临时修复 — 如果只是绕过问题而非根治，列入 blocked
-4. **五维审计**：跑 delivery-audit（见 skills.md）
+2. **todo 清零**：`todo(operation="list", scope="project")`，确认没有遗漏的 pending/blocked 项
+3. **根因审查**：`git(command="log", args="-20")` 回顾，检查有无 hotfix/workaround/临时修复 — 如果只是绕过问题而非根治，在 `$DOCS/task.md` 或 todo 内容中标记 blocked
+4. **五维审计**：按 `skills.md` 交付审计清单执行（可用 `pipeline(command="show", name="audit-project")` 作步骤参考，逐步手动调用）
 5. **清理**：清空 `$TMP/`、清理 `$SCRIPTS/` 中用完的一次性脚本、确保 `.gitignore` 包含 `$TMP/`
 6. **全量测试**：确保清理没破坏东西
-7. **反思**：`self_reflect` 记录经验，有价值模式写入 memory.md 的 Know-How 区
+7. **反思**：`self_reflect` 写入 `$AGENT_MEMORY/experiences/`；可复用模式摘要可追加到 `memory.md`
 
 **文件修改边界**：
 - ✅ Agent 可自动写入（CodeAgent 自身）：`memory.md`、`$AGENT_SKILLS/*.md`、`$AGENT_MEMORY/experiences/`
-- ✅ Agent 可自动写入（项目目录）：`docs/`、`.plans/`、`.scripts/`、`.agent-state.md`、`session-log/` — 遵守文件分区规则
+- ✅ Agent 可自动写入（项目目录）：`$DOCS/`、`$PLANS/`、`$SCRIPTS/`、`$AGENT_STATE`、`$SESSION_LOG/` — 遵守文件分区规则
 - ❌ 禁止 Agent 修改（CodeAgent persona）：`identity.md`、`soul.md`、`user.md`、`agent.md`、`tools.md`
