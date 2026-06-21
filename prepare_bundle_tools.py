@@ -37,6 +37,11 @@ NODE_VERSION = os.environ.get("CODEAGENT_NODE_VERSION", "20.18.2")
 
 
 def _machine() -> str:
+    forced = os.environ.get("CODEAGENT_BUNDLE_ARCH", "").strip().lower()
+    if forced in ("arm64", "aarch64"):
+        return "aarch64-apple-darwin"
+    if forced in ("x86_64", "amd64"):
+        return "x86_64-apple-darwin"
     m = platform.machine().lower()
     if m in ("arm64", "aarch64"):
         return "aarch64-apple-darwin"
@@ -71,45 +76,84 @@ def _venv_bin(name: str) -> Path | None:
     return Path(which) if which else None
 
 
+def _mach_minos(path: Path) -> str | None:
+    try:
+        out = subprocess.check_output(["otool", "-l", str(path)], text=True, stderr=subprocess.DEVNULL)
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    lines = out.splitlines()
+    for i, line in enumerate(lines):
+        if "LC_BUILD_VERSION" not in line:
+            continue
+        for j in range(i + 1, min(i + 6, len(lines))):
+            parts = lines[j].split()
+            if len(parts) >= 2 and parts[0] == "minos":
+                return parts[1]
+    return None
+
+
+def _minos_gt(version: str, target: str) -> bool:
+    def _parts(v: str) -> list[int]:
+        return [int(x) for x in v.split(".") if x.isdigit()]
+
+    a, b = _parts(version), _parts(target)
+    n = max(len(a), len(b))
+    a.extend([0] * (n - len(a)))
+    b.extend([0] * (n - len(b)))
+    return a > b
+
+
 def _bundle_git() -> None:
     print("==> git")
     candidates = [
+        Path("/usr/bin/git"),
         Path("/Library/Developer/CommandLineTools/usr/bin/git"),
         Path("/opt/homebrew/bin/git"),
         Path("/usr/local/bin/git"),
-        Path("/usr/bin/git"),
     ]
     git_src = next((p for p in candidates if p.is_file()), None)
     if git_src is None:
         raise SystemExit("git not found — install Xcode Command Line Tools")
 
+    minos = _mach_minos(git_src)
+    bundle_local = minos is None or not _minos_gt(minos, "12.0")
     real_bin = BIN / "gitcmd"
-    _copy_exec(git_src, real_bin)
 
-    clt_root = Path("/Library/Developer/CommandLineTools/usr")
-    core_src = clt_root / "libexec" / "git-core"
-    if core_src.is_dir():
-        core_dest = LIBEXEC / "git-core"
-        if core_dest.exists():
-            shutil.rmtree(core_dest)
-        shutil.copytree(core_src, core_dest)
-        print(f"  ✓ git-core  ← {core_src}")
-
-    tmpl_src = clt_root / "share" / "git-core" / "templates"
-    if tmpl_src.is_dir():
-        tmpl_dest = SHARE / "git-core" / "templates"
-        if tmpl_dest.exists():
-            shutil.rmtree(tmpl_dest)
-        shutil.copytree(tmpl_src, tmpl_dest)
-        print(f"  ✓ git templates  ← {tmpl_src}")
+    if bundle_local:
+        _copy_exec(git_src, real_bin)
+        clt_root = Path("/Library/Developer/CommandLineTools/usr")
+        core_src = clt_root / "libexec" / "git-core"
+        if core_src.is_dir() and git_src.as_posix().startswith("/Library/Developer/CommandLineTools"):
+            core_dest = LIBEXEC / "git-core"
+            if core_dest.exists():
+                shutil.rmtree(core_dest)
+            shutil.copytree(core_src, core_dest)
+            print(f"  ✓ git-core  ← {core_src}")
+        tmpl_src = clt_root / "share" / "git-core" / "templates"
+        if tmpl_src.is_dir() and git_src.as_posix().startswith("/Library/Developer/CommandLineTools"):
+            tmpl_dest = SHARE / "git-core" / "templates"
+            if tmpl_dest.exists():
+                shutil.rmtree(tmpl_dest)
+            shutil.copytree(tmpl_src, tmpl_dest)
+            print(f"  ✓ git templates  ← {tmpl_src}")
+    else:
+        print(f"  ⚠ skip bundled git binary (requires macOS {minos}; Monterey 12.x uses system git)")
 
     wrapper = BIN / "git"
     wrapper.write_text(
         "#!/bin/bash\n"
         'ROOT="$(cd "$(dirname "$0")/.." && pwd)"\n'
-        'export GIT_EXEC_PATH="$ROOT/libexec/git-core"\n'
-        'export GIT_TEMPLATE_DIR="$ROOT/share/git-core/templates"\n'
-        'exec "$ROOT/bin/gitcmd" "$@"\n',
+        'if [ -x "$ROOT/bin/gitcmd" ]; then\n'
+        '  export GIT_EXEC_PATH="$ROOT/libexec/git-core"\n'
+        '  export GIT_TEMPLATE_DIR="$ROOT/share/git-core/templates"\n'
+        '  exec "$ROOT/bin/gitcmd" "$@"\n'
+        "fi\n"
+        'for g in /usr/bin/git /Library/Developer/CommandLineTools/usr/bin/git '
+        '/usr/local/bin/git /opt/homebrew/bin/git; do\n'
+        '  if [ -x "$g" ]; then exec "$g" "$@"; fi\n'
+        "done\n"
+        'echo "git not found" >&2\n'
+        "exit 127\n",
         encoding="utf-8",
     )
     _chmod_exec(wrapper)
@@ -130,6 +174,16 @@ def _write_python_shim() -> None:
     print("  ✓ python shim (→ CodeAgent -m …)")
 
 
+def _valid_zip(path: Path) -> bool:
+    if not path.is_file():
+        return False
+    try:
+        with zipfile.ZipFile(path) as zf:
+            return zf.testzip() is None
+    except zipfile.BadZipFile:
+        return False
+
+
 def _download_ast_grep() -> None:
     print("==> ast-grep")
     dest = BIN / "ast-grep"
@@ -137,30 +191,45 @@ def _download_ast_grep() -> None:
         print(f"  ✓ ast-grep already staged ({dest})")
         return
 
+    def _use_local_fallback() -> bool:
+        for fallback in ("ast-grep", "sg"):
+            src = _venv_bin(fallback) or (Path(p) if (p := shutil.which(fallback)) else None)
+            if src and src.is_file():
+                _copy_exec(src, dest)
+                print(f"  ✓ ast-grep  ← {src} (local fallback)")
+                return True
+        return False
+
     arch = _machine()
     asset = f"app-{arch}.zip"
     url = f"https://github.com/ast-grep/ast-grep/releases/download/{AST_GREP_VERSION}/{asset}"
     CACHE.mkdir(parents=True, exist_ok=True)
     zip_path = CACHE / asset
 
-    if not zip_path.is_file():
+    if not _valid_zip(zip_path):
+        if zip_path.is_file():
+            print(f"  ⚠ stale/incomplete cache, re-downloading {asset}")
+            zip_path.unlink()
         print(f"  ↓ {url}")
         try:
-            urllib.request.urlretrieve(url, zip_path)
+            req = urllib.request.Request(url, headers={"User-Agent": "CodeAgent-bundle/1.0"})
+            with urllib.request.urlopen(req, timeout=120) as resp, open(zip_path, "wb") as out:
+                shutil.copyfileobj(resp, out)
         except Exception as exc:
             print(f"  ⚠ download failed: {exc}")
-            for fallback in ("ast-grep", "sg"):
-                src = _venv_bin(fallback) or (Path(p) if (p := shutil.which(fallback)) else None)
-                if src and src.is_file():
-                    _copy_exec(src, dest)
-                    print(f"  ✓ ast-grep  ← {src} (local fallback)")
-                    break
-            else:
-                raise SystemExit(
-                    "ast-grep download failed and no local ast-grep/sg on PATH. "
-                    "Install via `brew install ast-grep` or retry with network."
-                )
+            if _use_local_fallback():
+                return
+            raise SystemExit(
+                "ast-grep download failed and no local ast-grep/sg on PATH. "
+                "Install via `brew install ast-grep` or retry with network."
+            ) from exc
+
+    if not _valid_zip(zip_path):
+        print(f"  ⚠ downloaded {asset} is not a valid zip")
+        zip_path.unlink(missing_ok=True)
+        if _use_local_fallback():
             return
+        raise SystemExit(f"ast-grep download corrupt: {asset}")
 
     with tempfile.TemporaryDirectory(prefix="codeagent-sg-") as tmp:
         with zipfile.ZipFile(zip_path) as zf:

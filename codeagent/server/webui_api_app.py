@@ -2432,16 +2432,22 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         return JSONResponse({"path": str(fp), "content": text, "language": language, "size": size, "lines": lines})
 
     async def api_setup_finish(_: Request) -> JSONResponse:
-        from codeagent.core import env as ca_env
-        from codeagent.core.seed_bridge import bridge_codeagent_env_to_seed
-        from seed.integrations.env_config import ENV_FILENAME
-
+        """Generate Web UI token only; wizard completion is deferred to api_setup_complete."""
         tok = secrets.token_urlsafe(32)
         cfg = project_root / "config"
         cfg.mkdir(parents=True, exist_ok=True)
         from codeagent.web.auth_impl import TOKEN_FILENAME
 
         (cfg / TOKEN_FILENAME).write_text(tok + "\n", encoding="utf-8")
+        return JSONResponse({"webui_token": tok})
+
+    async def api_setup_complete(_: Request) -> JSONResponse:
+        from codeagent.core import env as ca_env
+        from codeagent.core.seed_bridge import bridge_codeagent_env_to_seed
+        from seed.integrations.env_config import ENV_FILENAME
+
+        cfg = project_root / "config"
+        cfg.mkdir(parents=True, exist_ok=True)
         marker = cfg / "setup.json"
         marker.write_text(json.dumps({"done": True}, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
         # Sensible defaults for new installs (context compact uses tokens, not bytes).
@@ -2462,7 +2468,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         for k, v in _setup_env.items():
             os.environ[k] = v
         bridge_codeagent_env_to_seed()
-        return JSONResponse({"webui_token": tok})
+        return JSONResponse({"ok": True})
 
     async def api_setup_test_llm(request: Request) -> JSONResponse:
         try:
@@ -2979,6 +2985,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         Route("/files/list", api_files_list, methods=["GET"]),
         Route("/files/read", api_files_read, methods=["GET"]),
         Route("/setup/finish", api_setup_finish, methods=["POST"]),
+        Route("/setup/complete", api_setup_complete, methods=["POST"]),
         Route("/setup/test-llm", api_setup_test_llm, methods=["POST"]),
         # Agent CRUD
         Route("/agent-presets", api_agent_presets, methods=["GET"]),

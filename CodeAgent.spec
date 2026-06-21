@@ -1,34 +1,40 @@
 # -*- mode: python ; coding: utf-8 -*-
 from pathlib import Path
 
+from PyInstaller.utils.hooks import collect_all
+
 ROOT = Path(SPECPATH)  # noqa: F405
+MONO = ROOT.parent
 
 # ── 数据文件 ──────────────────────────────────────────────
 _datas = []
 _binaries = []
+_hidden = [
+    'uvicorn.logging',
+    'uvicorn.loops.auto',
+    'uvicorn.protocols.http.auto',
+    'uvicorn.lifespan.on',
+    'uvicorn.lifespan.off',
+    'pytest',
+    'ruff',
+    'bandit',
+    'pip_audit',
+    'jaraco',
+    'jaraco.text',
+    'jaraco.functools',
+    'jaraco.context',
+    'setuptools._vendor.jaraco.text',
+    'setuptools._vendor.jaraco.functools',
+    'setuptools._vendor.jaraco.context',
+    'platformdirs',
+]
 
-# 托盘图标（放置于 Resources 根目录 = sys._MEIPASS）
-for _name in ("tray_icon.png", "tray_icon@2x.png"):
-    _p = ROOT / _name
-    if _p.exists():
-        _datas.append((str(_p), "."))
-
-# WebUI 静态资源
-_webui = ROOT / "codeagent" / "webui"
-if _webui.is_dir():
-    for p in sorted(_webui.rglob("*")):
-        if p.is_file():
-            _datas.append((str(p), "codeagent/webui"))
-
-# 主 HTML 模板（app_factory.py 运行时通过 __file__ 相对路径加载）
-_webui_html = ROOT / "codeagent" / "webui.html"
-if _webui_html.exists():
-    _datas.append((str(_webui_html), "codeagent"))
-
-# 网站图标（server/icon.png — 同样通过 __file__ 相对路径定位）
-_server_icon = ROOT / "codeagent" / "server" / "icon.png"
-if _server_icon.exists():
-    _datas.append((str(_server_icon), "codeagent/server"))
+# Monorepo Python packages (editable installs need explicit collect_all)
+for _pkg in ('seed', 'seed_model_providers', 'seed_tools', 'codeagent'):
+    _pd, _pb, _ph = collect_all(_pkg)
+    _datas += _pd
+    _binaries += _pb
+    _hidden += _ph
 
 # Bundled dev tools (git, ast-grep, ruff, pytest, …) — staged by prepare_bundle_tools.py
 _tools_root = ROOT / "build" / "bundle-tools"
@@ -51,33 +57,22 @@ if _tools_root.is_dir():
                     _rel = _p.relative_to(_tools_root)
                     _datas.append((str(_p), str(Path("tools") / _rel.parent)))
 
+# 托盘图标（放置于 Resources 根目录 = sys._MEIPASS）
+for _name in ("tray_icon.png", "tray_icon@2x.png"):
+    _p = ROOT / _name
+    if _p.exists():
+        _datas.append((str(_p), "."))
+
 a = Analysis(
     ['package_launcher.py'],
-    pathex=[str(ROOT)],
+    pathex=[str(ROOT), str(MONO / "seed"), str(MONO / "seed-tools"), str(MONO / "seed-model-providers")],
     binaries=_binaries,
     datas=_datas,
-    hiddenimports=[
-        'uvicorn.logging',
-        'uvicorn.loops.auto',
-        'uvicorn.protocols.http.auto',
-        'uvicorn.lifespan.on',
-        'uvicorn.lifespan.off',
-        'pytest',
-        'ruff',
-        'bandit',
-        'pip_audit',
-        'jaraco.text',
-        'jaraco.functools',
-        'jaraco.context',
-        'platformdirs',
-        'seed',
-        'seed_tools',
-        'codeagent',
-    ],
+    hiddenimports=_hidden,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=['tkinter', 'test', 'unittest', 'distutils', 'setuptools', 'pip'],
+    excludes=['tkinter', 'test', 'unittest', 'distutils', 'pip'],
     noarchive=False,
     optimize=0,
 )

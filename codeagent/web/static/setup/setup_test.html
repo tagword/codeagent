@@ -6,17 +6,18 @@
         <span class="step-badge">2</span>
         访问 Token
       </div>
-      <p class="card-desc">生成后请复制保存。</p>
+      <p class="card-desc">生成后请复制保存，再进入下一步。</p>
       <div class="actions">
-        <button id="btnFinish" type="button" class="btn-primary">生成 Token 并完成初始化</button>
+        <button id="btnFinish" type="button" class="btn-primary">生成 Token</button>
+        <button id="btnContinue" type="button" class="btn-primary" disabled hidden>已复制，继续 →</button>
       </div>
-      <div class="token-display">
-        <input id="tokenVal" readonly placeholder="点击上方按钮后显示"/>
+      <div class="token-display" id="tokenBox" hidden>
+        <input id="tokenVal" readonly placeholder="Token 将显示在这里"/>
         <button id="btnCopyToken" type="button" disabled>复制</button>
       </div>
       <div id="msg2" class="msg"></div>
-      <p class="hint" id="tokenHint" style="display:none;">
-        Token 已生成。请先复制保存，再进入第 3 步。
+      <p class="hint" id="tokenHint" hidden>
+        请复制并妥善保存 Token，丢失后需通过 CLI 重置。确认保存后再点「已复制，继续」。
       </p>
     </div>
   </div>
@@ -28,6 +29,7 @@
         <span class="step-badge">3</span>
         完成
       </div>
+      <p class="card-desc">确认 Token 已保存后，进入主界面开始对话。</p>
       <div class="actions">
         <button id="btnStart" type="button" class="btn-primary" disabled>开始对话 →</button>
       </div>

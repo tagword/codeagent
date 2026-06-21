@@ -15,9 +15,21 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 MONO="$(cd "$ROOT/.." && pwd)"
+GITHUB_ORG="${CODEAGENT_GITHUB_ORG:-tagword}"
 
 # Bundle & link for macOS 12 Monterey (incl. 12.7.6)
 export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-12.0}"
+
+_ensure_mono_repo() {
+  local name="$1"
+  local dir="$MONO/$name"
+  if [ -f "$dir/pyproject.toml" ]; then
+    return 0
+  fi
+  command -v git &>/dev/null || { echo "✗ git required to clone $name"; exit 1; }
+  echo "==> Clone $name (missing at $dir)"
+  git clone --depth 1 "https://github.com/${GITHUB_ORG}/${name}.git" "$dir"
+}
 
 _resolve_build_python() {
   if [ -n "${CODEAGENT_BUILD_PYTHON:-}" ]; then
@@ -77,14 +89,30 @@ for p in base.rglob('libpython3.*.dylib'):
 PYTHON="$(_resolve_build_python || true)"
 [ -n "$PYTHON" ] || { echo "✗ Python 3.11+ required"; exit 1; }
 
-VENV="$ROOT/.build-venv"
+NATIVE_ARCH="$(uname -m)"
+case "${CODEAGENT_BUILD_ARCH:-$NATIVE_ARCH}" in
+  arm64|aarch64) BUILD_ARCH=arm64 ;;
+  x86_64|amd64) BUILD_ARCH=x86_64 ;;
+  *) echo "✗ Unsupported CODEAGENT_BUILD_ARCH (use arm64 or x86_64)"; exit 1 ;;
+esac
+
+_run_arch() {
+  if [ "$BUILD_ARCH" = "$NATIVE_ARCH" ]; then
+    "$@"
+  else
+    arch -"$BUILD_ARCH" "$@"
+  fi
+}
+
+VENV="$ROOT/.build-venv-${BUILD_ARCH}"
 DIST="$ROOT/dist"
 APP="$DIST/CodeAgent.app"
-DMG="$DIST/CodeAgent-mac.dmg"
+DMG="$DIST/CodeAgent-mac-${BUILD_ARCH}.dmg"
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo " CodeAgent macOS DMG build"
-echo " Python: $($PYTHON --version 2>&1)"
+echo " Python: $(_run_arch "$PYTHON" --version 2>&1)"
+echo " Arch:   ${BUILD_ARCH} (native: ${NATIVE_ARCH})"
 echo " Root:   $ROOT"
 echo " Target: macOS ${MACOSX_DEPLOYMENT_TARGET}+"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -92,35 +120,41 @@ _check_python_supports_macos12 "$PYTHON"
 
 # ── 1. Virtualenv ─────────────────────────────────────────────────────
 if [ ! -d "$VENV" ]; then
-  echo "==> Create build venv"
-  "$PYTHON" -m venv "$VENV"
+  echo "==> Create build venv (${BUILD_ARCH})"
+  _run_arch "$PYTHON" -m venv "$VENV"
 fi
 # shellcheck disable=SC1091
 source "$VENV/bin/activate"
 export VIRTUAL_ENV="$VENV"
+export CODEAGENT_BUNDLE_ARCH="$BUILD_ARCH"
 
 echo "==> Upgrade pip"
-python -m pip install --upgrade pip -q
+_run_arch python -m pip install --upgrade pip -q
 
-# ── 2. Install packages (monorepo siblings or PyPI) ─────────────────────
-echo "==> Install seed / seed-tools / codeagent"
-if [ -f "$MONO/seed/pyproject.toml" ] && [ -f "$MONO/seed-tools/pyproject.toml" ]; then
-  pip install -e "$MONO/seed" -e "$MONO/seed-tools[code]" -e "$ROOT"
-else
-  pip install -e "$ROOT[dev,bundle]"
-fi
+# ── 2. Install packages (monorepo siblings; auto-clone from GitHub if missing) ─
+echo "==> Ensure monorepo siblings (seed-model-providers / seed / seed-tools)"
+_ensure_mono_repo seed-model-providers
+_ensure_mono_repo seed
+_ensure_mono_repo seed-tools
+
+echo "==> Install seed-model-providers / seed / seed-tools / codeagent"
+_run_arch pip install \
+  -e "$MONO/seed-model-providers" \
+  -e "$MONO/seed" \
+  -e "$MONO/seed-tools[code]" \
+  -e "$ROOT"
 
 echo "==> Install build deps"
-pip install pyinstaller pillow rumps -q
+_run_arch pip install pyinstaller pillow rumps -q
 
 # ── 3. Stage external CLI tools ───────────────────────────────────────
 echo "==> Stage bundled tools (git, node, eslint, ast-grep, …)"
-python "$ROOT/prepare_bundle_tools.py"
+_run_arch python "$ROOT/prepare_bundle_tools.py"
 
 # ── 4. Icons ──────────────────────────────────────────────────────────
 if [ -f "$ROOT/icon.png" ]; then
   echo "==> Generate .icns + tray icons"
-  python "$ROOT/make_icon.py"
+  _run_arch python "$ROOT/make_icon.py"
 else
   echo "⚠ icon.png missing — skipping icon generation"
 fi
@@ -128,13 +162,13 @@ fi
 # ── 5. PyInstaller ────────────────────────────────────────────────────
 echo "==> PyInstaller"
 rm -rf "$DIST/CodeAgent" "$APP"
-pyinstaller "$ROOT/CodeAgent.spec" -y --distpath "$DIST" --workpath "$ROOT/build/pyinstaller" --clean
+_run_arch pyinstaller "$ROOT/CodeAgent.spec" -y --distpath "$DIST" --workpath "$ROOT/build/pyinstaller-${BUILD_ARCH}" --clean
 
 [ -d "$APP" ] || { echo "✗ CodeAgent.app not produced"; exit 1; }
 
 # ── 6. DMG ────────────────────────────────────────────────────────────
 echo "==> Create DMG"
-bash "$ROOT/make_dmg.sh"
+CODEAGENT_DMG_OUTPUT="$DMG" bash "$ROOT/make_dmg.sh"
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -144,5 +178,6 @@ echo " DMG: $DMG"
 echo ""
 echo " Bundled tools: git, node, npm, eslint, ast-grep (+ ruff for Python scripts)"
 echo " Minimum macOS: ${MACOSX_DEPLOYMENT_TARGET} (incl. Monterey 12.7.6 with python.org build)"
+echo " CPU arch: ${BUILD_ARCH}  (Intel Mac 12.x 请用 x86_64 包，Apple 芯片用 arm64 包)"
 echo " For 微信小游戏: open UI → 工作区指向小游戏项目 → 用微信开发者工具预览"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

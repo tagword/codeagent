@@ -4,7 +4,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 APP="${ROOT}/dist/CodeAgent.app"
-DMG="${ROOT}/dist/CodeAgent-mac.dmg"
+DMG="${CODEAGENT_DMG_OUTPUT:-${ROOT}/dist/CodeAgent-mac.dmg}"
 TMP_IMG="${ROOT}/build/CodeAgent-template.sparseimage"
 
 echo "==> Clean"

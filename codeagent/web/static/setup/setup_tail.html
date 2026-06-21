@@ -207,16 +207,25 @@
       try {
         const j = await postJson('/api/ui/setup/finish', {});
         lastToken = String(j.webui_token || '').trim();
+        if (!lastToken) throw new Error('未返回 Token');
         $('tokenVal').value = lastToken;
-        $('btnCopyToken').disabled = !lastToken;
-        $('tokenHint').style.display = lastToken ? 'block' : 'none';
-        setMsg('msg2', 'Token 已生成。');
-        $('btnStart').disabled = !lastToken;
-        document.querySelector('.card.active').classList.remove('active');
-        $('step3').classList.add('active');
+        $('tokenBox').hidden = false;
+        $('btnCopyToken').disabled = false;
+        $('tokenHint').hidden = false;
+        $('btnFinish').disabled = true;
+        $('btnContinue').hidden = false;
+        $('btnContinue').disabled = false;
+        setMsg('msg2', 'Token 已生成，请先复制保存。');
       } catch (e) {
         setMsg('msg2', String(e.message || e), true);
       }
+    };
+
+    $('btnContinue').onclick = () => {
+      document.querySelector('.card.active').classList.remove('active');
+      $('step3').classList.add('active');
+      $('btnStart').disabled = !lastToken;
+      setMsg('msg3', '');
     };
 
     $('btnCopyToken').onclick = async () => {
@@ -233,18 +242,20 @@
     // --- Step 3: enter app ---
 
     $('btnStart').onclick = async () => {
-      if (lastToken) {
-        try {
-          setMsg('msg3', '登录中…');
-          const r = await postJson('/api/ui/auth', { token: lastToken });
-          if (r.ws_query_token) {
-            try { sessionStorage.setItem('oa_webui_ws_token', r.ws_query_token); } catch (_) {}
-          } else {
-            try { sessionStorage.removeItem('oa_webui_ws_token'); } catch (_) {}
-          }
-        } catch (e) {
-          console.warn('auto-login failed', e);
+      if (!lastToken) return;
+      try {
+        setMsg('msg3', '完成初始化…');
+        await postJson('/api/ui/setup/complete', {});
+        setMsg('msg3', '登录中…');
+        const r = await postJson('/api/ui/auth', { token: lastToken });
+        if (r.ws_query_token) {
+          try { sessionStorage.setItem('oa_webui_ws_token', r.ws_query_token); } catch (_) {}
+        } else {
+          try { sessionStorage.removeItem('oa_webui_ws_token'); } catch (_) {}
         }
+      } catch (e) {
+        setMsg('msg3', String(e.message || e), true);
+        return;
       }
       location.href = '/?setup_done=1';
     };
