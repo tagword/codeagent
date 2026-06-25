@@ -115,16 +115,15 @@ pip install --upgrade pip -q $PIP_MIRROR_FLAG
 
 # ── 安装私有依赖（Seed 框架） ──────────────────────────────────────
 info "安装 Seed 框架（私有依赖: seed, seed-model-providers, seed-tools）..."
-SEED_GIT_BASE="https://github.com/tagword"
 SEED_TMPDIR="$(mktemp -d /tmp/codeagent-seed-XXXXXX)"
 
-# 安装顺序: seed-model-providers → seed → seed-tools（依赖链）
-# 用 git clone --depth 1 代替 pip install git+https://，避免全量拉取历史
+# 用 curl tarball 代替 git clone，避免 git 协议握手在部分网络下无响应
 for PKG in seed-model-providers seed seed-tools; do
-  SRC="$SEED_TMPDIR/$PKG"
-  info "  拉取 $PKG ..."
-  git clone --depth 1 --progress "${SEED_GIT_BASE}/${PKG}.git" "$SRC"
-  pip install -e "$SRC" $PIP_MIRROR_FLAG -q
+  info "  下载 $PKG ..."
+  curl -L --connect-timeout 10 "https://github.com/tagword/${PKG}/archive/refs/heads/main.tar.gz" -o "$SEED_TMPDIR/${PKG}.tar.gz"
+  mkdir -p "$SEED_TMPDIR/$PKG"
+  tar xzf "$SEED_TMPDIR/${PKG}.tar.gz" -C "$SEED_TMPDIR/$PKG" --strip-components=1
+  pip install -e "$SEED_TMPDIR/$PKG" $PIP_MIRROR_FLAG -q
   ok "  $PKG 安装完成"
 done
 rm -rf "$SEED_TMPDIR"
