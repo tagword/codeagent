@@ -116,10 +116,18 @@ pip install --upgrade pip -q $PIP_MIRROR_FLAG
 # ── 安装私有依赖（Seed 框架） ──────────────────────────────────────
 info "安装 Seed 框架（私有依赖: seed, seed-model-providers, seed-tools）..."
 SEED_GIT_BASE="https://github.com/tagword"
+SEED_TMPDIR="$(mktemp -d /tmp/codeagent-seed-XXXXXX)"
+
 # 安装顺序: seed-model-providers → seed → seed-tools（依赖链）
-pip install "git+${SEED_GIT_BASE}/seed-model-providers.git" $PIP_MIRROR_FLAG -q
-pip install "git+${SEED_GIT_BASE}/seed.git" $PIP_MIRROR_FLAG -q
-pip install "git+${SEED_GIT_BASE}/seed-tools.git" $PIP_MIRROR_FLAG -q
+# 用 git clone --depth 1 代替 pip install git+https://，避免全量拉取历史
+for PKG in seed-model-providers seed seed-tools; do
+  SRC="$SEED_TMPDIR/$PKG"
+  info "  拉取 $PKG ..."
+  git clone --depth 1 --progress "${SEED_GIT_BASE}/${PKG}.git" "$SRC"
+  pip install -e "$SRC" $PIP_MIRROR_FLAG -q
+  ok "  $PKG 安装完成"
+done
+rm -rf "$SEED_TMPDIR"
 ok "Seed 框架安装完成"
 
 # ── 安装 CodeAgent ──────────────────────────────────────────────────
