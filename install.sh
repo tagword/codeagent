@@ -202,6 +202,60 @@ source .venv/bin/activate 2>/dev/null
 set -e
 pip install --upgrade pip -q $PIP_MIRROR_FLAG
 
+# ── 检查系统依赖（lxml 编译需要 libxml2/libxslt） ──────────────
+# lxml 被 ddgs(duckduckgo_search) 依赖，ddgs 被 seed 依赖
+info "检查系统依赖..."
+SYSTEM_DEPS_OK=true
+case "$(uname -s)" in
+  Linux)
+    # Termux
+    if command -v pkg &>/dev/null; then
+      # 检查 libxml2 是否已装
+      if ! command -v xml2-config &>/dev/null && ! ldconfig -p 2>/dev/null | grep -q libxml2; then
+        info "  检测到 Termux，安装 libxml2 libxslt..."
+        pkg install -y libxml2 libxslt 2>/dev/null || warn "  系统依赖安装失败（编译 lxml 可能需要手动: pkg install libxml2 libxslt）"
+      fi
+    # Debian/Ubuntu
+    elif command -v apt &>/dev/null; then
+      if ! dpkg -l libxml2-dev 2>/dev/null | grep -q ^ii; then
+        if command -v sudo &>/dev/null; then
+          info "  检测到 Debian/Ubuntu，安装 libxml2-dev libxslt1-dev..."
+          sudo -n apt install -y libxml2-dev libxslt1-dev 2>/dev/null || warn "  系统依赖安装失败（可手动: sudo apt install libxml2-dev libxslt1-dev）"
+        else
+          warn "  需要 libxml2-dev libxslt1-dev（运行: sudo apt install libxml2-dev libxslt1-dev）"
+        fi
+      fi
+    # RHEL/Fedora/CentOS
+    elif command -v dnf &>/dev/null; then
+      if ! rpm -q libxml2-devel 2>/dev/null | grep -q libxml2; then
+        if command -v sudo &>/dev/null; then
+          info "  检测到 RHEL/Fedora，安装 libxml2-devel libxslt-devel..."
+          sudo -n dnf install -y libxml2-devel libxslt-devel 2>/dev/null || warn "  系统依赖安装失败（可手动: sudo dnf install libxml2-devel libxslt-devel）"
+        else
+          warn "  需要 libxml2-devel libxslt-devel（运行: sudo dnf install libxml2-devel libxslt-devel）"
+        fi
+      fi
+    elif command -v yum &>/dev/null; then
+      if ! rpm -q libxml2-devel 2>/dev/null | grep -q libxml2; then
+        if command -v sudo &>/dev/null; then
+          info "  检测到 CentOS，安装 libxml2-devel libxslt-devel..."
+          sudo -n yum install -y libxml2-devel libxslt-devel 2>/dev/null || warn "  系统依赖安装失败（可手动: sudo yum install libxml2-devel libxslt-devel）"
+        else
+          warn "  需要 libxml2-devel libxslt-devel（运行: sudo yum install libxml2-devel libxslt-devel）"
+        fi
+      fi
+    fi
+    ;;
+  Darwin)
+    if command -v brew &>/dev/null; then
+      if ! brew list libxml2 2>/dev/null | grep -q libxml2; then
+        info "  检测到 macOS，安装 libxml2..."
+        brew install libxml2 libxslt 2>/dev/null || warn "  libxml2 安装失败，编译 lxml 可能需要手动: brew install libxml2 libxslt"
+      fi
+    fi
+    ;;
+esac
+
 # ── 安装私有依赖（Seed 框架） ──────────────────────────────────────
 info "安装 Seed 框架（私有依赖: seed, seed-model-providers, seed-tools）..."
 SEED_SRC="$INSTALL_DIR/.seed-build"
