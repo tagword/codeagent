@@ -113,6 +113,15 @@ info "升级 pip..."
 source .venv/bin/activate
 pip install --upgrade pip -q $PIP_MIRROR_FLAG
 
+# ── 安装私有依赖（Seed 框架） ──────────────────────────────────────
+info "安装 Seed 框架（私有依赖: seed, seed-model-providers, seed-tools）..."
+SEED_GIT_BASE="https://github.com/tagword"
+# 安装顺序: seed-model-providers → seed → seed-tools（依赖链）
+pip install "git+${SEED_GIT_BASE}/seed-model-providers.git" $PIP_MIRROR_FLAG -q
+pip install "git+${SEED_GIT_BASE}/seed.git" $PIP_MIRROR_FLAG -q
+pip install "git+${SEED_GIT_BASE}/seed-tools.git" $PIP_MIRROR_FLAG -q
+ok "Seed 框架安装完成"
+
 # ── 安装 CodeAgent ──────────────────────────────────────────────────
 info "安装 CodeAgent（默认包含 Starlette + Uvicorn + 代码检测/审计工具）..."
 pip install -e . $PIP_MIRROR_FLAG -q
