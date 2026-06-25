@@ -119,7 +119,55 @@ if ! $SKIP_INSTALL; then
   info "升级 pip..."
   pip install --upgrade pip -q $PIP_MIRROR_FLAG
 
-  # 检查是否已安装（粗略判断）
+  # ── 安装私有依赖（Seed 框架） ──────────────────────────────────
+  if ! pip show seed-model-providers &>/dev/null; then
+    info "安装 Seed 框架（私有依赖: seed, seed-model-providers, seed-tools）..."
+    SEED_SRC="$PROJECT_ROOT/.seed-build"
+    mkdir -p "$SEED_SRC"
+
+    install_seed_pkg() {
+      local pkg="$1"
+      local src_dir="$SEED_SRC/$pkg"
+      local tgz_path="$SEED_SRC/${pkg}.tar.gz"
+
+      if python -c "import $pkg" 2>/dev/null; then
+        ok "  $pkg 已安装，跳过"
+        return 0
+      fi
+
+      info "  安装 $pkg ..."
+      rm -rf "$src_dir" "$tgz_path"
+
+      if git clone --depth 1 "https://github.com/tagword/${pkg}.git" "$src_dir" 2>/dev/null; then
+        if [ -f "$src_dir/pyproject.toml" ]; then
+          pip install "$src_dir" --no-input -q
+          ok "  $pkg 安装完成"
+          return 0
+        fi
+        rm -rf "$src_dir"
+      fi
+
+      warn "  git clone 失败，尝试 tarball..."
+      if curl -fL --connect-timeout 15 "https://github.com/tagword/${pkg}/tarball/HEAD" -o "$tgz_path" 2>/dev/null; then
+        if [ -s "$tgz_path" ] && [ "$(head -c 2 "$tgz_path")" = $'\x1f\x8b' ]; then
+          mkdir -p "$src_dir"
+          tar xzf "$tgz_path" -C "$src_dir" --strip-components=1
+          pip install "$src_dir" --no-input -q
+          ok "  $pkg 安装完成（tarball）"
+          return 0
+        fi
+      fi
+      err "$pkg 安装失败，请检查网络后重试"
+    }
+
+    install_seed_pkg "seed-model-providers"
+    install_seed_pkg "seed"
+    install_seed_pkg "seed-tools"
+    rm -rf "$SEED_SRC"
+    ok "Seed 框架安装完成"
+  fi
+
+  # ── 安装 CodeAgent ──────────────────────────────────────────────
   if pip show codeagent &>/dev/null; then
     ok "CodeAgent 已安装，跳过"
   else
@@ -166,10 +214,11 @@ if ! $SKIP_INSTALL; then
 fi
 
 # ── 启动 ────────────────────────────────────────────────────────────
-title "🚀 启动 CodeAgent Web UI"
-info "监听地址: http://$HOST:$PORT"
-echo -e "${GREEN}  浏览器打开: http://localhost:$PORT${NC}"
-info "按 Ctrl+C 停止服务"
+echo ""
+echo -e "${BLUE}━━━ 🚀 启动 CodeAgent Web UI ━━━${NC}"
+echo -e "  监听地址:  ${CYAN}http://$HOST:$PORT${NC}"
+echo -e "  浏览器打开: ${GREEN}http://localhost:$PORT${NC}"
+echo -e "  按 ${YELLOW}Ctrl+C${NC} 停止服务"
 echo ""
 
 # 确保虚拟环境激活
