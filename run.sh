@@ -125,9 +125,13 @@ if ! $SKIP_INSTALL; then
   case "$(uname -s)" in
     Linux)
       if command -v pkg &>/dev/null; then
-        # Termux
-        info "  检测到 Termux，安装编译依赖（libxml2, libxslt, clang, make）..."
-        pkg install -y libxml2 libxslt clang make pkg-config 2>&1 || warn "  系统依赖安装失败，编译 lxml 可能报错"
+        # Termux（Android）— manylinux wheel 不兼容 bionic libc，需编译
+        info "  检测到 Termux（Android），安装编译依赖..."
+        if ! pkg install -y libxml2 libxslt clang make pkg-config ndk-sysroot 2>&1; then
+          warn "  首轮安装失败，尝试更新索引后重试..."
+          pkg update -y 2>&1 || true
+          pkg install -y libxml2 libxslt clang make pkg-config ndk-sysroot 2>&1 || warn "  系统依赖安装失败，编译 lxml 可能报错"
+        fi
       elif command -v apt &>/dev/null; then
         # Debian/Ubuntu
         if ! dpkg -l libxml2-dev 2>/dev/null | grep -q ^ii; then
@@ -165,6 +169,10 @@ if ! $SKIP_INSTALL; then
       fi
       ;;
   esac
+
+  # 提前安装 lxml（分离出错点，方便调试，也缓存 wheel）
+  info "预装 lxml（seed 的间接依赖）..."
+  pip install lxml -q $PIP_MIRROR_FLAG 2>&1 || warn "  lxml 预装失败，seed 安装时可能出错"
 
   # ── 安装私有依赖（Seed 框架） ──────────────────────────────────
   if ! pip show seed-model-providers &>/dev/null; then
