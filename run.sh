@@ -126,10 +126,8 @@ if ! $SKIP_INSTALL; then
     Linux)
       if command -v pkg &>/dev/null; then
         # Termux
-        if ! command -v xml2-config &>/dev/null && ! ldconfig -p 2>/dev/null | grep -q libxml2; then
-          info "  检测到 Termux，安装 libxml2 libxslt..."
-          pkg install -y libxml2 libxslt 2>/dev/null || warn "  系统依赖安装失败（编译 lxml 可能需要手动: pkg install libxml2 libxslt）"
-        fi
+        info "  检测到 Termux，安装编译依赖（libxml2, libxslt, clang, make）..."
+        pkg install -y libxml2 libxslt clang make pkg-config 2>&1 || warn "  系统依赖安装失败，编译 lxml 可能报错"
       elif command -v apt &>/dev/null; then
         # Debian/Ubuntu
         if ! dpkg -l libxml2-dev 2>/dev/null | grep -q ^ii; then
@@ -195,7 +193,7 @@ if ! $SKIP_INSTALL; then
         info "  git clone $pkg（尝试 $attempts/$max）..."
         if timeout 45 git clone --depth 1 "https://github.com/tagword/${pkg}.git" "$src_dir"; then
           if [ -f "$src_dir/pyproject.toml" ] || [ -f "$src_dir/setup.py" ]; then
-            pip install "$src_dir" --no-input -q
+            pip install "$src_dir" --no-input -q $PIP_MIRROR_FLAG
             ok "  $pkg 安装完成"
             return 0
           fi
@@ -218,7 +216,7 @@ if ! $SKIP_INSTALL; then
           if [ -s "$tgz_path" ] && [ "$(head -c 2 "$tgz_path")" = $'\x1f\x8b' ]; then
             mkdir -p "$src_dir"
             tar xzf "$tgz_path" -C "$src_dir" --strip-components=1
-            pip install "$src_dir" --no-input -q
+            pip install "$src_dir" --no-input -q $PIP_MIRROR_FLAG
             ok "  $pkg 安装完成（tarball）"
             return 0
           fi
