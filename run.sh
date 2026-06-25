@@ -129,6 +129,7 @@ if ! $SKIP_INSTALL; then
       local pkg="$1"
       local src_dir="$SEED_SRC/$pkg"
       local tgz_path="$SEED_SRC/${pkg}.tar.gz"
+      local attempts max=2
 
       if python -c "import $pkg" 2>/dev/null; then
         ok "  $pkg 已安装，跳过"
@@ -138,25 +139,45 @@ if ! $SKIP_INSTALL; then
       info "  安装 $pkg ..."
       rm -rf "$src_dir" "$tgz_path"
 
-      if git clone --depth 1 "https://github.com/tagword/${pkg}.git" "$src_dir" 2>/dev/null; then
-        if [ -f "$src_dir/pyproject.toml" ]; then
-          pip install "$src_dir" --no-input -q
-          ok "  $pkg 安装完成"
-          return 0
+      # 方案 A：git clone（有 45 秒超时）
+      attempts=0
+      while [ $attempts -lt $max ]; do
+        attempts=$((attempts + 1))
+        info "  git clone $pkg（尝试 $attempts/$max）..."
+        if timeout 45 git clone --depth 1 "https://github.com/tagword/${pkg}.git" "$src_dir"; then
+          if [ -f "$src_dir/pyproject.toml" ] || [ -f "$src_dir/setup.py" ]; then
+            pip install "$src_dir" --no-input -q
+            ok "  $pkg 安装完成"
+            return 0
+          fi
+          warn "  $pkg 克隆不完整，重试..."
+          rm -rf "$src_dir"
+        else
+          warn "  git clone $pkg 超时或失败，重试..."
         fi
-        rm -rf "$src_dir"
-      fi
+        [ $attempts -lt $max ] && sleep 2
+      done
 
-      warn "  git clone 失败，尝试 tarball..."
-      if curl -fL --connect-timeout 15 "https://github.com/tagword/${pkg}/tarball/HEAD" -o "$tgz_path" 2>/dev/null; then
-        if [ -s "$tgz_path" ] && [ "$(head -c 2 "$tgz_path")" = $'\x1f\x8b' ]; then
-          mkdir -p "$src_dir"
-          tar xzf "$tgz_path" -C "$src_dir" --strip-components=1
-          pip install "$src_dir" --no-input -q
-          ok "  $pkg 安装完成（tarball）"
-          return 0
+      # 方案 B：curl tarball（有超时限制）
+      attempts=0
+      while [ $attempts -lt $max ]; do
+        attempts=$((attempts + 1))
+        info "  curl tarball $pkg（尝试 $attempts/$max）..."
+        if curl -fL --connect-timeout 15 --max-time 60 \
+          "https://github.com/tagword/${pkg}/tarball/HEAD" \
+          -o "$tgz_path"; then
+          if [ -s "$tgz_path" ] && [ "$(head -c 2 "$tgz_path")" = $'\x1f\x8b' ]; then
+            mkdir -p "$src_dir"
+            tar xzf "$tgz_path" -C "$src_dir" --strip-components=1
+            pip install "$src_dir" --no-input -q
+            ok "  $pkg 安装完成（tarball）"
+            return 0
+          fi
+          warn "  $pkg tarball 无效，重试..."
         fi
-      fi
+        rm -f "$tgz_path"
+        [ $attempts -lt $max ] && sleep 2
+      done
       err "$pkg 安装失败，请检查网络后重试"
     }
 

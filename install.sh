@@ -20,19 +20,22 @@ warn()  { echo -e "${YELLOW}⚠${NC} $1"; }
 err()   { echo -e "${RED}✗${NC} $1"; exit 1; }
 
 # ── 辅助函数 ─────────────────────────────────────────────────────────
-# 安全克隆：自动检测默认分支，支持重试
+# 安全克隆：自动检测默认分支，支持超时和重试
 git_clone_safe() {
   local repo="$1" dest="$2"
   local attempts=0 max=2
   while [ $attempts -lt $max ]; do
     attempts=$((attempts + 1))
-    if git clone --depth 1 "https://github.com/tagword/${repo}.git" "$dest" 2>/dev/null; then
+    info "  git clone $repo（尝试 $attempts/$max）..."
+    if timeout 45 git clone --depth 1 "https://github.com/tagword/${repo}.git" "$dest"; then
       # 验证克隆结果——目录非空且有 Python 文件
       if [ -f "$dest/pyproject.toml" ] || [ -f "$dest/setup.py" ] || [ -f "$dest/setup.cfg" ]; then
         return 0
       fi
-      warn "  $repo 克隆不完整（缺少项目文件），重试..."
+      warn "  $repo 克隆不完整，重试..."
       rm -rf "$dest"
+    else
+      warn "  git clone $repo 超时或失败，重试..."
     fi
     [ $attempts -lt $max ] && sleep 2
   done
@@ -45,15 +48,18 @@ curl_tarball_safe() {
   local attempts=0 max=2
   while [ $attempts -lt $max ]; do
     attempts=$((attempts + 1))
-    # -f = 4xx/5xx 时退出非零；-L = 跟随重定向；--connect-timeout=15
-    if curl -fL --connect-timeout 15 \
+    info "  curl tarball $repo（尝试 $attempts/$max）..."
+    # -f = 4xx/5xx 时退出非零；-L = 跟随重定向；--connect-timeout=15；--max-time=60
+    if curl -fL --connect-timeout 15 --max-time 60 \
       "https://github.com/tagword/${repo}/tarball/HEAD" \
-      -o "$dest_tgz" 2>/dev/null; then
+      -o "$dest_tgz"; then
       # 验证：文件 > 100 字节且是 gzip 格式
       if [ -s "$dest_tgz" ] && [ "$(head -c 2 "$dest_tgz")" = $'\x1f\x8b' ]; then
         return 0
       fi
-      warn "  $repo 下载不完整（$([ -f "$dest_tgz" ] && wc -c < "$dest_tgz" || echo 0) bytes），重试..."
+      local fsize
+      fsize=$([ -f "$dest_tgz" ] && wc -c < "$dest_tgz" || echo 0)
+      warn "  $repo tarball 无效（${fsize} bytes），重试..."
     fi
     rm -f "$dest_tgz"
     [ $attempts -lt $max ] && sleep 2

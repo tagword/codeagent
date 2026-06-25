@@ -77,28 +77,57 @@ if (-not $NoInstall) {
     $tgzPath = "$seedDir\$pkg.tar.gz"
     Remove-Item -Recurse -Force $srcDir -ErrorAction SilentlyContinue | Out-Null
     Remove-Item -Force $tgzPath -ErrorAction SilentlyContinue | Out-Null
-    try {
-      git clone --depth 1 "https://github.com/tagword/${pkg}.git" $srcDir 2>$null
-      if ((Test-Path "$srcDir\pyproject.toml") -or (Test-Path "$srcDir\setup.py")) {
-        & $pip install $srcDir --no-input -q
-        ok "  $pkg 安装完成"
-        return
+
+    # 方案 A: git clone（带 45 秒超时）
+    $attempts = 0
+    while ($attempts -lt 2) {
+      $attempts++
+      info "  git clone $pkg（尝试 $attempts/2）..."
+      try {
+        $job = Start-Job -ScriptBlock { param($u,$d) git clone --depth 1 $u $d 2>$null } -ArgumentList "https://github.com/tagword/${pkg}.git", $srcDir
+        $job | Wait-Job -Timeout 45 -ErrorAction SilentlyContinue | Out-Null
+        if ($job.State -eq "Running") { $job.Stop(); Remove-Job $job -Force; throw "超时" }
+        Receive-Job $job -ErrorAction SilentlyContinue | Out-Null
+        Remove-Job $job -Force
+        if ((Test-Path "$srcDir\pyproject.toml") -or (Test-Path "$srcDir\setup.py")) {
+          & $pip install $srcDir --no-input -q
+          ok "  $pkg 安装完成"
+          return
+        }
+        warn "  $pkg 克隆不完整，重试..."
+        Remove-Item -Recurse -Force $srcDir -ErrorAction SilentlyContinue | Out-Null
+      } catch {
+        warn "  git clone $pkg 失败，重试..."
+        Remove-Item -Recurse -Force $srcDir -ErrorAction SilentlyContinue | Out-Null
       }
-      Remove-Item -Recurse -Force $srcDir -ErrorAction SilentlyContinue | Out-Null
-    } catch {}
-    try {
-      $url = "https://github.com/tagword/${pkg}/tarball/HEAD"
-      [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-      (New-Object System.Net.WebClient).DownloadFile($url, $tgzPath)
-      if ((Get-Item $tgzPath).Length -gt 100) {
-        New-Item -ItemType Directory -Force -Path $srcDir | Out-Null
-        tar xzf $tgzPath -C $srcDir --strip-components=1
-        & $pip install $srcDir --no-input -q
-        ok "  $pkg 安装完成（tarball）"
-        return
+      if ($attempts -lt 2) { Start-Sleep -Seconds 2 }
+    }
+
+    # 方案 B: tarball（Invoke-WebRequest 带超时）
+    $attempts = 0
+    while ($attempts -lt 2) {
+      $attempts++
+      info "  tarball $pkg（尝试 $attempts/2）..."
+      try {
+        $url = "https://github.com/tagword/${pkg}/tarball/HEAD"
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        Invoke-WebRequest -Uri $url -OutFile $tgzPath -TimeoutSec 60 -ErrorAction Stop
+        if ((Get-Item $tgzPath).Length -gt 100) {
+          New-Item -ItemType Directory -Force -Path $srcDir | Out-Null
+          tar xzf $tgzPath -C $srcDir --strip-components=1
+          & $pip install $srcDir --no-input -q
+          ok "  $pkg 安装完成（tarball）"
+          return
+        }
+        warn "  $pkg tarball 无效，重试..."
+      } catch {
+        warn "  tarball $pkg 下载失败，重试..."
       }
-    } catch {}
+      Remove-Item -Force $tgzPath -ErrorAction SilentlyContinue | Out-Null
+      if ($attempts -lt 2) { Start-Sleep -Seconds 2 }
+    }
     err "$pkg 安装失败，请检查网络后重试"
+  }
   }
 
   Install-SeedPkg "seed-model-providers"
