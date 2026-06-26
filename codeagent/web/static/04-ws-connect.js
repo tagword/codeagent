@@ -155,6 +155,10 @@ function connectWs() {
     wsTokQs
   );
   ws = sock;
+  sock.onopen = () => {
+    // WS 重连后从后端恢复正在运行中的会话状态（断连期间 run_started/run_finished 事件已丢失）
+    if (typeof restoreRunningSessions === 'function') restoreRunningSessions();
+  };
   sock.onmessage = (ev) => {
     try {
       const j = JSON.parse(ev.data);
@@ -182,12 +186,15 @@ const WS_HANDLERS = {
   chat_cancelled: function (j) {
     if (j.session_id) setSessionRunning(j.session_id, false);
     if (j.session_id === sessionId) systemMsg('info', '✅ 已停止。');
+    if (webuiSessionsEnabled) refreshSessionList().catch(function() {});
   },
   run_started: function (j) {
     if (j.session_id) setSessionRunning(j.session_id, true);
+    if (webuiSessionsEnabled) refreshSessionList().catch(function() {});
   },
   run_finished: function (j) {
     if (j.session_id) setSessionRunning(j.session_id, false);
+    if (webuiSessionsEnabled) refreshSessionList().catch(function() {});
   },
   context_compact: handleWsContextCompact,
   context_usage:  handleWsContextUsage,

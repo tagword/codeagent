@@ -15,6 +15,13 @@
     }
     pinSessionToTopOnce = '';
     updateMainHeaderForSession(cur);
+    // DOM 重建后重新应用每个会话的运行/已完成状态（避免 restoreRunningSessions 时序竞争）
+    requestAnimationFrame(function() {
+      (lastSessionsCache || []).forEach(function(r) {
+        if (typeof applySessionRunningState === 'function') applySessionRunningState(r.session_id);
+        if (typeof applySessionCompletedState === 'function') applySessionCompletedState(r.session_id);
+      });
+    });
   } catch (e) {
   }
 }
