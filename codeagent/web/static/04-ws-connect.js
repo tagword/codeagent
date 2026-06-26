@@ -261,7 +261,7 @@ function handleWsTextDelta(j) {
 
 function handleWsTextDone(j) {
   if (j.session_id !== sessionId) return;
-  var finalized = finalizeStreamBubble(j.text || '', []);
+  var finalized = finalizeStreamBubble(j.text || '');
   if (!finalized) {
     var remainingText = '';
     if (typeof _streamUnconsumedSuffix === 'function') {

@@ -179,7 +179,7 @@ async function submitChatMessage() {
       } else if (!hadWsTextDone && hadLiveProgress) {
         if (reply) {
           var finalized = (typeof finalizeStreamBubble === 'function')
-            ? finalizeStreamBubble(reply, [])
+            ? finalizeStreamBubble(reply)
             : null;
           var remainingDelta = '';
           if (typeof _streamUnconsumedSuffix === 'function') {

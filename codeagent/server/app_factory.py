@@ -121,6 +121,7 @@ def create_app():
         from seed.core.mem_bridge import finalize_episodic_for_llm
         from seed.core.chat_events import set_chat_cancel_checker, reset_chat_cancel_checker
         from seed.integrations.session_title import maybe_llm_refresh_session_title
+        from datetime import datetime, timezone
         import threading
 
         from . import SESSIONS, _DEFAULT_AUTO_CONTINUE_NUDGE, _running_add, _running_discard, _running_contains, tools_for_agent, ACTIVE_CHAT_CANCELS, PENDING_INJECTIONS
@@ -471,6 +472,8 @@ def create_app():
                                 and new_tail[0].get("role") == "assistant"):
                             real_msg = dict(new_tail[0])
                             real_msg.pop("_streaming", None)
+                            if "ts" not in real_msg or not real_msg.get("ts"):
+                                real_msg["ts"] = datetime.now(timezone.utc).isoformat()
                             chat_sess.messages[-1] = real_msg
                             rest = new_tail[1:]
                         else:
@@ -483,6 +486,8 @@ def create_app():
                                     continue
                                 copied = dict(message)
                                 strip_ephemeral_message_fields([copied])
+                                if "ts" not in copied or not copied.get("ts"):
+                                    copied["ts"] = datetime.now(timezone.utc).isoformat()
                                 persisted_rest.append(copied)
                             chat_sess.messages.extend(persisted_rest)
                         n_before_ref[0] = len(api_msgs)
@@ -515,6 +520,7 @@ def create_app():
                             "role": "assistant",
                             "content": "",
                             "_streaming": True,
+                            "ts": datetime.now(timezone.utc).isoformat(),
                         })
                         _stream_placeholder_created[0] = True
                     if chat_sess.messages and chat_sess.messages[-1].get("_streaming"):

@@ -6,88 +6,81 @@
  * @param {{prepend?:boolean,skipScroll?:boolean,running?:boolean,hideIndex?:boolean}} opts
  * @returns {HTMLDetailsElement}
  */
-/**
- * Render thumbnail previews for image_generate tool results inside a tool trace row.
- */
-function appendGeneratedImagesToToolRow(detailsEl, row) {
+/** 工具生成内容的媒体类型定义（图片/音频/视频） */
+const _MEDIA_HANDLERS = [
+  {
+    toolName: 'image_generate',
+    containerClass: 'oa-tool-gen-images',
+    extractItems(payload) {
+      return Array.isArray(payload?.images) ? payload.images : [];
+    },
+    createEl(item) {
+      const el = document.createElement('img');
+      el.className = 'chat-inline-img bubble-user__img';
+      el.alt = item.filename || 'generated';
+      return el;
+    },
+    postProcess(wrap) {
+      if (typeof enhanceChatImagesInBubble === 'function') enhanceChatImagesInBubble(wrap);
+    },
+  },
+  {
+    toolName: 'music_generate',
+    containerClass: 'oa-tool-gen-audio',
+    extractItems(payload) {
+      return payload?.audio ? [payload.audio] : [];
+    },
+    createEl() {
+      const el = document.createElement('audio');
+      el.controls = true;
+      el.preload = 'metadata';
+      return el;
+    },
+  },
+  {
+    toolName: 'video_generate',
+    containerClass: 'oa-tool-gen-video',
+    extractItems(payload) {
+      return payload?.video ? [payload.video] : [];
+    },
+    createEl() {
+      const el = document.createElement('video');
+      el.controls = true;
+      el.preload = 'metadata';
+      return el;
+    },
+  },
+];
+
+function _attachmentMediaUrl(attachmentId) {
+  return '/api/attachments/' + encodeURIComponent(attachmentId)
+    + '?session_id=' + encodeURIComponent(typeof sessionId !== 'undefined' ? sessionId : 'web-chat')
+    + '&agent_id=' + encodeURIComponent(typeof agentId !== 'undefined' ? agentId : 'default');
+}
+
+/** 在工具行内追加生成内容预览（图片/音频/视频），根据 row.tool 自动判断类型。 */
+function appendGeneratedMediaToToolRow(detailsEl, row) {
   if (!detailsEl || !row) return;
   const name = (row.tool || row.name || '').toLowerCase();
-  if (name !== 'image_generate') return;
-  let payload = null;
-  try {
-    payload = JSON.parse(String(row.result || ''));
-  } catch (_) {
-    return;
-  }
-  const images = payload && payload.images;
-  if (!Array.isArray(images) || !images.length) return;
-  detailsEl.querySelectorAll('.oa-tool-gen-images').forEach(function(n) { n.remove(); });
+  const handler = _MEDIA_HANDLERS.find(function(h) { return h.toolName === name; });
+  if (!handler) return;
+  let payload;
+  try { payload = JSON.parse(String(row.result || '')); } catch (_) { return; }
+  const items = handler.extractItems(payload);
+  if (!items.length) return;
+  detailsEl.querySelectorAll('.' + handler.containerClass).forEach(function(n) { n.remove(); });
   const wrap = document.createElement('div');
-  wrap.className = 'oa-tool-gen-images';
-  images.forEach(function(img) {
-    if (!img || !img.attachment_id) return;
-    const el = document.createElement('img');
-    el.className = 'chat-inline-img bubble-user__img';
-    el.alt = img.filename || 'generated';
-    el.src = '/api/attachments/' + encodeURIComponent(img.attachment_id)
-      + '?session_id=' + encodeURIComponent(typeof sessionId !== 'undefined' ? sessionId : 'web-chat')
-      + '&agent_id=' + encodeURIComponent(typeof agentId !== 'undefined' ? agentId : 'default');
+  wrap.className = handler.containerClass;
+  items.forEach(function(item) {
+    if (!item || !item.attachment_id) return;
+    const el = handler.createEl(item);
+    el.src = _attachmentMediaUrl(item.attachment_id);
     wrap.appendChild(el);
   });
   if (wrap.childNodes.length) {
     detailsEl.appendChild(wrap);
-    if (typeof enhanceChatImagesInBubble === 'function') enhanceChatImagesInBubble(wrap);
+    if (handler.postProcess) handler.postProcess(wrap);
   }
-}
-
-function appendGeneratedMusicToToolRow(detailsEl, row) {
-  if (!detailsEl || !row) return;
-  const name = (row.tool || row.name || '').toLowerCase();
-  if (name !== 'music_generate') return;
-  let payload = null;
-  try {
-    payload = JSON.parse(String(row.result || ''));
-  } catch (_) {
-    return;
-  }
-  const audio = payload && payload.audio;
-  if (!audio || !audio.attachment_id) return;
-  detailsEl.querySelectorAll('.oa-tool-gen-audio').forEach(function(n) { n.remove(); });
-  const wrap = document.createElement('div');
-  wrap.className = 'oa-tool-gen-audio';
-  const el = document.createElement('audio');
-  el.controls = true;
-  el.preload = 'metadata';
-  el.src = '/api/attachments/' + encodeURIComponent(audio.attachment_id)
-    + '?session_id=' + encodeURIComponent(typeof sessionId !== 'undefined' ? sessionId : 'web-chat')
-    + '&agent_id=' + encodeURIComponent(typeof agentId !== 'undefined' ? agentId : 'default');
-  wrap.appendChild(el);
-  detailsEl.appendChild(wrap);
-}
-
-function appendGeneratedVideoToToolRow(detailsEl, row) {
-  if (!detailsEl || !row) return;
-  const name = (row.tool || row.name || '').toLowerCase();
-  if (name !== 'video_generate') return;
-  let payload = null;
-  try {
-    payload = JSON.parse(String(row.result || ''));
-  } catch (_) {
-    return;
-  }
-  const video = payload && payload.video;
-  if (!video || !video.attachment_id) return;
-  detailsEl.querySelectorAll('.oa-tool-gen-video').forEach(function(n) { n.remove(); });
-  const wrap = document.createElement('div');
-  wrap.className = 'oa-tool-gen-video';
-  const el = document.createElement('video');
-  el.controls = true;
-  el.preload = 'metadata';
-  el.src = '/api/attachments/' + encodeURIComponent(video.attachment_id)
-    + '?session_id=' + encodeURIComponent(typeof sessionId !== 'undefined' ? sessionId : 'web-chat')
-    + '&agent_id=' + encodeURIComponent(typeof agentId !== 'undefined' ? agentId : 'default');
-  wrap.appendChild(el);
-  detailsEl.appendChild(wrap);
 }
 
 function appendAgentToolTraceRowToLog(row, index, total, opts) {
@@ -126,9 +119,7 @@ function appendAgentToolTraceRowToLog(row, index, total, opts) {
   wrap.appendChild(summary);
   wrap.appendChild(pre);
 
-  appendGeneratedImagesToToolRow(wrap, row);
-  appendGeneratedMusicToToolRow(wrap, row);
-  appendGeneratedVideoToToolRow(wrap, row);
+  appendGeneratedMediaToToolRow(wrap, row);
 
   if (opts.prepend && log.firstChild) {
     log.insertBefore(wrap, log.firstChild);
@@ -185,7 +176,7 @@ function updateTimelineToolRowElement(detailsEl, row, index, total) {
   }
   const pre = detailsEl.querySelector('.oa-tool-trace-pre');
   if (pre) pre.textContent = '参数：\n' + args + '\n\n输出：\n' + res;
-  appendGeneratedImagesToToolRow(detailsEl, row);
+  appendGeneratedMediaToToolRow(detailsEl, row);
   const spin = detailsEl.querySelector('.oa-live-tool-spinner');
   if (spin && spin.parentNode) spin.parentNode.removeChild(spin);
 }

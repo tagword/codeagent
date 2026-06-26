@@ -42,8 +42,7 @@ function updateStreamBubbleText(fullText) {
  * Finalize the streaming bubble (remove streaming-indicator, render final content).
  * Returns the bubble wrap element or null.
  */
-/** 结束流式气泡；工具不在气泡内合并（时间轴拆分）。第二个参数保留以兼容旧调用，已忽略。 */
-function finalizeStreamBubble(text, _toolTrace) {
+function finalizeStreamBubble(text) {
   const wrap = _streamBubbleWrap;
   _streamBubbleWrap = null;
   if (!wrap || !wrap.parentNode) return null;

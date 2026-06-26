@@ -8,11 +8,7 @@
 function ensureLinksOpenNewTab(el) {
   try {
     if (!el) return;
-    if (typeof hydrateAttachmentImagesInBubble === 'function') {
-      hydrateAttachmentImagesInBubble(el);
-    } else if (typeof enhanceChatImagesInBubble === 'function') {
-      enhanceChatImagesInBubble(el);
-    }
+    hydrateAttachmentImagesInBubble(el);
     const links = el.querySelectorAll ? el.querySelectorAll('a[href]') : [];
     links.forEach((a) => {
       const href = String(a.getAttribute('href') || '');
