@@ -1713,14 +1713,17 @@ def build_webui_api_app(project_root: Path) -> Starlette:
             "llm_id", "vision_llm_id", "image_gen_llm_id",
             "audio_llm_id", "music_llm_id", "video_gen_llm_id",
         )
-        # rows from list_stored_sessions_meta do NOT include metadata inline,
-        # so we resolve the on-disk JSON for each session. Bounded by `lim` (≤500).
+        # context_usage 已由 registry SQLite 缓存提供（快速路径）。
+        # model_stack_overrides 仍需加载 session JSON 来解析（低频字段，走快捷加载）。
         for r in rows:
             try:
                 sid = r.get("session_id") if isinstance(r, dict) else None
                 if not isinstance(sid, str) or not sid.strip():
                     r["model_stack_overrides"] = {"count": 0, "has_any": False}
                     continue
+                # 使用 registry 缓存的 context_usage（不含则回退加载 session JSON）
+                r["context_usage"] = r.get("context_usage")
+                # model_stack_overrides 需加载 session JSON
                 chat_sess = load_or_create_chat_session(sid.strip(), aid)
                 md = chat_sess.metadata if isinstance(chat_sess.metadata, dict) else {}
                 present = [k for k in _MODEL_STACK_KEYS_B2 if isinstance(md.get(k), str) and md.get(k).strip()]
@@ -1729,7 +1732,9 @@ def build_webui_api_app(project_root: Path) -> Starlette:
                     "has_any": bool(present),
                     "keys": present,
                 }
-                r["context_usage"] = md.get("context_usage")
+                # 回退：registry 无缓存时从 session JSON 获取
+                if r["context_usage"] is None:
+                    r["context_usage"] = md.get("context_usage")
             except Exception:
                 r["model_stack_overrides"] = {"count": 0, "has_any": False}
 
