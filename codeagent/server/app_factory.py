@@ -251,6 +251,13 @@ def create_app():
             PENDING_INJECTIONS[_run_mkey] = []
             _running_add(_run_mkey)
             _run_started = True
+            # 停止信号必须在 _running_add 后立即注册，消除
+            # _running_sessions 与 ACTIVE_CHAT_CANCELS 之间的时间窗口
+            try:
+                _cancel_event = ACTIVE_CHAT_CANCELS.setdefault(_run_mkey, threading.Event())
+                _cancel_token = set_chat_cancel_checker(lambda: _cancel_event.is_set())
+            except Exception:
+                pass
 
             mkey = _memkey(agent_id, session_id)
             try:
@@ -431,13 +438,6 @@ def create_app():
                     _broadcast_session_event(agent_id, session_id, {"type": "run_started"}),
                     main_loop,
                 )
-
-            # ── 停止信号：接线到 ACTIVE_CHAT_CANCELS ──
-            try:
-                _cancel_event = ACTIVE_CHAT_CANCELS.setdefault(_run_mkey, threading.Event())
-                _cancel_token = set_chat_cancel_checker(lambda: _cancel_event.is_set())
-            except Exception:
-                pass
 
             n_before = len(api_msgs)
             n_before_ref = [n_before]
@@ -925,10 +925,13 @@ def create_app():
             body = await request.json()
         except Exception:
             return JSONResponse({"detail": "invalid json"}, status_code=400)
-        from . import ACTIVE_CHAT_CANCELS, _memkey
+        from . import ACTIVE_CHAT_CANCELS, _memkey, _running_contains
         session_id = (body.get("session_id") or "web-chat").strip()
         agent_id = (body.get("agent_id") or "").strip() or "default"
         _run_mkey = _memkey(agent_id, session_id)
+        # 以 _running_sessions 为唯一判断源，ACTIVE_CHAT_CANCELS 只负责取消
+        if not _running_contains(_run_mkey):
+            return JSONResponse({"cancelled": False, "reason": "not_running"})
         cancel_event = ACTIVE_CHAT_CANCELS.get(_run_mkey)
         if cancel_event:
             cancel_event.set()

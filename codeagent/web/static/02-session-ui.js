@@ -103,17 +103,18 @@ function applyAllSessionRunningStates() {
 function applySessionCompletedState(sid) {
   const k = String(sid || '');
   if (!k) return;
-  let completed = typeof chatCompletedBySid !== 'undefined' && !!chatCompletedBySid[k];
+  // completed 状态只由 run_finished handler 标记（带 _userClearedCompletedSids 守卫），
+  // 这里直接读 chatCompletedBySid 即可，不需要再叠守卫。
+  const completed = !!(chatCompletedBySid && chatCompletedBySid[k]);
   // 当前正在查看的会话由 .is-active 控制，不叠加 completed（避免绿色覆盖 accent 高亮）
-  if (typeof sessionId !== 'undefined' && k === String(sessionId)) {
-    completed = false;
-  }
+  const isActive = typeof sessionId !== 'undefined' && k === String(sessionId);
+  const shouldShow = completed && !isActive;
   // 更新侧边栏列表
   const rows = document.querySelectorAll('#sessList .sess-row[data-session-id="' + CSS.escape(k) + '"]');
-  rows.forEach((el) => el.classList.toggle('is-completed', completed && !el.classList.contains('is-running')));
+  rows.forEach((el) => el.classList.toggle('is-completed', shouldShow && !el.classList.contains('is-running')));
   // 更新树状视图
   const treeSessions = document.querySelectorAll('.tree-session[data-session-id="' + CSS.escape(k) + '"]');
-  treeSessions.forEach((el) => el.classList.toggle('is-completed', completed && !el.classList.contains('is-running')));
+  treeSessions.forEach((el) => el.classList.toggle('is-completed', shouldShow && !el.classList.contains('is-running')));
 }
 function applyAllSessionCompletedStates() {
   try {
@@ -132,12 +133,8 @@ function buildSessListItem(row) {
   if (typeof chatInflightBySid !== 'undefined' && (chatInflightBySid[row.session_id] || 0) > 0) {
     wrap.classList.add('is-running');
   }
-  // 检查初始「已完成」状态（刚结束运行的会话显示绿色实心）
-  // 当前查看中的会话不叠加 completed（由 .is-active 控制）
-  var isActiveSess = typeof sessionId !== 'undefined' && row.session_id === sessionId;
-  if (!isActiveSess && typeof chatCompletedBySid !== 'undefined' && !!chatCompletedBySid[row.session_id] && !wrap.classList.contains('is-running')) {
-    wrap.classList.add('is-completed');
-  }
+  // 已完成状态（绿色）由 refreshSessionList() 末尾的 requestAnimationFrame 统一通过
+  // applySessionCompletedState 来管理，不在构建时单独设置，避免时序竞争（清除→重建→再标记）。
 
   const btn = document.createElement('button');
   btn.type = 'button';

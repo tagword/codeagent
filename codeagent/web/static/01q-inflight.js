@@ -10,16 +10,38 @@ var pendingAttachments = [];
  */
 const chatCompletedBySid = {};
 var _COMPLETED_STORAGE_KEY = STORAGE_KEYS.SESS_COMPLETED;
+/** 用户手动清除过 completed 状态的会话集合（防御：防止刷新/WS重连等路径重新标记）。sessionStorage 持久化。 */
+var _CLEARED_STORAGE_KEY = STORAGE_KEYS.SESS_CLEARED;
+const _userClearedCompletedSids = {};
 
-/** 从 localStorage 恢复会话已完成状态 */
+function _persistUserCleared() {
+  try {
+    var keys = Object.keys(_userClearedCompletedSids);
+    if (keys.length === 0) sessionStorage.removeItem(_CLEARED_STORAGE_KEY);
+    else sessionStorage.setItem(_CLEARED_STORAGE_KEY, JSON.stringify(keys));
+  } catch (_) {}
+}
+function _restoreUserCleared() {
+  try {
+    var raw = sessionStorage.getItem(_CLEARED_STORAGE_KEY);
+    if (!raw) return;
+    var arr = JSON.parse(raw);
+    if (Array.isArray(arr)) arr.forEach(function(k) { _userClearedCompletedSids[k] = true; });
+  } catch (_) {}
+}
+
+/** 从 localStorage 恢复会话已完成状态，但排除用户手动清除过的。 */
 function restoreCompletedSessions() {
+  _restoreUserCleared();
   try {
     var raw = localStorage.getItem(_COMPLETED_STORAGE_KEY);
     if (!raw) return;
     var obj = JSON.parse(raw);
     if (obj && typeof obj === 'object') {
       Object.keys(obj).forEach(function(k) {
-        chatCompletedBySid[k] = true;
+        if (!_userClearedCompletedSids[k]) {
+          chatCompletedBySid[k] = true;
+        }
       });
     }
   } catch (_) {}
@@ -53,18 +75,21 @@ function composeHasSendPayload() {
   return !!(text || hasPending);
 }
 
-/** 幂等设置会话 running / idle（单一状态源，避免 +/- 计数漂移） */
+/** 幂等设置会话 running / idle（单一状态源，避免 +/- 计数漂移）
+ *  ⚠️ 注意：此函数只负责 running 状态，不负责 completed（已完成绿色）状态。
+ *  completed 状态由 run_finished WS 事件 handler 专门管理（见 04-ws-connect.js）。
+ */
 function setSessionRunning(sid, running) {
   const k = String(sid || '');
   if (!k) return;
   if (running) {
     chatInflightBySid[k] = 1;
+    // 开始运行 → 清除 stale completed
     delete chatCompletedBySid[k];
     persistCompletedSessions();
   } else {
     delete chatInflightBySid[k];
-    chatCompletedBySid[k] = true;
-    persistCompletedSessions();
+    // 不再自动标记 completed —— 由 run_finished handler 管
   }
   updateComposerButtons();
   if (typeof applySessionRunningState === 'function') applySessionRunningState(k);
@@ -89,10 +114,13 @@ function updateComposerButtons() {
   }
 }
 
-/** 清除会话的「已完成」状态（用户点击后调用） */
+/** 清除会话的「已完成」绿色状态（用户点击高亮会话时调用） */
 function clearSessionCompleted(sid) {
   const k = String(sid || '');
   if (!k) return;
+  // 记录用户手动清除过此会话：后续 run_finished 事件不会再标记绿色
+  _userClearedCompletedSids[k] = true;
+  _persistUserCleared();
   delete chatCompletedBySid[k];
   persistCompletedSessions();
   if (typeof applySessionCompletedState === 'function') applySessionCompletedState(k);
@@ -125,7 +153,11 @@ function resetAgentReplyDedupe() {
 async function restoreRunningSessions() {
   // 1. 从 localStorage 恢复已完成（绿色实心）状态
   restoreCompletedSessions();
-  // 2. 从后端 API 恢复正在运行中的状态
+  // 2. 全量替换 running 状态：先清空所有 stale 状态，再填充后端快照。
+  //    避免 WS 断连期间丢失的 run_finished 事件导致会话"卡"在运行状态。
+  Object.keys(chatInflightBySid).forEach(function(sid) {
+    setSessionRunning(sid, false);
+  });
   try {
     const aid = (typeof agentId !== 'undefined') ? agentId : 'default';
     const r = await fetch('/api/ui/sessions/running?agent_id=' + encodeURIComponent(aid));

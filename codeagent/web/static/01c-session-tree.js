@@ -137,6 +137,9 @@ function fillSessionsList(childrenEl, pid, sessions) {
       loadSessionHistoryIntoLog(true);
       syncTreeProjectActiveHighlight();
       syncTreeSessionActiveHighlight();
+      // 切换会话后同步 completed 状态（清除当前会话的绿色 + 全量重算）
+      if (typeof clearSessionCompleted === 'function') clearSessionCompleted(s.session_id);
+      if (typeof applyAllSessionCompletedStates === 'function') applyAllSessionCompletedStates();
     });
     sDiv.appendChild(sRow);
     childrenEl.appendChild(sDiv);

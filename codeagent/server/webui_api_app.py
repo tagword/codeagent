@@ -831,7 +831,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
     )
     from seed.integrations.env_config import ENV_FILENAME
 
-    from . import SESSIONS, _memkey, _running_sessions
+    from . import SESSIONS, _memkey, _running_list
 
     ensure_default_config_files(project_root_fn())
 
@@ -1743,13 +1743,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
     async def api_sessions_running(request: Request) -> JSONResponse:
         """返回当前正在执行中的会话 ID 列表（用于页面刷新后恢复心跳指示）。"""
         aid = (request.query_params.get("agent_id") or "").strip() or _default_agent_id()
-        # _running_sessions 中存的是 mkey（agent_id::session_id）, 按 agent_id 过滤
-        prefix = f"{aid}::"
-        running = [
-            mkey.removeprefix(prefix)
-            for mkey in _running_sessions
-            if mkey.startswith(prefix)
-        ]
+        running = _running_list(aid)
         return JSONResponse({"running": running})
 
     async def api_session_history(request: Request) -> JSONResponse:

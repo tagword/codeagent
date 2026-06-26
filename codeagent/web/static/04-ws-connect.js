@@ -193,7 +193,16 @@ const WS_HANDLERS = {
     if (webuiSessionsEnabled) refreshSessionList().catch(function() {});
   },
   run_finished: function (j) {
-    if (j.session_id) setSessionRunning(j.session_id, false);
+    if (j.session_id) {
+      setSessionRunning(j.session_id, false);
+      // 标记 completed（绿色），除非用户手动清除过
+      var k = String(j.session_id);
+      if (!_userClearedCompletedSids[k]) {
+        chatCompletedBySid[k] = true;
+        persistCompletedSessions();
+        if (typeof applySessionCompletedState === 'function') applySessionCompletedState(k);
+      }
+    }
     if (webuiSessionsEnabled) refreshSessionList().catch(function() {});
   },
   context_compact: handleWsContextCompact,

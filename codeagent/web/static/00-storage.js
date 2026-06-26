@@ -22,6 +22,7 @@ const STORAGE_KEYS = Object.freeze({
   // ── 会话身份 ──
   SESS_LAST_READ: 'oa_sess_last_read_v2',
   SESS_COMPLETED: 'oaSessionCompletedMap',
+  SESS_CLEARED: 'oaSessionClearedMap',
   SESS_ACTIVE_PAGE: 'oa_active_page',
   SESS_ACTIVITY_MODE: 'oa_activity_mode',
   // ── 模型选择（旧 fallback） ──
