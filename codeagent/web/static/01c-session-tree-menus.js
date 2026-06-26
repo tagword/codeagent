@@ -117,15 +117,18 @@ function showProjectDirectoryDialog(pid) {
         body: JSON.stringify({ agent_id: agentId, project_id: k, path: newPath }),
       });
       if (!r.ok) throw new Error((await r.json()).detail || r.statusText);
+      var resp = await r.json();
+      var resolvedPath = resp.project ? resp.project.path : newPath;
       if (treeProjectsCache && treeProjectsCache.aid === agentId) {
         for (var i = 0; i < treeProjectsCache.projects.length; i++) {
           if (treePid(treeProjectsCache.projects[i].id) === k) {
-            treeProjectsCache.projects[i].path = newPath;
+            treeProjectsCache.projects[i].path = resolvedPath;
             break;
           }
         }
       }
       close();
+      window.dispatchEvent(new CustomEvent('project-changed', {detail: {projectId: k}}));
     } catch (e) {
       alert('保存失败：' + String(e.message || e));
       btnSave.disabled = false;
@@ -133,9 +136,20 @@ function showProjectDirectoryDialog(pid) {
   });
   if (typeof btnBrowse === 'object' && btnBrowse) {
     btnBrowse.addEventListener('click', function() {
-      // 原项目目录对话框无 file picker；这里只占位。
-      // 如需真正浏览，可改为 input[type=file]webkitdirectory。
-      alert('请在输入框中直接粘贴目录路径。');
+      btnBrowse.textContent = '⏳ 选择中…';
+      btnBrowse.disabled = true;
+      fetch('/api/ui/pick-directory', { method: 'POST', credentials: 'same-origin' })
+        .then(function(r) { return r.json(); })
+        .then(function(j) {
+          if (j.path) inp.value = j.path;
+          else if (j.hint) console.warn('pick-directory:', j.hint);
+          else if (j.detail) console.warn('pick-directory:', j.detail);
+        })
+        .catch(function(e) { console.error('pick-directory error:', e); })
+        .finally(function() {
+          btnBrowse.textContent = '📁 浏览';
+          btnBrowse.disabled = false;
+        });
     });
   }
 }

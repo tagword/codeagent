@@ -24,22 +24,32 @@
         var setBtn = document.getElementById('btnSetProjectPath');
         if (setBtn) {
           setBtn.addEventListener('click', function() {
-            var p = prompt('请输入工作目录路径：');
-            if (!p || !p.trim()) return;
-            fetch('/api/ui/projects/path', {
-              method: 'POST',
-              headers: {'Content-Type': 'application/json'},
-              body: JSON.stringify({agent_id: agentId, project_id: pid, path: p.trim()})
-            }).then(function(r) {
-              if (!r.ok) { alert('设置失败'); return; }
-              if (treeProjectsCache && treeProjectsCache.aid === agentId) {
-                treeProjectsCache.projects.forEach(function(x) {
-                  if (x.id === pid) x.path = p.trim();
-                });
-              }
-              window.dispatchEvent(new CustomEvent('project-changed', {detail: {projectId: pid}}));
-              _refreshAll();
-            }).catch(function() { alert('设置失败'); });
+            // 优先用已有项目目录对话框（与侧栏 ⋮ → 工作目录 统一），fallback 到 prompt
+            if (typeof showProjectDirectoryDialog === 'function') {
+              showProjectDirectoryDialog(pid);
+            } else {
+              var p = prompt(
+                '请输入工作目录路径：\n（支持 ~ 和 $HOME 等环境变量扩展，也支持 Windows %USERPROFILE%）',
+                _getProjectPath(pid) || ''
+              );
+              if (!p || !p.trim()) return;
+              fetch('/api/ui/projects/path', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                credentials: 'same-origin',
+                body: JSON.stringify({agent_id: agentId, project_id: pid, path: p.trim()})
+              }).then(function(r) { return r.json(); }).then(function(resp) {
+                if (resp.detail) { alert('设置失败：' + resp.detail); return; }
+                var resolvedPath = resp.project ? resp.project.path : p.trim();
+                if (treeProjectsCache && treeProjectsCache.aid === agentId) {
+                  treeProjectsCache.projects.forEach(function(x) {
+                    if (x.id === pid) x.path = resolvedPath;
+                  });
+                }
+                window.dispatchEvent(new CustomEvent('project-changed', {detail: {projectId: pid}}));
+                _refreshAll();
+              }).catch(function() { alert('设置失败'); });
+            }
           });
         }
       }

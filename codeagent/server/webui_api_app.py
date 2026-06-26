@@ -1558,7 +1558,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         path = str(body.get("path") or "").strip()
         if not path:
             return JSONResponse({"detail": "path required"}, status_code=400)
-        resolved = str(Path(os.path.expanduser(path)).resolve())
+        resolved = str(Path(os.path.expandvars(os.path.expanduser(path))).resolve())
         p = Path(resolved)
         if not p.is_dir():
             with contextlib.suppress(OSError):
