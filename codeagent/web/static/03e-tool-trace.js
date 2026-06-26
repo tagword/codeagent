@@ -6,41 +6,6 @@
  * @param {{prepend?:boolean,skipScroll?:boolean,running?:boolean,hideIndex?:boolean}} opts
  * @returns {HTMLDetailsElement}
  */
-
-// ── 工具组折叠容器 ─────────────────────────────────────────────
-// 同一轮助手回复的所有工具调用，折叠到一个 <details.oa-tool-group> 中。
-// WS 流式渲染过程中持续追加到当前组，直到下一轮 run_started 重置。
-
-let _currentToolGroup = null;
-
-/** 重置工具组（下一轮助手回复开始前调用）。 */
-function resetToolGroup() {
-  _currentToolGroup = null;
-}
-
-/** 获取当前工具组容器。不存在则创建（尚未插入 DOM，由调用者插入）。 */
-function _ensureToolGroup() {
-  if (!_currentToolGroup || !_currentToolGroup.parentNode) {
-    _currentToolGroup = document.createElement('details');
-    _currentToolGroup.className = 'oa-tool-group';
-    const summary = document.createElement('summary');
-    summary.className = 'oa-tool-group-summary';
-    summary.textContent = '\uD83D\uDD27 工具调用';
-    _currentToolGroup.appendChild(summary);
-  }
-  return _currentToolGroup;
-}
-
-/** 更新当前组 label 中的工具数量。 */
-function _updateToolGroupLabel() {
-  if (!_currentToolGroup) return;
-  const count = _currentToolGroup.querySelectorAll('details.system-msg.system-tools.oa-live-tool').length;
-  const summary = _currentToolGroup.querySelector('.oa-tool-group-summary');
-  if (summary) summary.textContent = '\uD83D\uDD27 工具调用 (' + count + ')';
-}
-
-// ── 工具行渲染 ─────────────────────────────────────────────────
-
 /**
  * Render thumbnail previews for image_generate tool results inside a tool trace row.
  */
@@ -165,19 +130,11 @@ function appendAgentToolTraceRowToLog(row, index, total, opts) {
   appendGeneratedMusicToToolRow(wrap, row);
   appendGeneratedVideoToToolRow(wrap, row);
 
-  // ── 放入工具组容器（而非直接 append 到 #log） ─────────────
-  const group = _ensureToolGroup();
-  // 首次创建时将组插入 log
-  if (!group.parentNode) {
-    if (opts.prepend && log.firstChild) {
-      log.insertBefore(group, log.firstChild);
-    } else {
-      log.appendChild(group);
-    }
+  if (opts.prepend && log.firstChild) {
+    log.insertBefore(wrap, log.firstChild);
+  } else {
+    log.appendChild(wrap);
   }
-  group.appendChild(wrap);
-  _updateToolGroupLabel();
-
   if (!opts.skipScroll) scrollLog();
   return wrap;
 }
@@ -187,11 +144,10 @@ function appendAgentToolTraceRowToLog(row, index, total, opts) {
 function syncLiveToolsFromToolTrace(toolTrace) {
   if (typeof log === 'undefined' || !log) return;
   const tt = Array.isArray(toolTrace) ? toolTrace : [];
-  // 收集当前组内所有工具块
-  const group = _ensureToolGroup();
+  // 收集当前所有工具块
   const all = [];
   try {
-    group.querySelectorAll('details.system-msg.system-tools.oa-live-tool').forEach(function(n) {
+    log.querySelectorAll('details.system-msg.system-tools.oa-live-tool').forEach(function(n) {
       all.push(n);
     });
   } catch (_) {}
@@ -213,7 +169,6 @@ function syncLiveToolsFromToolTrace(toolTrace) {
       appendAgentToolTraceRowToLog(tt[i], i, tt.length, { skipScroll: true });
     }
   }
-  _updateToolGroupLabel();
   scrollLog();
 }
 

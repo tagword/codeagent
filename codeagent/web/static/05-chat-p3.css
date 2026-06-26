@@ -293,38 +293,3 @@
 .ctx-history__table td:first-child {
   text-align: center;
 }
-
-/* ============ 工具链折叠组 ============ */
-.oa-tool-group {
-  margin: var(--sp-1) var(--sp-8);
-  border-radius: var(--r-lg);
-  overflow: hidden;
-  background: var(--bg-subtle);
-  border: 1px solid var(--border);
-}
-.oa-tool-group-summary {
-  cursor: pointer;
-  user-select: none;
-  padding: var(--sp-1) var(--sp-3);
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text-secondary);
-  background: var(--bg);
-  border-bottom: 1px solid transparent;
-  transition: background 0.12s ease;
-}
-.oa-tool-group[open] > .oa-tool-group-summary {
-  border-bottom-color: var(--border);
-  background: var(--bg-hover);
-}
-.oa-tool-group-summary:hover {
-  background: var(--bg-tertiary);
-}
-.oa-tool-group > .system-msg.system-tools.oa-live-tool {
-  margin: 0;
-  border: none;
-  border-radius: 0;
-}
-.oa-tool-group > .system-msg.system-tools.oa-live-tool + .system-msg.system-tools.oa-live-tool {
-  border-top: 1px solid var(--border);
-}
