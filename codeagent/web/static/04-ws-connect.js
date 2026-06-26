@@ -190,6 +190,8 @@ const WS_HANDLERS = {
   },
   run_started: function (j) {
     if (j.session_id) setSessionRunning(j.session_id, true);
+    // 新的一轮 → 新建工具折叠组
+    if (typeof resetToolGroup === 'function') resetToolGroup();
     if (webuiSessionsEnabled) refreshSessionList().catch(function() {});
   },
   run_finished: function (j) {

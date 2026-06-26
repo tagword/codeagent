@@ -36,10 +36,13 @@ function bubbleAgentWithSplitToolTrace(text, toolTrace, opts) {
     }
   }
 
-  // 3. 每个工具调用独立渲染（与 WS 实时 appendAgentToolTraceRowToLog 一致）
-  tt.forEach(function(row, i) {
-    appendAgentToolTraceRowToLog(row, i, tt.length, { prepend: !!opts.prepend, skipScroll: true });
-  });
+  // 3. 每个工具调用折叠在一组中（与 WS 实时 appendAgentToolTraceRowToLog 一致）
+  if (tt.length) {
+    if (typeof resetToolGroup === 'function') resetToolGroup();
+    tt.forEach(function(row, i) {
+      appendAgentToolTraceRowToLog(row, i, tt.length, { prepend: !!opts.prepend, skipScroll: true });
+    });
+  }
 
   if (!opts.skipScroll && !opts.prepend) scrollLog();
 }
