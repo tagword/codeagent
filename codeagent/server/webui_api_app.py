@@ -918,14 +918,75 @@ def build_webui_api_app(project_root: Path) -> Starlette:
             minimax_mcp_output_dir,
         )
 
+        # ⚡ 快速返回：不 probe，不阻塞。probe 由独立端点 /mcp/probe 异步处理
         try:
-            status = get_mcp_manager().list_servers_status(probe=True)
+            status = get_mcp_manager().list_servers_status(probe=False)
         except Exception as e:
             logger.exception("api_mcp_get status")
             status = []
             err = str(e)
         else:
             err = None
+        uvx = shutil.which("uvx") or ""
+        from codeagent.core.image_understanding import image_understanding_status
+
+        return JSONResponse(
+            {
+                "enabled": mcp_globally_enabled(),
+                "path": str(mcp_config_path(project_root)),
+                "config": load_mcp_config(project_root),
+                "servers_status": status,
+                "error": err,
+                "minimax_server_id": MINIMAX_MCP_SERVER_ID,
+                "minimax_output_dir": str(minimax_mcp_output_dir(project_root)),
+                "minimax_template": build_minimax_token_plan_mcp_server(
+                    api_key="",
+                    base=project_root,
+                    uvx_command=uvx or "uvx",
+                ),
+                "uvx_path": uvx,
+                # probe=False：只判断"是否已配置"，不做连接探测
+                "image_understanding": image_understanding_status(
+                    project_root, probe=False, servers_status=status
+                ),
+            }
+        )
+
+    async def api_mcp_probe(_: Request) -> JSONResponse:
+        """独立探测端点，不阻塞 WebUI 主加载流程。
+
+        由前端在页面渲染完成后异步调用，更新 MCP 连接状态。
+        asyncio.to_thread 防止同步阻塞 event loop。
+        """
+        import shutil
+
+        from seed.integrations.mcp_client import get_mcp_manager, mcp_globally_enabled
+        from seed.integrations.mcp_config import (
+            MINIMAX_MCP_SERVER_ID,
+            build_minimax_token_plan_mcp_server,
+            load_mcp_config,
+            mcp_config_path,
+            minimax_mcp_output_dir,
+        )
+
+        try:
+            status = await asyncio.wait_for(
+                asyncio.to_thread(
+                    lambda: get_mcp_manager().list_servers_status(probe=True)
+                ),
+                timeout=15.0,
+            )
+        except asyncio.TimeoutError:
+            logger.warning("api_mcp_probe timeout (>15s)")
+            status = []
+            err = "MCP 探测超时（>15s）"
+        except Exception as e:
+            logger.exception("api_mcp_probe error")
+            status = []
+            err = str(e)
+        else:
+            err = None
+
         uvx = shutil.which("uvx") or ""
         from codeagent.core.image_understanding import image_understanding_status
 
@@ -2935,6 +2996,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         Route("/plugins", api_plugins_post, methods=["POST"]),
         Route("/mcp", api_mcp_get, methods=["GET"]),
         Route("/mcp", api_mcp_post, methods=["POST"]),
+        Route("/mcp/probe", api_mcp_probe, methods=["GET"]),
         Route("/mcp/test", api_mcp_test, methods=["POST"]),
         Route("/mcp/skills", api_mcp_skills, methods=["GET"]),
         Route("/mcp/skill", api_mcp_skill, methods=["POST"]),

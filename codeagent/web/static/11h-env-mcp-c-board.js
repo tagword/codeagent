@@ -435,6 +435,8 @@ async function loadMcpEnvConfig() {
 
     const servers = (mcpJ.config && mcpJ.config.servers) ? mcpJ.config.servers : {};
     window._mcpConfigCache = { servers: servers };
+
+    // 初始状态：仅显示已缓存的状态（不 probe 不阻塞）
     window._mcpStatusCache = mcpJ.servers_status || [];
     window._mcpMeta = {
       uvx_path: mcpJ.uvx_path || '',
@@ -445,9 +447,45 @@ async function loadMcpEnvConfig() {
 
     if (typeof refreshVisionModelSelect === 'function') refreshVisionModelSelect();
     status.textContent = '共 ' + Object.keys(servers).length + ' 个 MCP 服务';
+
+    // ⚡ 异步探测：页面渲染完成后，后台检测 MCP 连接状态
+    // 不阻塞 UI，探测完成后自动刷新卡片状态
+    loadMcpStatusProbe().catch(function(e) {
+      // probe 失败不阻塞 UI，静默处理
+      if (status) {
+        status.textContent = status.textContent + '（探测中）';
+      }
+    });
   } catch (e) {
     status.classList.add('is-err');
     status.textContent = '加载失败：' + String(e);
+  }
+}
+
+async function loadMcpStatusProbe() {
+  try {
+    const r = await fetch('/api/ui/mcp/probe', { credentials: 'same-origin' });
+    if (!r.ok) return;
+    const j = await r.json();
+    window._mcpStatusCache = j.servers_status || [];
+    window._mcpMeta = {
+      uvx_path: j.uvx_path || '',
+      minimax_output_dir: j.minimax_output_dir || '',
+    };
+    const servers = (window._mcpConfigCache && window._mcpConfigCache.servers) || {};
+    renderMcpServerBoard(servers, window._mcpStatusCache, window._mcpMeta);
+
+    // 刷新识图选项（探测结果可能影响 MCP 识图可用性）
+    if (typeof refreshVisionModelSelect === 'function') refreshVisionModelSelect();
+
+    const status = mcpDom.status;
+    if (status) {
+      const count = Object.keys(servers).length;
+      const connected = window._mcpStatusCache.filter(function(s) { return s.connected; }).length;
+      status.textContent = '共 ' + count + ' 个 MCP 服务 · ' + connected + ' 已连接';
+    }
+  } catch (_) {
+    // probe 失败——不抛异常，静默保留初始状态
   }
 }
 
