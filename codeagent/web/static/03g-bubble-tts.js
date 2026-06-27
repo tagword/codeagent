@@ -204,9 +204,12 @@ async function copyBubbleContent(text, btn) {
 
 function appendBubbleTtsBar(col, rawText, opts) {
   opts = opts || {};
-  if (!col || opts.role !== 'agent') return;
-  var plain = plainTextForTts(rawText);
-  if (!plain || plain.length < 2) return;
+  if (!col) return;
+  var role = opts.role || 'agent';
+  if (role === 'agent') {
+    var plain = plainTextForTts(rawText);
+    if (!plain || plain.length < 2) return;
+  }
 
   var existing = col.querySelector('.bubble-tts-bar');
   if (existing) existing.remove();
@@ -214,6 +217,7 @@ function appendBubbleTtsBar(col, rawText, opts) {
   var bar = document.createElement('div');
   bar.className = 'bubble-tts-bar';
 
+  // 复制按钮（所有角色都有）
   var copyBtn = document.createElement('button');
   copyBtn.type = 'button';
   copyBtn.className = 'bubble-copy-btn';
@@ -224,20 +228,23 @@ function appendBubbleTtsBar(col, rawText, opts) {
     e.stopPropagation();
     copyBubbleContent(rawText, copyBtn);
   });
-
-  var btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = 'bubble-tts-btn';
-  btn.title = '朗读（首次合成，之后复播）';
-  btn.setAttribute('aria-label', '朗读');
-  btn.innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"/><path d="M16 9a5 5 0 0 1 0 6"/><path d="M19.364 5.636a9 9 0 0 1 0 12.728"/></svg>';
-  btn.addEventListener('click', function(e) {
-    e.stopPropagation();
-    toggleBubbleTts(rawText, btn);
-  });
-
   bar.appendChild(copyBtn);
-  bar.appendChild(btn);
+
+  // 朗读按钮（仅 agent 消息）
+  if (role === 'agent') {
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'bubble-tts-btn';
+    btn.title = '朗读（首次合成，之后复播）';
+    btn.setAttribute('aria-label', '朗读');
+    btn.innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"/><path d="M16 9a5 5 0 0 1 0 6"/><path d="M19.364 5.636a9 9 0 0 1 0 12.728"/></svg>';
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      toggleBubbleTts(rawText, btn);
+    });
+    bar.appendChild(btn);
+  }
+
   col.appendChild(bar);
 }
 

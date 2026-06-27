@@ -101,7 +101,6 @@ function bindSessListOnce() {
     reconnectWsForSession(); resetAgentReplyDedupe();
     highlightSessList(sid); updateMainHeaderForSession(sid);
     refreshSessionList().catch(() => {});
-    loadSessionHistoryIntoLog(true);
     if (typeof activatePage === 'function') activatePage('chat');
   });
 }

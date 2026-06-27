@@ -96,7 +96,7 @@ function bubble(role, text, opts) {
   ensureLinksOpenNewTab(b);
   col.appendChild(meta);
   col.appendChild(b);
-  if (role === 'agent' && typeof appendBubbleTtsBar === 'function') {
+  if (typeof appendBubbleTtsBar === 'function') {
     appendBubbleTtsBar(col, text, { role: role });
   }
   wrap.appendChild(col);

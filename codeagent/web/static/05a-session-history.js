@@ -129,7 +129,15 @@ async function loadSessionHistoryIntoLog(skipTreeRefresh) {
         }
       }
     });
-    requestAnimationFrame(() => { requestAnimationFrame(() => scrollLogForce()); });
+    // 滚动到底部：双重 rAF 确保 DOM 渲染完成后滚动，再加 setTimeout 兜底（图片等异步渲染可能延迟布局）
+    (function scrollLogAfterRender() {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          scrollLogForce();
+          setTimeout(scrollLogForce, 80);
+        });
+      });
+    })();
     // 历史加载完成后用持久化的 context_usage 校正指示器
     try {
       const cu = j && j.context_usage;

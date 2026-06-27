@@ -80,6 +80,7 @@
   margin-top: 3px;
 }
 .msg-row.msg-agent .bubble-tts-bar { justify-content: flex-end; padding-right: 4px; }
+.msg-row.msg-user .bubble-tts-bar { justify-content: flex-end; padding-left: 4px; }
 .bubble-tts-btn,
 .bubble-copy-btn {
   display: inline-flex;
