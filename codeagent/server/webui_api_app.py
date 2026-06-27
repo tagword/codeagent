@@ -2199,12 +2199,37 @@ def build_webui_api_app(project_root: Path) -> Starlette:
             )
         if method == "set":
             path.parent.mkdir(parents=True, exist_ok=True)
+            enabled = bool(body.get("enabled"))
+            http_val = str(body.get("http") or "").strip()
+            https_val = str(body.get("https") or "").strip()
             payload = {
-                "enabled": bool(body.get("enabled")),
-                "http": str(body.get("http") or ""),
-                "https": str(body.get("https") or ""),
+                "enabled": enabled,
+                "http": http_val,
+                "https": https_val,
             }
             path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+            # 同步写入 git 全局配置
+            async def _proxy_git_set(key: str, val: str) -> None:
+                # 先清掉旧的（防止重复值）
+                await asyncio.to_thread(
+                    subprocess.run,
+                    ["git", "config", "--global", "--unset-all", key],
+                    capture_output=True, text=True, timeout=10,
+                )
+                if val:
+                    await asyncio.to_thread(
+                        subprocess.run,
+                        ["git", "config", "--global", key, val],
+                        capture_output=True, text=True, timeout=10,
+                    )
+
+            for key, val in [("http.proxy", http_val), ("https.proxy", https_val)]:
+                if enabled and val:
+                    await _proxy_git_set(key, val)
+                else:
+                    await _proxy_git_set(key, "")  # 仅清除
+
             return JSONResponse({"ok": True})
         return JSONResponse({"detail": "bad method"}, status_code=400)
 
