@@ -1516,6 +1516,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
                 protocol = remote.get("protocol", "ssh")
                 auto_push = remote.get("autoPush", False)
                 if owner and repo:
+                    host = remote.get("host", "")
                     templates = {
                         "github": {
                             "ssh": f"git@github.com:{owner}/{repo}.git",
@@ -1533,8 +1534,12 @@ def build_webui_api_app(project_root: Path) -> Starlette:
                             "ssh": f"git@bitbucket.org:{owner}/{repo}.git",
                             "https": f"https://bitbucket.org/{owner}/{repo}.git",
                         },
+                        "custom": {
+                            "ssh": f"git@{host}:{owner}/{repo}.git",
+                            "https": f"https://{host}/{owner}/{repo}.git",
+                        },
                     }
-                    tmpl_dict = templates.get(provider, templates["github"])
+                    tmpl_dict = templates.get(provider, templates.get("custom") if host else templates["github"])
                     remote_url = tmpl_dict.get(protocol, tmpl_dict["ssh"])
                     add_remote = await asyncio.to_thread(
                         subprocess.run,

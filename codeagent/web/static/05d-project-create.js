@@ -55,8 +55,15 @@
       var preview = document.getElementById('projectRemoteUrlPreview');
       if (!preview) return;
       var provider = document.getElementById('selProjectRemoteProvider').value;
-      var owner = document.getElementById('inpProjectRemoteOwner').value.trim() || '{owner}';
-      var repo = document.getElementById('inpProjectRemoteRepo').value.trim() || '{repo}';
+      var hostEl = document.getElementById('inpProjectRemoteHost');
+      var ownerEl = document.getElementById('inpProjectRemoteOwner');
+      var repoEl = document.getElementById('inpProjectRemoteRepo');
+
+      // 显示/隐藏 主机地址输入
+      hostEl.style.display = provider === 'custom' ? '' : 'none';
+
+      var owner = ownerEl.value.trim() || '{owner}';
+      var repo = repoEl.value.trim() || '{repo}';
       var protocol = document.querySelector('input[name="projectRemoteProtocol"]:checked')?.value || 'ssh';
       var templates = {
         'github': { ssh: 'git@github.com:{owner}/{repo}.git', https: 'https://github.com/{owner}/{repo}.git' },
@@ -65,7 +72,18 @@
         'bitbucket': { ssh: 'git@bitbucket.org:{owner}/{repo}.git', https: 'https://bitbucket.org/{owner}/{repo}.git' },
       };
       var t = templates[provider];
-      if (t) preview.textContent = 'URL: ' + t[protocol].replace('{owner}', owner).replace('{repo}', repo);
+      if (t) {
+        preview.textContent = 'URL: ' + t[protocol].replace('{owner}', owner).replace('{repo}', repo);
+      } else if (provider === 'custom') {
+        var host = hostEl.value.trim() || '{host}';
+        var url;
+        if (protocol === 'ssh') {
+          url = 'git@' + host + ':' + owner + '/' + repo + '.git';
+        } else {
+          url = 'https://' + host + '/' + owner + '/' + repo + '.git';
+        }
+        preview.textContent = 'URL: ' + url;
+      }
     }
 
     // ---- 目录选择器：服务端调系统对话框（macOS choose folder / Win 文件夹选择器），返回完整路径 ---- //

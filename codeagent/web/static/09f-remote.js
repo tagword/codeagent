@@ -33,7 +33,13 @@
           if (m && m[3] === 'fetch') remotes.push({ name: m[1], url: m[2] });
         });
         if (remotes.length > 0) {
-          display.innerHTML = '🔗 <span title="' + escAttr(remotes[0].url) + '">' + escapeHtml(remotes[0].name) + ' → ' + escapeHtml(_shortUrl(remotes[0].url)) + '</span>';
+          var html = '';
+          remotes.forEach(function(r) {
+            html += '<div style="padding:1px 0;font-size:11px;" title="' + escAttr(r.url) + '">';
+            html += '🔗 <strong>' + escapeHtml(r.name) + '</strong> → ' + escapeHtml(_shortUrl(r.url));
+            html += '</div>';
+          });
+          display.innerHTML = html;
           infoBar.style.display = 'flex';
           emptyBar.style.display = 'none';
           return;

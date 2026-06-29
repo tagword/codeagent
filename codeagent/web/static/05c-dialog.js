@@ -41,6 +41,8 @@
       document.getElementById('inpCloneUrl').value = '';
       document.getElementById('chkProjectRemoteEnable').checked = false;
       document.getElementById('projectRemoteForm').style.display = 'none';
+      document.getElementById('inpProjectRemoteHost').value = '';
+      document.getElementById('inpProjectRemoteHost').style.display = 'none';
       _updateProjectSourceFields('scratch');
 
       // 加载默认远程配置
@@ -64,14 +66,20 @@
         // 收集远程信息
         var remoteInfo = null;
         if (source !== 'clone' && document.getElementById('chkProjectRemoteEnable').checked) {
+          var provider = document.getElementById('selProjectRemoteProvider').value;
           remoteInfo = {
-            provider: document.getElementById('selProjectRemoteProvider').value,
+            provider: provider,
+            host: document.getElementById('inpProjectRemoteHost').value.trim(),
             owner: document.getElementById('inpProjectRemoteOwner').value.trim(),
             repo: document.getElementById('inpProjectRemoteRepo').value.trim(),
             protocol: document.querySelector('input[name="projectRemoteProtocol"]:checked')?.value || 'ssh',
             autoPush: document.getElementById('chkProjectAutoPush').checked,
           };
-          if (!remoteInfo.owner || !remoteInfo.repo) remoteInfo = null;
+          if (provider === 'custom') {
+            if (!remoteInfo.host || !remoteInfo.owner || !remoteInfo.repo) remoteInfo = null;
+          } else {
+            if (!remoteInfo.owner || !remoteInfo.repo) remoteInfo = null;
+          }
         }
 
         // 不关闭对话框，而是显示进度覆盖层
@@ -92,7 +100,7 @@
       });
 
       // 远程输入实时预览
-      ['selProjectRemoteProvider', 'inpProjectRemoteOwner', 'inpProjectRemoteRepo'].forEach(function(id) {
+      ['selProjectRemoteProvider', 'inpProjectRemoteHost', 'inpProjectRemoteOwner', 'inpProjectRemoteRepo'].forEach(function(id) {
         var el = document.getElementById(id);
         if (el) el.addEventListener('change', _updateProjectRemotePreview);
       });
