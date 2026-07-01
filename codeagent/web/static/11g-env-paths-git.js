@@ -23,7 +23,14 @@ function _gitProviderFromSelect(id) {
 function _syncCredUrlFromProvider() {
   var prov = _gitProviderFromSelect('selConfigCredProvider');
   var inp = document.getElementById('inpConfigCredUrl');
-  if (inp) inp.value = GIT_PROVIDER_HTTPS_HOST[prov] || GIT_PROVIDER_HTTPS_HOST.github;
+  if (!inp) return;
+  if (prov === 'custom') {
+    inp.readOnly = false;
+    if (!inp.value) inp.value = 'https://';
+  } else {
+    inp.readOnly = true;
+    inp.value = GIT_PROVIDER_HTTPS_HOST[prov] || GIT_PROVIDER_HTTPS_HOST.github;
+  }
 }
 
 async function loadConfigPaths() {
