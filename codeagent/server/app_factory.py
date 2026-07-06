@@ -466,18 +466,7 @@ def create_app():
                         )
                     ]
                     if new_tail:
-                        if (_stream_placeholder_created[0]
-                                and chat_sess.messages
-                                and chat_sess.messages[-1].get("_streaming")
-                                and new_tail[0].get("role") == "assistant"):
-                            real_msg = dict(new_tail[0])
-                            real_msg.pop("_streaming", None)
-                            if "ts" not in real_msg or not real_msg.get("ts"):
-                                real_msg["ts"] = datetime.now(timezone.utc).isoformat()
-                            chat_sess.messages[-1] = real_msg
-                            rest = new_tail[1:]
-                        else:
-                            rest = new_tail
+                        rest = new_tail
                         if rest:
                             persisted_rest = []
                             for message in rest:
