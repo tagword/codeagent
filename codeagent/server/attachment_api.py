@@ -141,6 +141,49 @@ async def api_attachment_get(request: Request) -> Response:
     )
 
 
+async def api_file_serve(request: Request) -> Response:
+    """Serve local files from the server filesystem.
+    
+    Security: only serves files under /home/u2/ (agent workspace).
+    Rejects '..' path traversal.
+    """
+    from pathlib import Path as _Path
+    import mimetypes as _mime
+
+    raw = request.query_params.get("path", "").strip()
+    if not raw:
+        return JSONResponse({"detail": "path query parameter required"}, status_code=400)
+
+    # Path traversal protection
+    if ".." in raw.split("/") or raw.startswith("~"):
+        return JSONResponse({"detail": "invalid path"}, status_code=403)
+
+    p = _Path(raw)
+    if not p.is_absolute():
+        return JSONResponse({"detail": "absolute path required"}, status_code=400)
+
+    try:
+        resolved = p.resolve(strict=False)
+    except Exception:
+        return JSONResponse({"detail": "invalid path"}, status_code=400)
+
+    # Only allow files under /home/u2/
+    allowed_prefix = "/home/u2/"
+    if not str(resolved).startswith(allowed_prefix):
+        return JSONResponse({"detail": "access denied"}, status_code=403)
+
+    if not resolved.is_file():
+        return JSONResponse({"detail": "not found"}, status_code=404)
+
+    mt, _ = _mime.guess_type(str(resolved))
+    return FileResponse(
+        str(resolved),
+        media_type=mt or "application/octet-stream",
+        filename=resolved.name,
+        headers={"Cache-Control": "private, max-age=300"},
+    )
+
+
 def parse_chat_multimodal_body(body: dict[str, Any]) -> tuple[str, list[str], bool, dict[str, Any]]:
     """Return (message_text, attachment_ids, has_image, extra)."""
     from codeagent.core.attachments import (

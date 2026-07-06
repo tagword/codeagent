@@ -36,6 +36,16 @@ function rewriteAttachmentRefsInMarkdown(raw) {
     /https?:\/\/[^/]+\/api\/attachments\/([^?\s)"']+)(\?[^)\s"']*)?/gi,
     function(_, id, _q) { return toUrl(id); }
   );
+  // 本地文件系统绝对路径（如 /home/u2/xxx/tmp/file.png）→ 通过 /api/file-serve 代理加载
+  // 匹配 ![alt](/absolute/path/file.ext) 形式的图片引用
+  t = t.replace(
+    /!\[([^\]]*)\]\(\/([^)]+\.\w+)\)/gi,
+    function(_, alt, rawPath) {
+      var path = rawPath.split('?')[0];
+      if (!path.startsWith('home/u2/')) return _;
+      return '![' + alt + '](/api/file-serve?path=' + encodeURIComponent('/' + path) + ')';
+    }
+  );
   return t;
 }
 

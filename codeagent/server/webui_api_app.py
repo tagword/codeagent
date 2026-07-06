@@ -20,7 +20,7 @@ from urllib.parse import urlparse
 
 from starlette.applications import Starlette
 from starlette.requests import Request
-from starlette.responses import JSONResponse, StreamingResponse
+from starlette.responses import JSONResponse, Response, StreamingResponse
 from starlette.routing import Route
 
 logger = logging.getLogger(__name__)
@@ -2521,6 +2521,46 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         lines = text.count("\n") + (1 if text and not text.endswith("\n") else 0)
         return JSONResponse({"path": str(fp), "content": text, "language": language, "size": size, "lines": lines})
 
+    async def api_project_file_serve(request: Request) -> Response:
+        """Serve a file from a known project directory by absolute path.
+
+        Query param ``path`` — absolute filesystem path to serve (must be under a project dir).
+        Returns the raw file content with proper MIME type for images, etc.
+        """
+        path_str = (request.query_params.get("path") or "").strip()
+        if not path_str:
+            return Response("path required", status_code=400)
+        try:
+            fp = Path(path_str).resolve()
+        except OSError:
+            return Response("invalid path", status_code=400)
+        aid = _default_agent_id()
+        # Check path is under a known project directory
+        from seed.core.proj_reg import list_project_ids
+        allowed = False
+        for pid in list_project_ids(aid):
+            base = _project_fs_dir(aid, pid)
+            if base is None:
+                continue
+            base_r = base.resolve()
+            if fp == base_r or base_r in fp.parents:
+                allowed = True
+                break
+        if not allowed or not fp.is_file():
+            return Response("not found", status_code=404)
+        ext = fp.suffix.lower()
+        mime_map = {
+            ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+            ".gif": "image/gif", ".svg": "image/svg+xml", ".webp": "image/webp",
+            ".ico": "image/x-icon", ".pdf": "application/pdf",
+        }
+        media_type = mime_map.get(ext, "application/octet-stream")
+        try:
+            content = fp.read_bytes()
+            return Response(content=content, media_type=media_type)
+        except OSError as e:
+            return Response(str(e), status_code=500)
+
     async def api_setup_finish(_: Request) -> JSONResponse:
         """Generate Web UI token only; wizard completion is deferred to api_setup_complete."""
         tok = secrets.token_urlsafe(32)
@@ -3075,6 +3115,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         Route("/pick-directory", api_pick_directory, methods=["POST"]),
         Route("/files/list", api_files_list, methods=["GET"]),
         Route("/files/read", api_files_read, methods=["GET"]),
+        Route("/project-file", api_project_file_serve, methods=["GET"]),
         Route("/setup/finish", api_setup_finish, methods=["POST"]),
         Route("/setup/complete", api_setup_complete, methods=["POST"]),
         Route("/setup/test-llm", api_setup_test_llm, methods=["POST"]),

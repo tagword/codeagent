@@ -151,6 +151,9 @@ def is_public_webui_route(path: str, method: str) -> bool:
         return True
     if path == "/api/ui/llm/providers" and method == "GET":
         return True
+    # File-serve for local images (path validation in handler)
+    if path == "/api/file-serve" and method == "GET":
+        return True
     return bool(method == "GET" and path in ("/icon.png", "/favicon.ico", "/favicon.svg", "/health", "/api/health"))
 
 

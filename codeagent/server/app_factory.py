@@ -1248,6 +1248,7 @@ def create_app():
         api_attachment_batch,
         api_attachment_get,
         api_attachment_upload,
+        api_file_serve,
     )
     from codeagent.server.tts_api import api_tts
 
@@ -1290,6 +1291,7 @@ def create_app():
         Route("/api/attachments", api_attachment_upload, methods=["POST"]),
         Route("/api/attachments/batch", api_attachment_batch, methods=["POST"]),
         Route("/api/attachments/{attachment_id}", api_attachment_get, methods=["GET"]),
+        Route("/api/file-serve", api_file_serve, methods=["GET"]),
         Route("/api/chat", api_chat, methods=["POST"]),
         Route("/api/chat/stop", api_chat_stop, methods=["POST"]),
         Route("/api/chat/rollback", api_chat_rollback, methods=["POST"]),
