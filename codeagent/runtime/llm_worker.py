@@ -75,7 +75,9 @@ class LLMWorker:
             persisted_context_usage=_prev_cu if isinstance(_prev_cu, dict) else None,
         )
         persist_compact_summary(chat_sess.messages, compact_result)
-        strip_ephemeral_message_fields(api_msgs)
+        # Don't strip _source_idx yet - we need it after the tool loop
+        # to distinguish pre-loop messages from new ones (mid-loop compact
+        # preserves same dict objects, so _source_idx survives).
         from codeagent.runtime.compact_state import inject_state_into_system
 
         if compact_result:
@@ -96,7 +98,6 @@ class LLMWorker:
 
         set_active_llm_session(mkey)
         try:
-            n_before = len(api_msgs)
             reply, meta, tools_used, tool_trace, loop_meta = asyncio.run(
                 run_llm_tool_loop(
                     llm,
@@ -106,7 +107,17 @@ class LLMWorker:
                     max_tool_rounds=max_tool_rounds,
                 )
             )
-            merge_llm_tail_into_full(chat_sess.messages, api_msgs, n_before)
+            # Find the true boundary: pre-loop messages from build_api_projection_messages
+            # all have _source_idx (survives mid-loop compact). New messages generated
+            # during the tool loop don't have it.
+            actual_n_before = len(api_msgs)
+            for i, m in enumerate(api_msgs):
+                if isinstance(m, dict) and m.get("_source_idx") is None:
+                    actual_n_before = i
+                    break
+            # Now safe to strip ephemeral fields (including _source_idx)
+            strip_ephemeral_message_fields(api_msgs)
+            merge_llm_tail_into_full(chat_sess.messages, api_msgs, actual_n_before)
             persist_chat_session(chat_sess, aid)
             out_meta = dict(meta or {})
             out_meta.update(loop_meta or {})
