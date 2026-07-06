@@ -204,8 +204,6 @@ def _webui_history_rows_from_session(sess: Session, max_chars: int) -> list[dict
         role = m.get("role")
         if role not in ("user", "assistant"):
             continue
-        if m.get("_streaming"):
-            continue
         c = msg_text_to_str(m.get("content"))
         if len(c) > max_chars:
             c = c[: max_chars - 24] + "\n…[内容已截断]"
