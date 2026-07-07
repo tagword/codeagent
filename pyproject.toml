@@ -4,15 +4,18 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "codeagent"
-version = "1.1.3"
+version = "1.1.6"
 description = "LLM agent with Markdown config, tool loop, Web UI, sessions, memory, and webhooks"
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.9"
 dependencies = [
-    "seed>=1.0.6",
-    "seed-model-providers>=1.0.0",
-    "seed-tools[code]>=1.0.2",
+    # ⚠️ seed / seed-model-providers / seed-tools 是私有依赖，不在 PyPI 上
+    #    这里使用 git+https URL 确保 pip install -e . 可直接安装
+    #    更健壮的安装方式见 run.sh（含网络重试、tarball 降级）
+    "seed @ git+https://github.com/tagword/seed.git",
+    "seed-model-providers @ git+https://github.com/tagword/seed-model-providers.git",
+    "seed-tools[code] @ git+https://github.com/tagword/seed-tools.git",
     "uvicorn[standard]>=0.30.0",
     "starlette>=0.37.0"
 ]

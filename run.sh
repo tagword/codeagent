@@ -175,6 +175,8 @@ if ! $SKIP_INSTALL; then
   pip install lxml -q $PIP_MIRROR_FLAG 2>&1 || warn "  lxml 预装失败，seed 安装时可能出错"
 
   # ── 安装私有依赖（Seed 框架） ──────────────────────────────────
+  # pyproject.toml 已添加 git+https 依赖，pip install 可自动拉取
+  # 但 run.sh 用更健壮的方式（多策略重试 + tarball 降级）优先处理
   if ! pip show seed-model-providers &>/dev/null; then
     info "安装 Seed 框架（私有依赖: seed, seed-model-providers, seed-tools）..."
     SEED_SRC="$PROJECT_ROOT/.seed-build"

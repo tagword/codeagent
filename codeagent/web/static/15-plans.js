@@ -90,8 +90,9 @@ var SOURCE_LABELS = {
   docs: { icon: '\uD83D\uDCC4', label: '项目文档' },         // 📄
   plans: { icon: '\uD83D\uDCCB', label: '工作计划' },        // 📋
   project_plans: { icon: '\uD83D\uDCC1', label: '项目计划' }, // 📁
+  rules: { icon: '\u2699\uFE0F', label: '项目规则' },        // ⚙️
 };
-var SOURCE_ORDER = ['docs', 'plans', 'project_plans'];
+var SOURCE_ORDER = ['rules', 'docs', 'plans', 'project_plans'];
 
 async function refreshPlans() {
   var plans = await fetchPlans();
@@ -99,7 +100,7 @@ async function refreshPlans() {
   planList.innerHTML = '';
 
   if (!plans || plans.length === 0) {
-    planList.innerHTML = '<div class="plan-empty">当前项目暂无规划文档。<br/>Agent 在规划项目时会自动在 <code>docs/</code> 生成 <code>requirement.md / design.md / task.md</code>，<br/>在 <code>plans/</code> 生成 <code>*-plan.md</code>。</div>';
+    planList.innerHTML = '<div class="plan-empty">当前项目暂无规划文档。<br/>Agent 在规划项目时会自动在 <code>docs/</code> 生成 <code>requirement.md / design.md / task.md</code>，<br/>在 <code>plans/</code> 生成 <code>*-plan.md</code>。<br/>你也可在 <code>.codeagent/rules.md</code> 中写入项目级规则，自动生效。</div>';
     if (planStatus) planStatus.textContent = '';
     return;
   }

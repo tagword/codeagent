@@ -1718,6 +1718,25 @@ def build_webui_api_app(project_root: Path) -> Starlette:
                             }
                         )
 
+                # rules/ — .codeagent/rules.md (global) + .codeagent/{aid}/rules.md (agent)
+                ca_root = Path(proj_path) / ".codeagent"
+                for rname, rpath in [("rules.md", ca_root / "rules.md"), (f"rules.md ({aid})", ca_root / aid / "rules.md")]:
+                    if rpath.is_file():
+                        try:
+                            st = rpath.stat()
+                            content = rpath.read_text(encoding="utf-8", errors="replace")
+                        except OSError:
+                            continue
+                        plans.append(
+                            {
+                                "name": rname,
+                                "source": "rules",
+                                "modified_at": int(st.st_mtime),
+                                "size": st.st_size,
+                                "content": content[:80000] if content.strip() else "",
+                            }
+                        )
+
             return JSONResponse({"plans": plans})
         except Exception as e:
             logger.exception("api_projects_plans")
