@@ -99,6 +99,22 @@
         document.getElementById('projectRemoteForm').style.display = this.checked ? 'block' : 'none';
       });
 
+      // 方案选择器切换
+      var selPreset = document.getElementById('selProjectPreset');
+      if (selPreset) {
+        selPreset.addEventListener('change', function() {
+          var name = this.value;
+          if (!name) return;
+          fetch('/api/ui/git/defaults').then(function(r) { return r.json(); }).then(function(j) {
+            var def = j.defaults || {};
+            if (!def.presets && def.provider) {
+              def.presets = [{ name: '默认', provider: def.provider, owner: def.owner || '', host: def.host || '', protocol: def.protocol || 'ssh', autoPush: !!def.autoPush }];
+            }
+            _applyPreset(name, def.presets || []);
+          }).catch(function() {});
+        });
+      }
+
       // 远程输入实时预览
       ['selProjectRemoteProvider', 'inpProjectRemoteHost', 'inpProjectRemoteOwner', 'inpProjectRemoteRepo'].forEach(function(id) {
         var el = document.getElementById(id);

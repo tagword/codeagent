@@ -492,91 +492,54 @@
             <h3 class="section__title">🔗 Git 远程仓库</h3>
           </div>
           <p class="section__desc">
-            分三块，互不相同：<strong>默认远程</strong>只影响「新建项目」对话框预填；<strong>SSH</strong> 用于 <code>git@host:…</code>；<strong>HTTPS Token</strong> 写入系统凭据助手，供 <code>https://…</code> 拉取/推送。
+            预设方案整合了远程地址、SSH 连通性和 PAT 凭据。每个方案就是一整套 Git 远程配置，创建项目时一步到位。
           </p>
 
-          <!-- 默认远程配置（仅新建项目预填） -->
-          <div id="gitDefaultsSection" style="margin-bottom:var(--sp-3);padding:var(--sp-3);border:1px solid var(--border);border-radius:6px;">
-            <div style="font-weight:500;font-size:12px;margin-bottom:var(--sp-2);">📋 新建项目默认远程（不修改全局 git）</div>
+          <!-- Git 远程预设方案（集成版） -->
+          <div style="margin-bottom:var(--sp-3);padding:var(--sp-3);border:1px solid var(--border);border-radius:6px;">
+            <select id="selGitDefaultProvider" style="display:none;"></select>
+            <select id="selConfigCredProvider" style="display:none;"></select>
+            <div style="font-weight:500;font-size:12px;margin-bottom:var(--sp-2);">📋 预设方案</div>
             <p style="font-size:11px;color:var(--text-muted);margin:0 0 var(--sp-2);">
-              勾选后，在<strong>新建空白/模板项目</strong>时预填平台、所有者、协议。克隆已有 URL 的项目不会用到此项。
+              每个方案包含平台、所有者、主机地址、SSH 连通状态和 PAT 凭据——全套一起管理。
             </p>
             <label class="checkbox-row" style="margin-bottom:var(--sp-2);">
               <input type="checkbox" id="chkGitDefaultEnabled"/>
               <span>新建项目时默认启用远程仓库</span>
             </label>
             <div id="gitDefaultsForm" style="display:none;">
-              <div class="form-row">
-                <label class="form-label" for="selGitDefaultProvider">平台</label>
-                <select id="selGitDefaultProvider" class="md-select" style="max-width:160px;">
-                  <option value="github">GitHub</option>
-                  <option value="gitlab">GitLab</option>
-                  <option value="gitee">Gitee</option>
-                  <option value="bitbucket">Bitbucket</option>
-                  <option value="custom">自定义</option>
-                </select>
-              </div>
-              <div class="form-row">
-                <label class="form-label" for="inpGitDefaultOwner">所有者</label>
-                <input type="text" id="inpGitDefaultOwner" class="form-input-sm" placeholder="用户名或组织名" style="max-width:200px;">
-              </div>
-              <div class="form-row">
-                <label class="form-label">协议</label>
-                <div style="display:flex;gap:12px;align-items:center;">
-                  <label style="font-size:12px;display:flex;align-items:center;gap:4px;cursor:pointer;">
-                    <input type="radio" name="gitDefaultProtocol" value="ssh" checked> SSH
-                  </label>
-                  <label style="font-size:12px;display:flex;align-items:center;gap:4px;cursor:pointer;">
-                    <input type="radio" name="gitDefaultProtocol" value="https"> HTTPS
-                  </label>
+
+              <!-- 方案列表 -->
+              <div id="gitPresetList"></div>
+
+              <!-- PAT 内联表单 -->
+              <div id="gitPatForm" style="display:none;border:1px solid var(--border);border-radius:4px;padding:var(--sp-2);margin-bottom:var(--sp-2);">
+                <div style="font-size:11px;font-weight:500;margin-bottom:var(--sp-1);">🔐 PAT 配置 — <span id="patFormHostLabel"></span></div>
+                <div class="form-row">
+                  <label class="form-label" for="inpPatUser">用户名</label>
+                  <input type="text" id="inpPatUser" class="form-input-sm" placeholder="用户名或邮箱" style="max-width:200px;">
+                </div>
+                <div class="form-row">
+                  <label class="form-label" for="inpPatToken">Token / 密码</label>
+                  <input type="password" id="inpPatToken" class="form-input-sm" placeholder="Personal Access Token" style="max-width:250px;">
+                </div>
+                <div class="row-actions">
+                  <button type="button" class="btn btn--primary btn--sm" id="btnPatSave">保存</button>
+                  <button type="button" class="btn btn--ghost btn--sm" id="btnPatCancel">取消</button>
+                  <span id="patFormStatus" class="status-line" style="display:inline;margin-left:8px;"></span>
                 </div>
               </div>
-              <label class="checkbox-row">
-                <input type="checkbox" id="chkGitDefaultAutoPush"/>
-                <span>创建后自动推送初始提交</span>
-              </label>
-              <div class="row-actions" style="margin-top:var(--sp-2);">
-                <button type="button" class="btn btn--primary btn--sm" id="btnGitDefaultsSave">保存默认值</button>
-                <span id="gitDefaultsStatus" class="status-line" style="display:inline;margin-left:8px;"></span>
-              </div>
-            </div>
-          </div>
 
-          <!-- SSH 密钥管理（可折叠） -->
-          <div style="margin-top:var(--sp-2);border:1px solid var(--border);border-radius:6px;overflow:hidden;">
-            <div id="gitConfigSshHeader" style="display:flex;align-items:center;justify-content:space-between;padding:var(--sp-2) var(--sp-3);cursor:pointer;user-select:none;font-size:12px;">
-              <span>🔑 SSH 密钥</span>
-              <span id="gitConfigSshIcon" style="font-size:10px;color:var(--text-muted);">▶</span>
-            </div>
-            <div id="gitConfigSshBody" style="display:none;padding:0 var(--sp-3) var(--sp-3);">
-              <p style="font-size:11px;color:var(--text-muted);margin:0 0 var(--sp-2);">
-                新建项目选 <strong>SSH</strong> 协议时使用。检测目标与上方「默认远程」平台一致，密钥列表来自 <code>ssh -G</code>（与 <code>git push</code> 实际行为一致），连通性 ✅ 即表示可用。
-              </p>
-              <div id="gitConfigSshStatus" style="font-size:11px;color:var(--text-muted);padding:4px 0;">展开后检查</div>
-              <div style="display:flex;gap:4px;flex-wrap:wrap;">
-                <button type="button" class="btn btn--ghost btn--xs" id="btnConfigSshGen">生成密钥</button>
-                <button type="button" class="btn btn--ghost btn--xs" id="btnConfigSshCat">查看公钥</button>
-                <button type="button" class="btn btn--ghost btn--xs" id="btnConfigSshTest">测试连接</button>
-              </div>
-              <pre id="gitConfigSshOutput" style="font-size:11px;color:var(--text);padding:6px 0;max-height:120px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;margin:0;"></pre>
-            </div>
-          </div>
-
-          <!-- HTTPS 凭据（可折叠） -->
-          <div style="margin-top:var(--sp-2);border:1px solid var(--border);border-radius:6px;overflow:hidden;">
-            <div id="gitConfigCredHeader" style="display:flex;align-items:center;justify-content:space-between;padding:var(--sp-2) var(--sp-3);cursor:pointer;user-select:none;font-size:12px;">
-              <span>🔐 HTTPS 凭据</span>
-              <span id="gitConfigCredIcon" style="font-size:10px;color:var(--text-muted);">▶</span>
-            </div>
-            <div id="gitConfigCredBody" style="display:none;padding:0 var(--sp-3) var(--sp-3);">
-              <p style="font-size:11px;color:var(--text-muted);margin:0 0 var(--sp-2);">
-                仅在选择 <strong>HTTPS</strong> 协议时需要。Token 存入 <code>git credential</code>（如 macOS 钥匙串），与上方「默认远程」里的平台/所有者无关。
-              </p>
-              <div id="gitConfigCredStatus" style="font-size:11px;color:var(--text-muted);padding:4px 0;">展开后查看状态</div>
-              <div id="gitConfigCredForm" style="display:none;margin-bottom:var(--sp-2);">
+              <!-- 方案编辑表单 -->
+              <div id="gitPresetEditor" style="display:none;border:1px solid var(--border);border-radius:4px;padding:var(--sp-2);margin-bottom:var(--sp-2);">
+                <div style="font-size:11px;font-weight:500;margin-bottom:var(--sp-1);" id="gitPresetEditorTitle">添加方案</div>
                 <div class="form-row">
-                  <label class="form-label" for="selConfigCredProvider">平台</label>
-                  <select id="selConfigCredProvider" class="md-select" style="max-width:160px;">
+                  <label class="form-label" for="inpPresetName">方案名称</label>
+                  <input type="text" id="inpPresetName" class="form-input-sm" placeholder="例如: GitHub 主号" style="max-width:200px;">
+                </div>
+                <div class="form-row">
+                  <label class="form-label" for="selPresetProvider">平台</label>
+                  <select id="selPresetProvider" class="md-select" style="max-width:160px;">
                     <option value="github">GitHub</option>
                     <option value="gitlab">GitLab</option>
                     <option value="gitee">Gitee</option>
@@ -584,29 +547,38 @@
                     <option value="custom">自定义</option>
                   </select>
                 </div>
-                <div class="form-row">
-                  <label class="form-label" for="inpConfigCredUrl">凭据主机 URL</label>
-                  <input type="text" id="inpConfigCredUrl" class="form-input-sm" placeholder="https://github.com" style="max-width:250px;" readonly/>
-                  <span class="form-hint">由平台自动填充，对应 git 凭据里的 host</span>
+                <div class="form-row" id="rowPresetHost" style="display:none;">
+                  <label class="form-label" for="inpPresetHost">主机地址</label>
+                  <input type="text" id="inpPresetHost" class="form-input-sm" placeholder="例如 git.tagword.cn" style="max-width:250px;">
+                  <span class="form-hint">选「自定义」时必填</span>
                 </div>
                 <div class="form-row">
-                  <label class="form-label" for="inpConfigCredUser">用户名</label>
-                  <input type="text" id="inpConfigCredUser" class="form-input-sm" placeholder="用户名或邮箱" style="max-width:200px;">
+                  <label class="form-label" for="inpPresetOwner">所有者</label>
+                  <input type="text" id="inpPresetOwner" class="form-input-sm" placeholder="用户名或组织名" style="max-width:200px;">
                 </div>
                 <div class="form-row">
-                  <label class="form-label" for="inpConfigCredToken">Token / 密码</label>
-                  <input type="password" id="inpConfigCredToken" class="form-input-sm" placeholder="Personal Access Token" style="max-width:250px;">
+                  <label class="form-label">协议</label>
+                  <div style="display:flex;gap:12px;align-items:center;">
+                    <label style="font-size:12px;display:flex;align-items:center;gap:4px;cursor:pointer;">
+                      <input type="radio" name="presetProtocol" value="ssh" checked> SSH
+                    </label>
+                    <label style="font-size:12px;display:flex;align-items:center;gap:4px;cursor:pointer;">
+                      <input type="radio" name="presetProtocol" value="https"> HTTPS
+                    </label>
+                  </div>
                 </div>
-                <div class="row-actions">
-                  <button type="button" class="btn btn--primary btn--sm" id="btnConfigCredSave">保存凭据</button>
-                  <button type="button" class="btn btn--ghost btn--sm" id="btnConfigCredCancel">取消</button>
+                <label class="checkbox-row">
+                  <input type="checkbox" id="chkPresetAutoPush"/>
+                  <span>创建后自动推送初始提交</span>
+                </label>
+                <div class="row-actions" style="margin-top:var(--sp-1);">
+                  <button type="button" class="btn btn--primary btn--sm" id="btnPresetSave">保存方案</button>
+                  <button type="button" class="btn btn--ghost btn--sm" id="btnPresetCancel">取消</button>
+                  <span id="presetFormStatus" class="status-line" style="display:inline;margin-left:8px;"></span>
                 </div>
               </div>
-              <div style="display:flex;gap:4px;flex-wrap:wrap;">
-                <button type="button" class="btn btn--ghost btn--xs" id="btnConfigCredAdd">+ 添加凭据</button>
-                <button type="button" class="btn btn--ghost btn--xs" id="btnConfigCredShow">查看已存储</button>
-                <button type="button" class="btn btn--ghost btn--xs" id="btnConfigCredClear">清除所有</button>
-              </div>
+
+              <button type="button" class="btn btn--ghost btn--sm" id="btnPresetAdd">+ 添加方案</button>
             </div>
           </div>
 
@@ -797,6 +769,12 @@
               </label>
             </div>
             <div id="projectRemoteForm" style="display:none;padding:8px;border:1px solid var(--border);border-radius:6px;">
+              <div id="presetSelectorRow" style="display:none;margin-bottom:6px;">
+                <select id="selProjectPreset" class="modal-field__input" style="flex:1;min-width:140px;">
+                  <option value="">— 选择方案 —</option>
+                </select>
+                <span style="font-size:10px;color:var(--text-muted);margin-left:4px;">自动填充下方</span>
+              </div>
               <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;">
                 <select id="selProjectRemoteProvider" class="modal-field__input" style="flex:1;min-width:100px;">
                   <option value="github">GitHub</option>

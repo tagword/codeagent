@@ -36,19 +36,72 @@
         if (!r.ok) return;
         var j = await r.json();
         var def = j.defaults || {};
+        // 兼容旧格式
+        if (!def.presets && def.provider) {
+          def.presets = [{
+            name: '默认',
+            provider: def.provider,
+            owner: def.owner || '',
+            host: def.host || '',
+            protocol: def.protocol || 'ssh',
+            autoPush: !!def.autoPush,
+          }];
+          def.defaultPreset = '默认';
+        }
         if (def.enabled) {
           document.getElementById('chkProjectRemoteEnable').checked = true;
           document.getElementById('projectRemoteForm').style.display = 'block';
-          if (def.provider) document.getElementById('selProjectRemoteProvider').value = def.provider;
-          if (def.owner) document.getElementById('inpProjectRemoteOwner').value = def.owner;
-          if (def.protocol === 'https') {
-            var el = document.querySelector('input[name="projectRemoteProtocol"][value="https"]');
-            if (el) el.checked = true;
+          // 填充方案选择器
+          var presets = def.presets || [];
+          var defaultName = def.defaultPreset || '';
+          var selPreset = document.getElementById('selProjectPreset');
+          if (selPreset) {
+            if (presets.length > 1) {
+              document.getElementById('presetSelectorRow').style.display = '';
+              selPreset.innerHTML = '<option value="">— 选择方案 —</option>';
+              for (var i = 0; i < presets.length; i++) {
+                var opt = document.createElement('option');
+                opt.value = presets[i].name;
+                opt.textContent = presets[i].name;
+                selPreset.appendChild(opt);
+              }
+            } else {
+              document.getElementById('presetSelectorRow').style.display = 'none';
+            }
+            // 默认选中 defaultPreset
+            if (defaultName) {
+              selPreset.value = defaultName;
+              _applyPreset(defaultName, presets);
+            } else if (presets.length === 1) {
+              _applyPreset(presets[0].name, presets);
+            }
+          } else {
+            // fallback: 无选择器时直接填第一套
+            if (presets.length) _applyPreset(presets[0].name, presets);
           }
-          document.getElementById('chkProjectAutoPush').checked = !!def.autoPush;
-          _updateProjectRemotePreview();
         }
       } catch(_) {}
+    }
+
+    function _applyPreset(name, presets) {
+      var p = null;
+      for (var i = 0; i < (presets || []).length; i++) {
+        if (presets[i].name === name) { p = presets[i]; break; }
+      }
+      if (!p && presets && presets.length) p = presets[0];
+      if (!p) return;
+      document.getElementById('selProjectRemoteProvider').value = p.provider || 'github';
+      if (p.host) document.getElementById('inpProjectRemoteHost').value = p.host;
+      if (p.owner) document.getElementById('inpProjectRemoteOwner').value = p.owner;
+      if (p.protocol === 'https') {
+        var el = document.querySelector('input[name="projectRemoteProtocol"][value="https"]');
+        if (el) el.checked = true;
+      } else {
+        var el2 = document.querySelector('input[name="projectRemoteProtocol"][value="ssh"]');
+        if (el2) el2.checked = true;
+      }
+      document.getElementById('chkProjectAutoPush').checked = !!p.autoPush;
+      _updateProjectRemotePreview();
     }
 
     function _updateProjectRemotePreview() {

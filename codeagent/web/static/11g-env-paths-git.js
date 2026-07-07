@@ -230,7 +230,16 @@ async function _clearGitProxy(scheme) {
   }
 }
 
-/* ---------- 默认远程配置 ---------- */
+/* ---------- 默认远程配置（多方案） ---------- */
+/* 数据格式:
+   { enabled: true,
+     presets: [{ name, provider, owner, host, protocol, autoPush }],
+     defaultPreset: "方案名称" }
+*/
+
+// 当前内存中的全量数据
+var _gitDefaultsData = { enabled: false, presets: [], defaultPreset: '' };
+
 async function _loadGitDefaults() {
   const chk = document.getElementById('chkGitDefaultEnabled');
   if (!chk) return;
@@ -239,72 +248,407 @@ async function _loadGitDefaults() {
     const r = await fetch('/api/ui/git/defaults');
     if (!r.ok) return;
     const j = await r.json();
-    const def = j.defaults || {};
+    var def = j.defaults || {};
+    // 兼容旧格式：单套方案自动转多方案
+    if (!def.presets && def.provider) {
+      def.presets = [{
+        name: '默认',
+        provider: def.provider,
+        owner: def.owner || '',
+        host: def.host || '',
+        protocol: def.protocol || 'ssh',
+        autoPush: !!def.autoPush,
+      }];
+      def.defaultPreset = '默认';
+    }
+    _gitDefaultsData = def;
     chk.checked = !!def.enabled;
     _toggleGitDefaultsForm(def.enabled);
+    // 同步 selGitDefaultProvider（旧占位，供 SSH 读取）
+    _syncGitDefaultProvider();
+    _renderPresetList();
 
-    if (def.provider) {
-      document.getElementById('selGitDefaultProvider').value = def.provider;
-      var credProv = document.getElementById('selConfigCredProvider');
-      if (credProv) credProv.value = def.provider;
+    // 同步 HTTTPS 凭据平台与 SSH 状态
+    var firstPreset = (def.presets && def.presets.length) ? def.presets[0] : null;
+    if (firstPreset) {
+      var selProv = document.getElementById('selConfigCredProvider');
+      if (selProv) selProv.value = firstPreset.provider;
       _syncCredUrlFromProvider();
+      var sshBody = document.getElementById('gitConfigSshBody');
+      if (sshBody && sshBody.style.display === 'block') _refreshGitSshStatus();
     }
-    if (def.owner) document.getElementById('inpGitDefaultOwner').value = def.owner;
-    if (def.protocol === 'https') {
-      const el = document.querySelector('input[name="gitDefaultProtocol"][value="https"]');
-      if (el) el.checked = true;
-    }
-    document.getElementById('chkGitDefaultAutoPush').checked = !!def.autoPush;
-
   } catch (_) {}
 
-  if (!window._gitDefaultsBound) {
-    window._gitDefaultsBound = true;
-    chk.addEventListener('change', function() {
-      _toggleGitDefaultsForm(this.checked);
-    });
-    var selProv = document.getElementById('selGitDefaultProvider');
-    if (selProv) {
-      selProv.addEventListener('change', function() {
-        var credProv = document.getElementById('selConfigCredProvider');
-        if (credProv) credProv.value = selProv.value;
-        _syncCredUrlFromProvider();
-        var sshBody = document.getElementById('gitConfigSshBody');
-        if (sshBody && sshBody.style.display === 'block') _refreshGitSshStatus();
-      });
-    }
-    var gds = document.getElementById('btnGitDefaultsSave');
-    if (gds) gds.addEventListener('click', _saveGitDefaults);
-  }
+  // 绑定事件（只绑一次）
+  if (window._gitDefaultsBound) return;
+  window._gitDefaultsBound = true;
+
+  chk.addEventListener('change', function() {
+    _gitDefaultsData.enabled = this.checked;
+    _toggleGitDefaultsForm(this.checked);
+    if (!this.checked) _commitGitDefaults();
+  });
+
+  document.getElementById('selPresetProvider')?.addEventListener('change', function() {
+    _togglePresetHost(this.value);
+  });
+
+  document.getElementById('btnPresetAdd')?.addEventListener('click', function() {
+    _openPresetEditor(null);
+  });
+
+  document.getElementById('btnPresetSave')?.addEventListener('click', _savePreset);
+  document.getElementById('btnPresetCancel')?.addEventListener('click', _closePresetEditor);
+  document.getElementById('btnPatSave')?.addEventListener('click', _savePat);
+  document.getElementById('btnPatCancel')?.addEventListener('click', _closePatForm);
 }
 
 function _toggleGitDefaultsForm(show) {
-  const form = document.getElementById('gitDefaultsForm');
+  var form = document.getElementById('gitDefaultsForm');
   if (form) form.style.display = show ? 'block' : 'none';
 }
 
-async function _saveGitDefaults() {
-  const status = document.getElementById('gitDefaultsStatus');
+function _togglePresetHost(provider) {
+  var row = document.getElementById('rowPresetHost');
+  if (row) row.style.display = provider === 'custom' ? '' : 'none';
+}
+
+// ---- 方案列表渲染 ----
+function _renderPresetList() {
+  var container = document.getElementById('gitPresetList');
+  if (!container) return;
+  var presets = _gitDefaultsData.presets || [];
+  var defaultName = _gitDefaultsData.defaultPreset || '';
+  if (!presets.length) {
+    container.innerHTML = '<div style="font-size:11px;color:var(--text-muted);padding:4px 0;">暂无方案，点击下方「+ 添加方案」</div>';
+    return;
+  }
+  var html = '';
+  for (var i = 0; i < presets.length; i++) {
+    var p = presets[i];
+    var isDefault = (p.name === defaultName);
+    var providerLabel = p.provider === 'custom' ? (p.host || '自定义') : p.provider;
+    html += '<div style="padding:8px;margin-bottom:6px;'
+          + 'border:1px solid ' + (isDefault ? 'var(--accent)' : 'var(--border)') + ';border-radius:6px;'
+          + 'background:' + (isDefault ? 'rgba(59,130,246,0.06)' : 'transparent') + ';">'
+
+          // 第一行：星标 + 名称 + 信息 + 编辑/删除
+          + '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">'
+          + '<span style="cursor:pointer;font-size:12px;color:' + (isDefault ? 'var(--accent)' : 'var(--text-muted)') + ';" title="设为默认" onclick="_setDefaultPreset(\'' + _escJs(p.name) + '\')">'
+          + (isDefault ? '⭐' : '☆') + '</span>'
+          + '<span style="font-size:12px;font-weight:500;">' + _escHtml(p.name) + '</span>'
+          + '<span style="font-size:10px;color:var(--text-muted);">' + _escHtml(p.owner || '') + ' @ ' + _escHtml(providerLabel) + '</span>'
+          + '<span style="font-size:10px;color:var(--text-muted);">(' + (p.protocol || 'ssh') + ')</span>'
+          + '<div style="margin-left:auto;display:flex;gap:2px;">'
+          + '<button class="btn btn--ghost btn--xs" onclick="_openPresetEditor(' + i + ')" title="编辑">✎</button>'
+          + '<button class="btn btn--ghost btn--xs" style="color:#e74c3c;" onclick="_deletePreset(' + i + ')" title="删除">✕</button>'
+          + '</div>'
+          + '</div>'
+
+          // 第二行：SSH + PAT 状态 + 操作按钮
+          + '<div style="display:flex;align-items:center;gap:12px;font-size:11px;margin-left:18px;">'
+          + '<span>🔑 SSH <span id="presetSshStatus_' + i + '">…</span></span>'
+          + '<span>🔐 PAT <span id="presetPatStatus_' + i + '">…</span></span>'
+          + '<div style="margin-left:auto;display:flex;gap:4px;">'
+          + '<button class="btn btn--ghost btn--xs" id="presetSshBtn_' + i + '" onclick="_testPresetSsh(' + i + ')">测试 SSH</button>'
+          + '<button class="btn btn--ghost btn--xs" onclick="_openPatForm(' + i + ')">配置 PAT</button>'
+          + '</div>'
+          + '</div>'
+
+          + '</div>';
+  }
+  container.innerHTML = html;
+  _syncGitDefaultProvider();
+  // 异步检查每套方案的 SSH 和 PAT 状态
+  setTimeout(function() { _refreshPresetStatuses(); }, 100);
+}
+
+// ---- 方案编辑 ----
+var _editingPresetIndex = -1;  // -1 = 新增
+
+function _openPresetEditor(index) {
+  _editingPresetIndex = (index === null || index === undefined) ? -1 : index;
+  var editor = document.getElementById('gitPresetEditor');
+  var title = document.getElementById('gitPresetEditorTitle');
+  if (!editor || !title) return;
+
+  // 隐藏列表中的添加按钮
+  document.getElementById('btnPresetAdd').style.display = 'none';
+
+  if (_editingPresetIndex >= 0) {
+    // 编辑已有方案
+    title.textContent = '编辑方案';
+    var p = (_gitDefaultsData.presets || [])[_editingPresetIndex];
+    if (!p) { _closePresetEditor(); return; }
+    document.getElementById('inpPresetName').value = p.name || '';
+    document.getElementById('selPresetProvider').value = p.provider || 'github';
+    document.getElementById('inpPresetHost').value = p.host || '';
+    document.getElementById('inpPresetOwner').value = p.owner || '';
+    var protoEl = document.querySelector('input[name="presetProtocol"][value="' + (p.protocol || 'ssh') + '"]');
+    if (protoEl) protoEl.checked = true;
+    document.getElementById('chkPresetAutoPush').checked = !!p.autoPush;
+  } else {
+    title.textContent = '添加方案';
+    document.getElementById('inpPresetName').value = '';
+    document.getElementById('selPresetProvider').value = 'github';
+    document.getElementById('inpPresetHost').value = '';
+    document.getElementById('inpPresetOwner').value = '';
+    var sshEl = document.querySelector('input[name="presetProtocol"][value="ssh"]');
+    if (sshEl) sshEl.checked = true;
+    document.getElementById('chkPresetAutoPush').checked = false;
+  }
+  _togglePresetHost(document.getElementById('selPresetProvider').value);
+  editor.style.display = 'block';
+  document.getElementById('inpPresetName').focus();
+}
+
+function _closePresetEditor() {
+  var editor = document.getElementById('gitPresetEditor');
+  if (editor) editor.style.display = 'none';
+  _editingPresetIndex = -1;
+  document.getElementById('btnPresetAdd').style.display = '';
+  document.getElementById('presetFormStatus').textContent = '';
+}
+
+function _savePreset() {
+  var status = document.getElementById('presetFormStatus');
   if (!status) return;
+
+  var name = document.getElementById('inpPresetName').value.trim();
+  if (!name) { status.textContent = '❌ 方案名称不能为空'; return; }
+
+  var provider = document.getElementById('selPresetProvider').value;
+  var host = document.getElementById('inpPresetHost').value.trim();
+  var owner = document.getElementById('inpPresetOwner').value.trim();
+
+  if (provider === 'custom' && !host) { status.textContent = '❌ 自定义方案需填写主机地址'; return; }
+  if (!owner) { status.textContent = '❌ 所有者不能为空'; return; }
+
+  var preset = {
+    name: name,
+    provider: provider,
+    owner: owner,
+    host: host,
+    protocol: document.querySelector('input[name="presetProtocol"]:checked')?.value || 'ssh',
+    autoPush: document.getElementById('chkPresetAutoPush').checked,
+  };
+
+  var presets = _gitDefaultsData.presets || [];
+  // 重名检查（排除自己）
+  for (var i = 0; i < presets.length; i++) {
+    if (presets[i].name === name && i !== _editingPresetIndex) {
+      status.textContent = '❌ 方案名称「' + _escHtml(name) + '」已存在';
+      return;
+    }
+  }
+
+  status.textContent = '保存中…';
+
+  if (_editingPresetIndex >= 0) {
+    presets[_editingPresetIndex] = preset;
+  } else {
+    presets.push(preset);
+    // 第一个方案自动设为默认
+    if (!_gitDefaultsData.defaultPreset) _gitDefaultsData.defaultPreset = name;
+  }
+  _gitDefaultsData.presets = presets;
+
+  _closePresetEditor();
+  _renderPresetList();
+  _commitGitDefaults();
+  status.textContent = '';
+}
+
+function _deletePreset(index) {
+  if (!confirm('确定删除方案「' + _escHtml((_gitDefaultsData.presets || [])[index]?.name || '') + '」吗？')) return;
+  var presets = _gitDefaultsData.presets || [];
+  var deletedName = presets[index]?.name;
+  presets.splice(index, 1);
+  _gitDefaultsData.presets = presets;
+  // 如果删的是默认方案，选第一个
+  if (_gitDefaultsData.defaultPreset === deletedName) {
+    _gitDefaultsData.defaultPreset = presets.length ? presets[0].name : '';
+  }
+  _renderPresetList();
+  _commitGitDefaults();
+}
+
+function _setDefaultPreset(name) {
+  _gitDefaultsData.defaultPreset = name;
+  _renderPresetList();
+  _syncGitDefaultProvider();
+  _commitGitDefaults();
+}
+
+// ---- 保存到后端 ----
+function _commitGitDefaults() {
+  var status = document.getElementById('gitDefaultsStatus');
+  var body = {
+    enabled: _gitDefaultsData.enabled,
+    presets: _gitDefaultsData.presets || [],
+    defaultPreset: _gitDefaultsData.defaultPreset || '',
+  };
+  fetch('/api/ui/git/defaults', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }).then(function(r) {
+    if (r.ok && status) {
+      status.textContent = '✅ 已保存';
+      setTimeout(function() { status.textContent = ''; }, 2000);
+    }
+  }).catch(function() {});
+}
+
+// ---- 同步 selGitDefaultProvider（旧占位，供 SSH 代码读取） ----
+function _syncGitDefaultProvider() {
+  var el = document.getElementById('selGitDefaultProvider');
+  if (!el) return;
+  var defaultName = _gitDefaultsData.defaultPreset || '';
+  var presets = _gitDefaultsData.presets || [];
+  var p = null;
+  for (var i = 0; i < presets.length; i++) {
+    if (presets[i].name === defaultName) { p = presets[i]; break; }
+  }
+  if (!p && presets.length) p = presets[0];
+  el.value = p ? p.provider : 'github';
+}
+
+// ---- 工具函数 ----
+function _escHtml(s) {
+  if (typeof s !== 'string') return String(s || '');
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function _escJs(s) {
+  if (typeof s !== 'string') return String(s || '');
+  return s.replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'\\"');
+}
+
+// ---- 每方案的 SSH/PAT 状态检查与操作 ----
+function _getPresetSshHost(preset) {
+  if (preset.provider === 'custom') return preset.host || '';
+  return GIT_PROVIDER_SSH_HOST[preset.provider] || 'github.com';
+}
+function _getPresetHttpsUrl(preset) {
+  if (preset.provider === 'custom') return 'https://' + (preset.host || '');
+  return GIT_PROVIDER_HTTPS_HOST[preset.provider] || 'https://github.com';
+}
+
+async function _checkPresetSsh(index) {
+  var el = document.getElementById('presetSshStatus_' + index);
+  if (!el) return;
+  var presets = _gitDefaultsData.presets || [];
+  var p = presets[index];
+  if (!p) { el.innerHTML = '—'; return; }
+  el.innerHTML = '检查…';
+  var payload = { command: 'ssh', args: 'status', provider: p.provider };
+  if (p.provider === 'custom' && p.host) payload.host = p.host;
+  try {
+    var r = await fetch('/api/ui/git', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    var j = await r.json();
+    el.innerHTML = (j && j.connected) ? '✅' : '❌';
+  } catch (_) { el.innerHTML = '⚠️'; }
+}
+
+async function _checkPresetPat(index) {
+  var el = document.getElementById('presetPatStatus_' + index);
+  if (!el) return;
+  var presets = _gitDefaultsData.presets || [];
+  var p = presets[index];
+  if (!p) { el.innerHTML = '—'; return; }
+  var hostUrl = _getPresetHttpsUrl(p);
+  el.innerHTML = '检查…';
+  try {
+    // 用 git credential fill 检查该 host 是否有已存凭据
+    var r = await fetch('/api/ui/git', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        command: 'credential', action: 'show',
+      }),
+    });
+    var j = await r.json();
+    var text = (j && j.result) || '';
+    // 如果 show 结果包含了这个 host，认作已配置
+    var urlPart = hostUrl.replace(/^https?:\/\//, '');
+    el.innerHTML = text.indexOf(urlPart) !== -1 ? '✅' : '❌';
+  } catch (_) { el.innerHTML = '⚠️'; }
+}
+
+async function _testPresetSsh(index) {
+  var btn = document.getElementById('presetSshBtn_' + index);
+  if (btn) btn.textContent = '测试中…';
+  await _checkPresetSsh(index);
+  if (btn) btn.textContent = '测试 SSH';
+}
+
+var _patEditingIndex = -1;
+
+function _openPatForm(index) {
+  _patEditingIndex = index;
+  var presets = _gitDefaultsData.presets || [];
+  var p = presets[index];
+  if (!p) return;
+
+  document.getElementById('patFormHostLabel').textContent = _getPresetHttpsUrl(p);
+  document.getElementById('inpPatUser').value = p.owner || '';
+  document.getElementById('inpPatToken').value = '';
+  document.getElementById('patFormStatus').textContent = '';
+  document.getElementById('gitPatForm').style.display = 'block';
+  document.getElementById('inpPatToken').focus();
+}
+
+function _closePatForm() {
+  document.getElementById('gitPatForm').style.display = 'none';
+  _patEditingIndex = -1;
+}
+
+async function _savePat() {
+  var status = document.getElementById('patFormStatus');
+  if (!status) return;
+  var presets = _gitDefaultsData.presets || [];
+  var p = presets[_patEditingIndex];
+  if (!p) { status.textContent = '❌ 方案不存在'; return; }
+
+  var user = document.getElementById('inpPatUser').value.trim();
+  var token = document.getElementById('inpPatToken').value.trim();
+  if (!token) { status.textContent = '❌ Token 不能为空'; return; }
+
   status.textContent = '保存中…';
   try {
-    const body = {
-      enabled: document.getElementById('chkGitDefaultEnabled').checked,
-      provider: document.getElementById('selGitDefaultProvider').value,
-      owner: document.getElementById('inpGitDefaultOwner').value.trim(),
-      protocol: document.querySelector('input[name="gitDefaultProtocol"]:checked')?.value || 'ssh',
-      autoPush: document.getElementById('chkGitDefaultAutoPush').checked,
-    };
-    const r = await fetch('/api/ui/git/defaults', {
-      method: 'PUT',
+    var hostUrl = _getPresetHttpsUrl(p);
+    var r = await fetch('/api/ui/git', {
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      body: JSON.stringify({
+        command: 'credential', action: 'store',
+        url: hostUrl,
+        username: user,
+        token: token,
+      }),
     });
-    if (!r.ok) throw new Error((await r.json()).detail || '保存失败');
+    if (!r.ok) {
+      var errData = await r.json();
+      throw new Error(errData.detail || errData.error || '保存失败');
+    }
     status.textContent = '✅ 已保存';
-    setTimeout(function() { status.textContent = ''; }, 3000);
+    _checkPresetPat(_patEditingIndex);
+    setTimeout(function() { _closePatForm(); }, 1000);
   } catch (e) {
     status.textContent = '❌ ' + String(e);
+  }
+}
+
+// ---- 更新 preset 卡片里的 SSH/PAT 状态 ----
+function _refreshPresetStatuses() {
+  var presets = _gitDefaultsData.presets || [];
+  for (var i = 0; i < presets.length; i++) {
+    _checkPresetSsh(i);
+    _checkPresetPat(i);
   }
 }
 

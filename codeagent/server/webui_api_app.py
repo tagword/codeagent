@@ -409,8 +409,11 @@ async def _ssh_probe(ssh_host: str) -> tuple[bool, str]:
     return ok, first[:200]
 
 
-async def _ssh_build_status(provider: str) -> dict[str, Any]:
-    pid, ssh_host = _ssh_provider_target(provider)
+async def _ssh_build_status(provider: str, ssh_host: str | None = None) -> dict[str, Any]:
+    if not ssh_host:
+        pid, ssh_host = _ssh_provider_target(provider)
+    else:
+        pid = provider or "custom"
     connected, auth_message = await _ssh_probe(ssh_host)
     identities = await _ssh_resolve_identities(ssh_host)
     agent_keys = await _ssh_agent_fingerprints()
@@ -2296,9 +2299,10 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         if cmd == "ssh":
             arg = str(args or "").strip()
             provider = str(body.get("provider") or "").strip().lower()
+            ssh_host = str(body.get("host") or "").strip() or None
             force_generate = bool(body.get("force"))
             if arg == "status":
-                status = await _ssh_build_status(provider)
+                status = await _ssh_build_status(provider, ssh_host=ssh_host)
                 return JSONResponse(status)
             if arg == "cat":
                 text, err = await _ssh_read_public_keys(provider)
@@ -2306,7 +2310,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
                     return JSONResponse({"result": "", "error": err})
                 return JSONResponse({"result": text})
             if arg == "generate":
-                st = await _ssh_build_status(provider)
+                st = await _ssh_build_status(provider, ssh_host=ssh_host)
                 if st.get("connected") and not force_generate:
                     return JSONResponse(
                         {
@@ -2345,8 +2349,11 @@ def build_webui_api_app(project_root: Path) -> Starlette:
                     text = (text.strip() + "\n\n" + pub.read_text(encoding="utf-8")).strip()
                 return JSONResponse({"result": text.strip() or "完成"})
             if arg == "test":
-                _pid, ssh_host = _ssh_provider_target(provider)
-                ok, first = await _ssh_probe(ssh_host)
+                if ssh_host:
+                    _pid, _ssh_host = provider, ssh_host
+                else:
+                    _pid, _ssh_host = _ssh_provider_target(provider)
+                ok, first = await _ssh_probe(_ssh_host)
                 label = _pid or "github"
                 prefix = "✅" if ok else "○"
                 return JSONResponse({"result": f"[{label} → {ssh_host}]\n{prefix} {first}"})
