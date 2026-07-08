@@ -34,7 +34,14 @@
     <aside id="chatSidebar" class="sess-panel" style="display:none;" aria-label="会话列表">
       <!-- 搜索栏 -->
       <div class="search-bar">
+        <span class="search-bar__icon">
+          <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
+            <circle cx="9" cy="9" r="4.5"/>
+            <path d="M13 13l3 3"/>
+          </svg>
+        </span>
         <input type="text" id="treeSearchInput" class="search-bar__input" placeholder="搜索项目或会话... Ctrl+K">
+        <button type="button" class="search-bar__clear" id="treeSearchClear" style="display:none;" aria-label="清除搜索">×</button>
       </div>
       <!-- 项目树 -->
       <div id="projectTree" class="project-tree" role="tree">

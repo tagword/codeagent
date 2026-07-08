@@ -161,6 +161,9 @@ function loadSessionsIntoContainer(childrenEl, pid) {
     }
     fillSessionsList(childrenEl, k, sessions);
     syncTreeSessionActiveHighlight();
+    // 异步加载完成后重新应用搜索过滤
+    var inp = document.getElementById('treeSearchInput');
+    if (inp && inp.value.trim()) _treeSearchFilter(inp.value);
   });
 }
 
@@ -388,6 +391,9 @@ async function refreshProjects(forceFetch) {
     });
     // 渲染完成后恢复滚动位置（避免全量重建跳到顶部）
     if (savedScrollTop > 0) treeEl.scrollTop = savedScrollTop;
+    // 重建后重新应用搜索过滤（如有）
+    var inp = document.getElementById('treeSearchInput');
+    if (inp && inp.value.trim()) _treeSearchFilter(inp.value);
   } catch (_) {}
 }
 
@@ -408,5 +414,118 @@ function getTreeProjectPath(pid) {
     if (treePid(p.id) === k && p.path) return String(p.path);
   }
   return '';
+}
+
+// ================================================================
+//  Project tree search (filter by project name / session title)
+// ================================================================
+
+function _treeSearchFilter(q) {
+  q = q.trim().toLowerCase();
+  var treeEl = document.getElementById('projectTree');
+  if (!treeEl) return;
+  var projDivs = treeEl.querySelectorAll(':scope > .tree-project');
+  var anyVisible = false;
+  projDivs.forEach(function(projDiv) {
+    var nameEl = projDiv.querySelector('.tree-project__name');
+    var pName = nameEl ? (nameEl.textContent || '').toLowerCase() : '';
+    var sessionRows = projDiv.querySelectorAll(':scope > .tree-sessions > .tree-session');
+    var pMatch = q === '' || pName.indexOf(q) !== -1;
+    var sMatch = false;
+    sessionRows.forEach(function(sRow) {
+      var titleEl = sRow.querySelector('.tree-session__title');
+      var sTitle = titleEl ? (titleEl.textContent || '').toLowerCase() : '';
+      var match = q === '' || pMatch || sTitle.indexOf(q) !== -1;
+      sRow.style.display = match ? '' : 'none';
+      if (match) sMatch = true;
+    });
+    // 项目整体隐藏：无匹配且无匹配的会话
+    var hide = q !== '' && !pMatch && !sMatch;
+    projDiv.style.display = hide ? 'none' : '';
+    if (!hide) anyVisible = true;
+    // 有搜索词时自动展开项目（如果有匹配的子会话或项目名匹配）
+    if (q !== '' && !hide) {
+      var k = treePid(projDiv.dataset.projectId);
+      if (!treeIsExpanded(k)) {
+        treeExpanded[k] = true;
+        var toggle = projDiv.querySelector('.tree-project__toggle');
+        if (toggle) toggle.classList.add('tree-project__toggle--expanded');
+      }
+      var existing = projDiv.querySelector(':scope > .tree-sessions');
+      if (!existing) {
+        var children = document.createElement('div');
+        children.className = 'tree-sessions';
+        children.dataset.projectId = k;
+        projDiv.appendChild(children);
+        loadSessionsIntoContainer(children, k);
+      }
+    }
+  });
+  // 空状态
+  var empty = treeEl.querySelector('.project-tree__empty');
+  if (q !== '' && !anyVisible) {
+    if (!empty || !empty.classList.contains('tree-search__empty')) {
+      var ne = document.createElement('div');
+      ne.className = 'project-tree__empty tree-search__empty';
+      ne.textContent = '没有找到匹配的项目或会话';
+      if (empty) empty.remove();
+      treeEl.appendChild(ne);
+    }
+  } else {
+    if (empty && empty.classList.contains('tree-search__empty')) empty.remove();
+  }
+}
+
+var _treeSearchTimer = null;
+
+function bindTreeSearch() {
+  var inp = document.getElementById('treeSearchInput');
+  var clearBtn = document.getElementById('treeSearchClear');
+  if (!inp) return;
+
+  // 输入过滤
+  inp.addEventListener('input', function() {
+    if (_treeSearchTimer) clearTimeout(_treeSearchTimer);
+    _treeSearchTimer = setTimeout(function() {
+      _treeSearchFilter(inp.value);
+      if (clearBtn) clearBtn.style.display = inp.value.trim() ? '' : 'none';
+    }, 150);
+  });
+
+  // 清除按钮
+  if (clearBtn) {
+    clearBtn.addEventListener('click', function() {
+      inp.value = '';
+      _treeSearchFilter('');
+      clearBtn.style.display = 'none';
+      inp.focus();
+    });
+  }
+
+  // Escape 清除
+  inp.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      inp.value = '';
+      _treeSearchFilter('');
+      if (clearBtn) clearBtn.style.display = 'none';
+      inp.blur();
+    }
+  });
+
+  // Ctrl+K / Cmd+K 全局快捷键聚焦搜索
+  document.addEventListener('keydown', function(e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+      e.preventDefault();
+      inp.focus();
+      inp.select();
+    }
+  });
+}
+
+// 在 DOM 就绪后绑定搜索
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', bindTreeSearch);
+} else {
+  bindTreeSearch();
 }
 
