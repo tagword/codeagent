@@ -999,3 +999,60 @@ body.chat-img-lightbox-open {
   padding: 0;
   font-family: var(--font-mono);
 }
+
+/* ============================================================
+ * Mermaid diagrams
+ *   渲染流程：03c-render-bubble.js renderMarkdown 把 ```mermaid 块
+ *   替换为 <pre class="mermaid">，再由 renderMermaidInBubble() 异步
+ *   调 mermaid.render() 输出 SVG 到 .mermaid-host。
+ * ============================================================ */
+.mermaid-host {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 12px 0;
+  padding: 14px 12px;
+  background: var(--bg-subtle, #f7f7f9);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 10px;
+  overflow-x: auto;
+  position: relative; /* 给 .mermaid-host__actions 提供定位基准 */
+}
+.mermaid-host svg {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+.mermaid-error {
+  margin: 12px 0;
+  padding: 10px 12px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  color: #b91c1c;
+  font-size: 12.5px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* mermaid 图右上角悬浮操作按钮（hover/focus 时显示） */
+.mermaid-host__actions {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  gap: 6px;
+  opacity: 0;
+  transition: opacity 120ms ease-in-out;
+  pointer-events: none; /* 避免透明时挡住 svg */
+}
+.mermaid-host:hover .mermaid-host__actions,
+.mermaid-host:focus-within .mermaid-host__actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+/* 小屏（触屏）始终显示，避免无法点击 */
+@media (hover: none) {
+  .mermaid-host__actions { opacity: 1; pointer-events: auto; }
+}
