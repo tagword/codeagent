@@ -74,6 +74,9 @@ docs/路径管理体系设计.md
 # Runtime logs
 serve.log
 
+# pre-commit hooks config (local dev only)
+.pre-commit-config.yaml
+
 # Packaging scripts (macOS DMG, PyInstaller, icon generation)
 packaging/
 
