@@ -71,6 +71,9 @@ docs/persona-拆分分析.md
 docs/task-路径管理体系落地.md
 docs/路径管理体系设计.md
 
+# Runtime logs
+serve.log
+
 # Local-only: docs, CI workflows, deploy config & tests (not pushed to remote)
 .github/
 deploy/
