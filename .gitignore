@@ -71,6 +71,7 @@ docs/persona-拆分分析.md
 docs/task-路径管理体系落地.md
 docs/路径管理体系设计.md
 
-# Local-only: deploy config & tests (not pushed to remote)
+# Local-only: CI workflows, deploy config & tests (not pushed to remote)
+.github/
 deploy/
 tests/
