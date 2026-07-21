@@ -74,6 +74,9 @@ docs/路径管理体系设计.md
 # Runtime logs
 serve.log
 
+# Packaging scripts (macOS DMG, PyInstaller, icon generation)
+packaging/
+
 # Local-only: docs, CI workflows, deploy config & tests (not pushed to remote)
 .github/
 deploy/
