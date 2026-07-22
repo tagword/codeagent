@@ -60,16 +60,6 @@
 
     </aside>
 
-    <section id="sidebarFiles" class="sidebar-mode" style="display:none;">
-      <div class="sidebar-mode__scroll">
-        <div class="sidebar__head" style="padding-bottom:0;">
-          <div class="sidebar__section-label">文件浏览器</div>
-        </div>
-        <div id="fileTreeContainer" class="file-tree">
-          <div class="file-tree__loading">加载中...</div>
-        </div>
-      </div>
-    </section>
     <section id="sidebarGit" class="sidebar-mode" style="display:none;">
       <div class="sidebar-mode__scroll">
         <div class="sidebar__head" style="padding-bottom:0;">
@@ -89,6 +79,17 @@
             <textarea id="gitCommitMsg" class="git-panel__commit-input" rows="3" placeholder="提交信息..."></textarea>
             <button class="btn btn--primary btn--sm" id="gitBtnCommit" style="width:100%;">提交</button>
           </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="sidebarFiles" class="sidebar-mode" style="display:none;">
+      <div class="sidebar-mode__scroll">
+        <div class="sidebar__head" style="padding-bottom:0;">
+          <div class="sidebar__section-label">📂 文件浏览器</div>
+        </div>
+        <div id="fileTreeContainer" class="file-tree">
+          <div class="file-tree__loading"><div class="file-browser__spinner"></div>加载中...</div>
         </div>
       </div>
     </section>
@@ -691,8 +692,8 @@
           </div>
           <div id="editorContainer" class="file-editor__container">
             <div class="file-editor__welcome">
-              <h3>文件浏览器</h3>
-              <p>左侧边栏选择文件进行编辑</p>
+              <h3>文件编辑器</h3>
+              <p>从左侧文件树选择文件进行编辑</p>
             </div>
           </div>
           <div class="file-editor__status" id="editorStatus"></div>

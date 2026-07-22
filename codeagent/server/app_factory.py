@@ -734,6 +734,15 @@ def create_app():
                         }), main_loop
                     )
 
+                # ── 移除流式占位符，防止纯文本回复路径（无 tool rounds）重复落盘 ──
+                if _stream_placeholder_created[0]:
+                    for _pi in range(len(chat_sess.messages) - 1, -1, -1):
+                        _pm = chat_sess.messages[_pi]
+                        if isinstance(_pm, dict) and _pm.get("_streaming"):
+                            del chat_sess.messages[_pi]
+                            break
+                    _stream_placeholder_created[0] = False
+
                 tail = merge_llm_tail_into_full(chat_sess.messages, api_msgs, n_before_ref[0])
                 _model_name = getattr(llm, "model", "")
                 _ctx: dict[str, Any] = {}

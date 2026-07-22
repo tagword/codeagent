@@ -222,7 +222,7 @@ function showSessionContextMenu(e, sid, pid) {
         if (!confirm('确定归档此会话？文件将移到 sessions/archived/。')) return;
         fetch('/api/ui/session/archive', {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
-          body: JSON.stringify({ session_id: sid, agent_id: agentId })
+          body: JSON.stringify({ session_id: sid, agent_id: agentId, project_id: pid || '' })
         }).then(function(r) {
           if (!r.ok) alert('归档失败');
           else if (typeof refreshSessionsUnderProject === 'function') refreshSessionsUnderProject(pid);
@@ -326,7 +326,7 @@ function deleteSession(sid, pid) {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     credentials: 'same-origin',
-    body: JSON.stringify({ session_id: sid, agent_id: agentId })
+    body: JSON.stringify({ session_id: sid, agent_id: agentId, project_id: pid || '' })
   }).then(function(r) {
     if (r.ok) {
       if (sessionId === sid) {

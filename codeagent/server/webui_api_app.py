@@ -819,8 +819,10 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         delete_project,
         get_project,
         list_project_plan_files,
+        list_project_sessions_meta,
         list_projects,
         rename_project,
+        unregister_session,
         update_project_path,
     )
     from seed.core.proj_todos import delete_todo, list_todos, update_todo
@@ -1903,6 +1905,13 @@ def build_webui_api_app(project_root: Path) -> Starlette:
                     ok = True
                 except OSError:
                     ok = False
+            # fallback 删除了文件但可能未清理 registry，补一个全项目扫描清理
+            if ok and sid:
+                for proj in list_projects(aid):
+                    proj_pid = str(proj.get("id") or "").strip()
+                    if proj_pid and sid in list_project_sessions_meta(aid, proj_pid):
+                        unregister_session(aid, proj_pid, sid)
+                        break
         if not ok:
             return JSONResponse({"detail": "delete failed"}, status_code=400)
         SESSIONS.pop(_memkey(aid, sid), None)
@@ -2502,7 +2511,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
                     continue
         except OSError:
             pass
-        return JSONResponse({"files": items})
+        return JSONResponse({"files": items, "base_path": str(base)})
 
     async def api_files_read(request: Request) -> JSONResponse:
         pid = (request.query_params.get("project_id") or "").strip()

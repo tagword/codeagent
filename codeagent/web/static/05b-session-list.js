@@ -47,7 +47,7 @@ function bindSessListOnce() {
           if (!confirm('确定归档「' + titleHint + '」？文件将移到 sessions/archived/。')) return;
           const r = await fetch('/api/ui/session/archive', {
             method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
-            body: JSON.stringify({ session_id: sid, agent_id: agentId })
+            body: JSON.stringify({ session_id: sid, agent_id: agentId, project_id: projectId || '' })
           });
           const j = await r.json().catch(() => ({}));
           if (!r.ok) throw new Error(j.detail || r.statusText);
@@ -55,7 +55,7 @@ function bindSessListOnce() {
           if (!confirm('确定删除「' + titleHint + '」？此操作不可恢复。')) return;
           const r = await fetch('/api/ui/session/delete', {
             method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
-            body: JSON.stringify({ session_id: sid, agent_id: agentId })
+            body: JSON.stringify({ session_id: sid, agent_id: agentId, project_id: projectId || '' })
           });
           const j = await r.json().catch(() => ({}));
           if (!r.ok) throw new Error(j.detail || r.statusText);

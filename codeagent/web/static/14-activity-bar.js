@@ -3,17 +3,27 @@ var _FULL_WIDTH_MODES = ['config', 'tasks', 'agent'];
 
 function _applySidebarForMode(mode) {
   var chatSidebar = document.getElementById('chatSidebar');
+  var fileSidebar = document.getElementById('sidebarFiles');
+  var gitSidebar = document.getElementById('sidebarGit');
   var outerSidebar = document.querySelector('.app > aside.sidebar');
   if (outerSidebar) outerSidebar.style.removeProperty('display');
 
-  if (mode === 'files') {
-    if (chatSidebar) chatSidebar.style.display = 'none';
-    return;
-  }
+  // Hide all secondary sidebar sections first
+  if (fileSidebar) fileSidebar.style.display = 'none';
+  if (gitSidebar) gitSidebar.style.display = 'none';
+
   if (_FULL_WIDTH_MODES.indexOf(mode) >= 0) {
     if (chatSidebar) chatSidebar.style.display = 'none';
     return;
   }
+
+  if (mode === 'files') {
+    if (chatSidebar) chatSidebar.style.display = 'none';
+    if (fileSidebar) fileSidebar.style.display = 'flex';
+    return;
+  }
+
+  // Default: chat mode
   if (chatSidebar) {
     if (typeof webuiSessionsEnabled !== 'undefined' && webuiSessionsEnabled) {
       chatSidebar.style.display = 'flex';
@@ -30,11 +40,7 @@ function _syncWorkspacePages(pageId) {
 function _syncFileBtnState() {
   var fileBtn = document.getElementById('btnToggleFiles');
   if (!fileBtn) return;
-  if (_activeMode === 'files') {
-    fileBtn.classList.add('is-active');
-  } else {
-    fileBtn.classList.remove('is-active');
-  }
+  fileBtn.classList.toggle('is-active', _activeMode === 'files');
 }
 
 function switchActivityMode(mode) {
@@ -55,38 +61,24 @@ function switchActivityMode(mode) {
     b.classList.toggle('active', b.getAttribute('data-mode') === mode);
   });
 
-  var filesSection = document.getElementById('sidebarFiles');
-  var gitSidebarSection = document.getElementById('sidebarGit');
+  _applySidebarForMode(mode);
+  var pageId = mode;
+  _syncWorkspacePages(pageId);
+  if (typeof switchToPage === 'function') switchToPage(pageId);
+  if (typeof activatePage === 'function') activatePage(pageId);
 
-  function hideSidebarModes() {
-    if (filesSection) filesSection.style.display = 'none';
-    if (gitSidebarSection) gitSidebarSection.style.display = 'none';
+  if (mode === 'chat') {
+    if (typeof refreshProjects === 'function') setTimeout(function() { refreshProjects(false); }, 100);
   }
-
   if (mode === 'files') {
-    hideSidebarModes();
-    if (filesSection) filesSection.style.display = 'flex';
-    _applySidebarForMode(mode);
-    if (typeof switchToPage === 'function') switchToPage('files');
-    else _syncWorkspacePages('files');
-    if (typeof activatePage === 'function') activatePage('files');
+    // Refresh file tree on next tick
     setTimeout(function() {
       if (typeof window.webuiRefreshFileTreeIfVisible === 'function') {
         window.webuiRefreshFileTreeIfVisible();
       }
     }, 0);
-  } else {
-    hideSidebarModes();
-    _applySidebarForMode(mode);
-    var pageId = mode;
-    _syncWorkspacePages(pageId);
-    if (typeof switchToPage === 'function') switchToPage(pageId);
-    if (typeof activatePage === 'function') activatePage(pageId);
   }
 
-  if (mode === 'chat') {
-    if (typeof refreshProjects === 'function') setTimeout(function() { refreshProjects(false); }, 100);
-  }
   trySetLS(STORAGE_KEYS.SESS_ACTIVITY_MODE, mode);
   if (typeof window.webuiMobileSyncMode === 'function') window.webuiMobileSyncMode(mode);
   syncTopbarChatShortcutUi();
@@ -108,7 +100,7 @@ function syncTopbarChatShortcutUi() {
 function restoreActivityMode() {
   try {
     var saved = tryGetLS(STORAGE_KEYS.SESS_ACTIVITY_MODE);
-    if (saved && ['chat', 'tasks', 'agent', 'config', 'files'].indexOf(saved) >= 0) {
+    if (saved && ['chat', 'files', 'tasks', 'agent', 'config'].indexOf(saved) >= 0) {
       _activeMode = null;
       switchActivityMode(saved);
       return;
@@ -120,13 +112,11 @@ function restoreActivityMode() {
 
 ;(function initActivityBar() {
   document.querySelectorAll('.activity-btn').forEach(function(btn) {
-    // 手机视图下用 touchstart 捕获，避免键盘收起时 viewport 变化吞掉 click
     btn.addEventListener('touchstart', function(e) {
       var isMobile = window.matchMedia('(max-width: 768px)').matches;
       if (!isMobile) return;
       var mode = this.getAttribute('data-mode');
       if (!mode) return;
-      // 键盘弹出时：在 touchstart 阶段 blur 并切换，不等 click
       if (document.activeElement && document.activeElement.id === 'msg') {
         document.activeElement.blur();
         switchActivityMode(mode);
@@ -149,29 +139,16 @@ function restoreActivityMode() {
   }
   restoreActivityMode();
 
-  // ======== 文件按钮（topbar 切换） ========
+  // ======== 文件按钮（topbar 切换）= 模式切换 ========
   var fileBtn = document.getElementById('btnToggleFiles');
   if (fileBtn) {
-    _syncFileBtnState();
-
     fileBtn.addEventListener('click', function() {
       if (_activeMode === 'files') {
         switchActivityMode('chat');
       } else {
-        // 关闭顶层面板：Plan/Todo/Git
-        ['planPanel','todoPanel','gitPanel'].forEach(function(id) {
-          var p = document.getElementById(id);
-          if (p && p.style.display !== 'none') {
-            p.style.display = 'none';
-            try { localStorage.setItem('oa_' + id.replace('Panel','').toLowerCase() + '_panel_open', '0'); } catch (_) {}
-          }
-        });
-        ['btnTogglePlans','btnToggleTodos','btnToggleGit'].forEach(function(id) {
-          var b = document.getElementById(id);
-          if (b) b.classList.remove('is-active');
-        });
         switchActivityMode('files');
       }
+      _syncFileBtnState();
     });
   }
 })();
