@@ -468,6 +468,15 @@ def create_app():
                     if new_tail:
                         rest = new_tail
                         if rest:
+                            # ── 移除上一个流式占位符（_streaming=True），防止重复落盘 ──
+                            if _stream_placeholder_created[0]:
+                                for _pi in range(len(chat_sess.messages) - 1, -1, -1):
+                                    _pm = chat_sess.messages[_pi]
+                                    if isinstance(_pm, dict) and _pm.get("_streaming"):
+                                        del chat_sess.messages[_pi]
+                                        break
+                                _stream_placeholder_created[0] = False
+
                             persisted_rest = []
                             for message in rest:
                                 if not isinstance(message, dict):
