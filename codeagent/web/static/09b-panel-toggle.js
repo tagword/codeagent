@@ -13,8 +13,11 @@
     if (btn) btn.classList.toggle('is-active', opening);
     trySetLS(STORAGE_KEYS.GIT_PANEL_OPEN, opening ? '1' : '0');
 
-    // 互斥：打开 Git 时关闭 Plan 和 Todo
+    // 互斥：打开 Git 时关闭其他面板
     if (opening) {
+      if (typeof _activeMode !== 'undefined' && _activeMode === 'files' && typeof switchActivityMode === 'function') {
+        switchActivityMode('chat');
+      }
       _closeOtherPanels();
       _refreshAll();
     }
@@ -35,13 +38,20 @@
       if (todoB) todoB.classList.remove('is-active');
       trySetLS(STORAGE_KEYS.TODO_PANEL_OPEN, '0');
     }
+    var skillP = $('skillPanel');
+    var skillB = $('btnToggleSkills');
+    if (skillP && skillP.style.display !== 'none') {
+      skillP.style.display = 'none';
+      if (skillB) skillB.classList.remove('is-active');
+    }
   }
 
   // 外部监听：如果 Plan/Todo 打开了，自动关闭 Git
   document.addEventListener('click', function(e) {
     var planBtn = e.target.closest('#btnTogglePlans');
     var todoBtn = e.target.closest('#btnToggleTodos');
-    if (planBtn || todoBtn) {
+    var skillBtn = e.target.closest('#btnToggleSkills');
+    if (planBtn || todoBtn || skillBtn) {
       var panel = $('gitPanel');
       var btn = $('btnToggleGit');
       if (panel && panel.style.display === 'flex') {
@@ -57,7 +67,8 @@
     if (tryGetLS(STORAGE_KEYS.GIT_PANEL_OPEN) === '1') {
       var planP = $('planPanel');
       var todoP = $('todoPanel');
-      if ((planP && planP.style.display === 'flex') || (todoP && todoP.style.display === 'flex')) {
+      var skillP = $('skillPanel');
+      if ((planP && planP.style.display === 'flex') || (todoP && todoP.style.display === 'flex') || (skillP && skillP.style.display === 'flex')) {
         // 对面已开，不覆盖
       } else {
         var panel = $('gitPanel');

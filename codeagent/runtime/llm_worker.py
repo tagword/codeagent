@@ -23,6 +23,7 @@ from seed.core.mem_bridge import finalize_episodic_for_llm
 
 from codeagent.runtime.prompt_enrichment import build_skills_suffix, fresh_system_prompt, get_cached_system_prompt
 from codeagent.tools.agent_tools import get_tools_for_agent
+from seed.core.proj_reg import resolve_project_path
 
 
 @dataclass
@@ -55,7 +56,8 @@ class LLMWorker:
             chat_sess.messages[:] = merge_fresh_system(chat_sess.messages, fresh_sys)
 
         chat_sess.messages.append({"role": "user", "content": user_text})
-        skills_suffix = build_skills_suffix(aid, user_text=user_text)
+        _proj_path = resolve_project_path(aid, self.project_id) if self.project_id else None
+        skills_suffix = build_skills_suffix(aid, user_text=user_text, project_path=_proj_path)
         api_msgs = build_api_projection_messages(
             chat_sess.messages,
             skills_suffix=skills_suffix,

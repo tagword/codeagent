@@ -2649,6 +2649,41 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         lines = text.count("\n") + (1 if text and not text.endswith("\n") else 0)
         return JSONResponse({"path": str(fp), "content": text, "language": language, "size": size, "lines": lines})
 
+    async def api_files_download(request: Request) -> Response:
+        """GET /api/ui/files/download — download a file as attachment."""
+        pid = (request.query_params.get("project_id") or "").strip()
+        rel = (request.query_params.get("path") or "").strip()
+        aid = _default_agent_id()
+        base = _project_fs_dir(aid, pid) if pid else None
+        if base is None:
+            return Response("no project path", status_code=400)
+        base = base.resolve()
+        p = Path(rel)
+        if p.is_absolute():
+            p = p.resolve()
+            if p == base or base in p.parents:
+                fp = p
+            else:
+                return Response("path not under project", status_code=400)
+        else:
+            fp = _safe_under(base, rel.lstrip("/"))
+        if fp is None or not fp.is_file():
+            return Response("not found", status_code=404)
+        try:
+            content = fp.read_bytes()
+        except OSError as e:
+            return Response(str(e), status_code=500)
+        filename = fp.name
+        import mimetypes
+        media_type, _ = mimetypes.guess_type(filename)
+        if media_type is None:
+            media_type = "application/octet-stream"
+        return Response(
+            content=content,
+            media_type=media_type,
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
     async def api_project_file_serve(request: Request) -> Response:
         """Serve a file from a known project directory by absolute path.
 
@@ -3243,6 +3278,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         Route("/pick-directory", api_pick_directory, methods=["POST"]),
         Route("/files/list", api_files_list, methods=["GET"]),
         Route("/files/read", api_files_read, methods=["GET"]),
+        Route("/files/download", api_files_download, methods=["GET"]),
         Route("/project-file", api_project_file_serve, methods=["GET"]),
         Route("/setup/finish", api_setup_finish, methods=["POST"]),
         Route("/setup/complete", api_setup_complete, methods=["POST"]),

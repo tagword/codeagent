@@ -723,7 +723,7 @@ def _cmd_chat_llm(args):
         user_text = str(user_msg.get('content') or '')
         from codeagent.core.attachments import content_text_for_skills
 
-        _skills_suffix = build_skills_suffix(agent_id, user_text=content_text_for_skills(user_text))
+        _skills_suffix = build_skills_suffix(agent_id, user_text=content_text_for_skills(user_text), project_path=project_root)
         api_msgs = build_api_projection_messages(
             chat_sess.messages,
             skills_suffix=_skills_suffix,

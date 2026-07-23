@@ -6,5 +6,5 @@ Architecture:
   - codeagent/ : Personality layer (CLI, server, web UI, skills, per-agent config)
 """
 
-__version__ = "2.2.16"
+__version__ = "1.1.8"
 

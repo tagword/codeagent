@@ -153,6 +153,30 @@
   border-top: 1px solid var(--border);
   background: var(--bg-subtle);
 }
+.file-editor__status-info {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.file-editor__status-dl {
+  flex-shrink: 0;
+  width: 22px; height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--text-subtle);
+  cursor: pointer;
+  border-radius: var(--r-xs, 3px);
+  transition: background 0.12s, color 0.12s;
+}
+.file-editor__status-dl:hover {
+  background: var(--bg-hover);
+  color: var(--accent);
+}
 
 /* ============ File tree (sidebar) ============ */
 .file-tree {
@@ -249,6 +273,30 @@
   color: var(--text-subtle);
   font-family: var(--font-mono, monospace);
   margin-left: auto;
+}
+/* Download button on each file entry — appears on hover */
+.file-browser__entry-dl {
+  flex-shrink: 0;
+  width: 22px; height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--text-subtle);
+  cursor: pointer;
+  border-radius: var(--r-xs, 3px);
+  opacity: 0;
+  transition: opacity 0.12s, background 0.12s;
+  margin-left: 2px;
+}
+.file-browser__entry:hover .file-browser__entry-dl {
+  opacity: 0.7;
+}
+.file-browser__entry-dl:hover {
+  opacity: 1 !important;
+  background: var(--bg-hover);
+  color: var(--accent);
 }
 .file-browser__error {
   display: flex;

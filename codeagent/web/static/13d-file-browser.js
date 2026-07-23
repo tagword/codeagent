@@ -11,6 +11,7 @@
 // ---- SVG icons ----
 var FB_ICON_FOLDER = '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3.5h4.5L8 5.5h6v7a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V4a.5.5 0 0 1 .5-.5z"/></svg>';
 var FB_ICON_FILE = '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M10 1.5H4a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V5l-3-3.5z"/><path d="M10 1.5V5h3.5"/></svg>';
+var FB_ICON_DOWNLOAD = '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1v8M4 6l4 4 4-4M2 13h12"/></svg>';
 
 // ---- State ----
 var _fb = {
@@ -46,6 +47,15 @@ function _fbFileLang(filename) {
     txt: 'Text', ini: 'INI', cfg: 'INI', vue: 'Vue', svelte: 'Svelte',
   };
   return map[ext] || '';
+}
+
+function _fbDownloadFile(filePath, filename) {
+  var a = document.createElement('a');
+  a.href = '/api/ui/files/download?project_id=' + encodeURIComponent(projectId || '') + '&path=' + encodeURIComponent(filePath);
+  a.download = filename || filePath.split('/').pop() || 'file';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
 }
 
 function _fbEntrySort(a, b) {
@@ -92,6 +102,9 @@ function _fbRender() {
       html += '<span class="file-browser__entry-icon ' + iconCls + '">' + icon + '</span>';
       html += '<span class="file-browser__entry-name">' + _fbEscHtml(entry.name) + '</span>';
       if (sizeStr) html += '<span class="file-browser__entry-size">' + sizeStr + '</span>';
+      if (!entry.is_dir) {
+        html += '<button class="file-browser__entry-dl" data-fb-dl="' + _fbEscAttr(entry.path) + '" title="下载文件">' + FB_ICON_DOWNLOAD + '</button>';
+      }
       html += '</div>';
     });
   }
@@ -111,7 +124,8 @@ function _fbBindTreeEvents() {
   });
 
   container.querySelectorAll('.file-browser__entry').forEach(function(el) {
-    el.addEventListener('click', function() {
+    el.addEventListener('click', function(e) {
+      if (e.target.closest('.file-browser__entry-dl')) return;
       var path = this.getAttribute('data-fb-path');
       var isDir = this.getAttribute('data-fb-dir') === '1';
       if (!path) return;
@@ -120,6 +134,14 @@ function _fbBindTreeEvents() {
       } else {
         _fbOpenFile(path);
       }
+    });
+  });
+
+  container.querySelectorAll('.file-browser__entry-dl').forEach(function(el) {
+    el.addEventListener('click', function(e) {
+      e.stopPropagation();
+      var path = this.getAttribute('data-fb-dl');
+      if (path) _fbDownloadFile(path);
     });
   });
 }
@@ -301,7 +323,15 @@ function _fbRenderEditor() {
 
   var escaped = (tab.content || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   container.innerHTML = '<pre class="file-editor__code">' + escaped + '</pre>';
-  if (statusEl) statusEl.textContent = tab.name + '  ·  ' + (tab.lines || 0) + ' 行  ·  ' + _fbFormatSize(tab.size || 0);
+  if (statusEl) {
+    statusEl.innerHTML = '<span class="file-editor__status-info">' + _fbEscHtml(tab.name) + '  ·  ' + (tab.lines || 0) + ' 行  ·  ' + _fbFormatSize(tab.size || 0) + '</span>'
+      + '<button class="file-editor__status-dl" data-status-dl="' + _fbEscAttr(tab.path) + '" title="下载文件">' + FB_ICON_DOWNLOAD + '</button>';
+    var dlBtn = statusEl.querySelector('.file-editor__status-dl');
+    if (dlBtn) dlBtn.addEventListener('click', function() {
+      var p = this.getAttribute('data-status-dl');
+      if (p) _fbDownloadFile(p);
+    });
+  }
 }
 
 // =====================================================

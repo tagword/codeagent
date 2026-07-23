@@ -88,6 +88,7 @@ def _codeagent_vars_dict(agent_id: str) -> dict[str, str]:
         "PLANS": str(wd / "plans"),
         "SCRIPTS": str(wd / "scripts"),
         "DOCS": str(wd / "docs"),
+        "SKILLS": str(wd / "skills"),
         "TMP": str(wd / "tmp"),
         "SESSION_LOG": str(wd / "sessions"),
         "AGENT_STATE": str(wd / "state.md"),

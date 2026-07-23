@@ -28,10 +28,12 @@ function planIsVisible() {
 
 try {
   if (tryGetLS(STORAGE_KEYS.PLAN_PANEL_OPEN) === '1') {
-    // 初始化互斥：如果待办已打开，不覆盖
+    // 初始化互斥：如果其他面板已打开，不覆盖
     var todoPanel = document.getElementById('todoPanel');
-    if (todoPanel && todoPanel.style.display === 'flex') {
-      // 待办已开 → 忽略 localStorage，自己不打开
+    var gitPanel = document.getElementById('gitPanel');
+    var skillPanel = document.getElementById('skillPanel');
+    if ((todoPanel && todoPanel.style.display === 'flex') || (gitPanel && gitPanel.style.display === 'flex') || (skillPanel && skillPanel.style.display === 'flex')) {
+      // 对面已开 → 忽略 localStorage，自己不打开
     } else {
       planPanel.style.display = 'flex';
       btnToggle.classList.add('is-active');
@@ -48,14 +50,23 @@ btnToggle.addEventListener('click', function() {
   btnToggle.classList.toggle('is-active', opening);
   trySetLS(STORAGE_KEYS.PLAN_PANEL_OPEN, opening ? '1' : '0');
 
-  // 互斥：打开 Plan 时自动关闭 Todo
+  // 互斥：打开 Plan 时自动关闭其他面板
   if (opening) {
+    if (typeof _activeMode !== 'undefined' && _activeMode === 'files' && typeof switchActivityMode === 'function') {
+      switchActivityMode('chat');
+    }
     var todoP = document.getElementById('todoPanel');
     var todoB = document.getElementById('btnToggleTodos');
     if (todoP && todoP.style.display !== 'none') {
       todoP.style.display = 'none';
       if (todoB) todoB.classList.remove('is-active');
       trySetLS(STORAGE_KEYS.TODO_PANEL_OPEN, '0');
+    }
+    var skillP = document.getElementById('skillPanel');
+    var skillB = document.getElementById('btnToggleSkills');
+    if (skillP && skillP.style.display !== 'none') {
+      skillP.style.display = 'none';
+      if (skillB) skillB.classList.remove('is-active');
     }
     refreshPlans();
   }

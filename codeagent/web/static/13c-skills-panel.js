@@ -41,8 +41,35 @@ btnToggle.addEventListener('click', function() {
   var opening = !skillPanelIsVisible();
   skillPanel.style.display = opening ? 'flex' : 'none';
   btnToggle.classList.toggle('is-active', opening);
-  if (opening) refreshSkills();
+  if (opening) {
+    // 如果在文件模式，先切回聊天
+    if (typeof _activeMode !== 'undefined' && _activeMode === 'files' && typeof switchActivityMode === 'function') {
+      switchActivityMode('chat');
+    }
+    _closeOtherPanels();
+    refreshSkills();
+  }
 });
+
+// 互斥：打开技能面板时关闭其他面板
+function _closeOtherPanels() {
+  var ids = [
+    { panel: 'planPanel',   btn: 'btnTogglePlans',   key: 'PLAN_PANEL_OPEN' },
+    { panel: 'todoPanel',   btn: 'btnToggleTodos',    key: 'TODO_PANEL_OPEN' },
+    { panel: 'gitPanel',    btn: 'btnToggleGit',      key: 'GIT_PANEL_OPEN' },
+  ];
+  ids.forEach(function(item) {
+    var p = document.getElementById(item.panel);
+    var b = document.getElementById(item.btn);
+    if (p && p.style.display !== 'none') {
+      p.style.display = 'none';
+      if (b) b.classList.remove('is-active');
+      if (typeof trySetLS === 'function' && STORAGE_KEYS && STORAGE_KEYS[item.key]) {
+        trySetLS(STORAGE_KEYS[item.key], '0');
+      }
+    }
+  });
+}
 
 if (btnRefresh) {
   btnRefresh.addEventListener('click', refreshSkills);
@@ -234,7 +261,7 @@ function openSkillEditor(existing) {
 
   var title = document.createElement('div');
   title.style.cssText = 'font-weight:600;font-size:15px;margin-bottom:var(--sp-3);';
-  title.textContent = isNew ? '📚 新建项目技能' : '📚 编辑项目技能';
+  title.innerHTML = isNew ? '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-3px;margin-right:4px;"><path d="M8 1l2 5.5h5.5l-4.5 3L12 15 8 11.5 4 15l1-5.5-4.5-3H6z"/></svg> 新建项目技能' : '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-3px;margin-right:4px;"><path d="M8 1l2 5.5h5.5l-4.5 3L12 15 8 11.5 4 15l1-5.5-4.5-3H6z"/></svg> 编辑项目技能';
   dialog.appendChild(title);
 
   var fldName = document.createElement('input');

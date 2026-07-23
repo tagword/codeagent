@@ -146,10 +146,32 @@ function restoreActivityMode() {
     fileBtn.addEventListener('click', function() {
       if (_activeMode === 'files') {
         switchActivityMode('chat');
-      } else {
-        switchActivityMode('files');
+        return;
       }
+      // 切到文件模式前关闭其他抽屉面板
+      _closeAllDrawerPanels();
+      switchActivityMode('files');
       _syncFileBtnState();
+    });
+  }
+
+  function _closeAllDrawerPanels() {
+    var drawers = [
+      { panel: 'planPanel',   btn: 'btnTogglePlans',   key: 'PLAN_PANEL_OPEN' },
+      { panel: 'todoPanel',   btn: 'btnToggleTodos',    key: 'TODO_PANEL_OPEN' },
+      { panel: 'gitPanel',    btn: 'btnToggleGit',      key: 'GIT_PANEL_OPEN' },
+      { panel: 'skillPanel',  btn: 'btnToggleSkills' },
+    ];
+    drawers.forEach(function(item) {
+      var p = document.getElementById(item.panel);
+      var b = document.getElementById(item.btn);
+      if (p && p.style.display !== 'none') {
+        p.style.display = 'none';
+        if (b) b.classList.remove('is-active');
+        if (item.key && typeof trySetLS === 'function' && STORAGE_KEYS && STORAGE_KEYS[item.key]) {
+          trySetLS(STORAGE_KEYS[item.key], '0');
+        }
+      }
     });
   }
 })();
