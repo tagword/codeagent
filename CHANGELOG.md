@@ -1,14 +1,6 @@
 # Changelog
 
-## 1.1.9 (2026-07-24)
-
-- feat: WebUI 文件浏览器下载按钮 — 悬停显示 ⬇️，支持任意文件下载
-- feat: 项目级 skills Wave 2-4 — persona 清理、skill_discover 注册、project_path 透传
-- feat: Flat skill .md → `skills/<name>/SKILL.md` 目录格式迁移
-- docs: 新增 ARCHITECTURE.md / CONTRIBUTING.md 项目文档
-- chore: 版本号 2.2.16 → 2.2.17
-
-## 1.1.8 (2026-07-23)
+## 1.1.8 (2026-07-24)
 
 - feat: 项目级 skills 支持 — 自动扫描 `.codeagent/skills/`，Web UI 技能面板
 - fix: 纯文本回复路径的流式占位符删除，覆盖无 tool rounds 场景
