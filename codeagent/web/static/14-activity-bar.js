@@ -8,9 +8,10 @@ function _applySidebarForMode(mode) {
   var outerSidebar = document.querySelector('.app > aside.sidebar');
   if (outerSidebar) outerSidebar.style.removeProperty('display');
 
-  // Hide all secondary sidebar sections first
-  if (fileSidebar) fileSidebar.style.display = 'none';
-  if (gitSidebar) gitSidebar.style.display = 'none';
+  // 先清空所有 sidebar-mode 的 visible 状态
+  [fileSidebar, gitSidebar].forEach(function(el) {
+    if (el) el.classList.remove('is-visible');
+  });
 
   if (_FULL_WIDTH_MODES.indexOf(mode) >= 0) {
     if (chatSidebar) chatSidebar.style.display = 'none';
@@ -19,7 +20,7 @@ function _applySidebarForMode(mode) {
 
   if (mode === 'files') {
     if (chatSidebar) chatSidebar.style.display = 'none';
-    if (fileSidebar) fileSidebar.style.display = 'flex';
+    if (fileSidebar) fileSidebar.classList.add('is-visible');
     return;
   }
 

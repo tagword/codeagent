@@ -60,7 +60,7 @@
 
     </aside>
 
-    <section id="sidebarGit" class="sidebar-mode" style="display:none;">
+    <section id="sidebarGit" class="sidebar-mode">
       <div class="sidebar-mode__scroll">
         <div class="sidebar__head" style="padding-bottom:0;">
           <div class="sidebar__section-label">源代码管理</div>
@@ -83,7 +83,7 @@
       </div>
     </section>
 
-    <section id="sidebarFiles" class="sidebar-mode" style="display:none;">
+    <section id="sidebarFiles" class="sidebar-mode">
       <div class="sidebar-mode__scroll">
         <div class="sidebar__head" style="padding-bottom:0;">
           <div class="sidebar__section-label">📂 文件浏览器</div>
@@ -136,6 +136,9 @@
             <path d="M15 8l-6.5 6.5a1.5 1.5 0 0 1-2 0L2 9.5a1.5 1.5 0 0 1 0-2L8.5 1"/>
             <circle cx="8" cy="8" r="1.5"/>
           </svg>
+        </button>
+        <button type="button" class="topbar__todo-btn" id="btnToggleSkills" title="项目技能" style="display:none;">
+          <span style="font-size:16px;line-height:1;">📚</span>
         </button>
       </div>
       <div class="oa-global-progress" id="chatGlobalProgress" aria-hidden="true"></div>
@@ -340,6 +343,17 @@
         <div class="todo-panel__list" id="todoList"></div>
         <div class="todo-panel__footer">
           <button type="button" class="btn btn--ghost btn--sm" id="btnTodoRefresh">刷新</button>
+        </div>
+      </aside>
+      <aside id="skillPanel" class="skill-panel" style="display:none;" aria-label="项目技能">
+        <div class="skill-panel__header">
+          <span>📚 项目技能</span>
+          <span id="skillPanelStatus" style="font-weight:400;font-size:12px;color:var(--text-muted);"></span>
+        </div>
+        <div class="skill-panel__list" id="skillPanelList"></div>
+        <div class="skill-panel__footer">
+          <button type="button" class="btn btn--ghost btn--sm" id="btnSkillPanelRefresh">刷新</button>
+          <button type="button" class="btn btn--primary btn--sm" id="btnSkillPanelAdd">+ 新增</button>
         </div>
       </aside>
       <aside id="planPanel" class="plan-panel" style="display:none;" aria-label="项目规划">

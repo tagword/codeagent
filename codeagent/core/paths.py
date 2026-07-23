@@ -38,7 +38,7 @@ from seed.core.paths import (
 # Project-level working directories (.codeagent/{agent_id}/)
 # ---------------------------------------------------------------------------
 
-_PROJECT_SUBDIRS = ("docs", "plans", "scripts", "sessions", "cache", "tmp")
+_PROJECT_SUBDIRS = ("docs", "plans", "scripts", "sessions", "skills", "cache", "tmp")
 
 
 def _codeagent_dir(root: Path | None = None) -> Path:

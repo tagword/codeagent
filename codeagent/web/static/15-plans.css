@@ -172,6 +172,56 @@
   line-height: 1.5;
 }
 
+/* ---- Skill panel (same layout as plan-panel) ---- */
+
+.skill-panel {
+  position: absolute;
+  top: var(--topbar-h, 44px);
+  right: 0;
+  bottom: 0;
+  width: 400px;
+  max-width: 92vw;
+  background: var(--bg-panel);
+  border-left: 1px solid var(--border);
+  display: none;
+  flex-direction: column;
+  z-index: 50;
+  box-shadow: -4px 0 16px rgba(0,0,0,0.06);
+  overflow: hidden;
+}
+
+.skill-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--sp-3) var(--sp-4);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.skill-panel__list {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--sp-2) 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+.skill-panel__list::-webkit-scrollbar { width: 8px; }
+.skill-panel__list::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
+
+.skill-panel__footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-4);
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
 /* ---- Empty state ---- */
 
 .plan-empty {

@@ -1246,8 +1246,73 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         tmp.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
         tmp.replace(state_path)
 
+    def _api_scan_skills_dir(
+        directory: Path,
+        state: dict[str, bool],
+        scope: str,
+        seen: set[str] | None = None,
+    ) -> list[dict]:
+        """Scan a single skills directory for flat .md and skills/<name>/SKILL.md."""
+        if seen is None:
+            seen = set()
+        files: list[dict] = []
+        if not directory.is_dir():
+            return files
+
+        # 1st pass: flat .md files
+        for fp in sorted(directory.iterdir()):
+            if fp.name == "_state.json" or fp.name.startswith("."):
+                continue
+            if fp.suffix.lower() not in (".md", ".txt"):
+                continue
+            if fp.name in seen:
+                continue
+            enabled = state.get(fp.name, True)
+            files.append(
+                {
+                    "name": fp.name,
+                    "path": str(fp),
+                    "content": fp.read_text(encoding="utf-8"),
+                    "enabled": enabled,
+                    "scope": scope,
+                }
+            )
+            seen.add(fp.name)
+
+        # 2nd pass: directory format skills/<name>/SKILL.md
+        for fp in sorted(directory.glob("*/SKILL.md")):
+            dirname = fp.parent.name
+            if dirname.startswith("."):
+                continue
+            state_key = f"{dirname}.md"
+            if state_key in seen:
+                continue
+            enabled = state.get(state_key, True)
+            files.append(
+                {
+                    "name": state_key,
+                    "path": str(fp),
+                    "content": fp.read_text(encoding="utf-8"),
+                    "enabled": enabled,
+                    "scope": scope,
+                    "format": "dir",
+                }
+            )
+            seen.add(state_key)
+
+        return files
+
     async def api_skills_get(request: Request) -> JSONResponse:
         aid = (request.query_params.get("agent_id") or "").strip() or _default_agent_id()
+        project_path_str = (request.query_params.get("project_path") or "").strip()
+        project_id_str = (request.query_params.get("project_id") or "").strip()
+        # Resolve project_path from project_id if provided
+        if not project_path_str and project_id_str:
+            try:
+                from seed.core.proj_reg import resolve_project_path
+                project_path_str = resolve_project_path(aid, project_id_str)
+            except Exception:
+                pass
         try:
             from codeagent.core.paths import agent_skills_dir, ensure_agent_scaffold
 
@@ -1256,29 +1321,28 @@ def build_webui_api_app(project_root: Path) -> Starlette:
             skills_dir = project_root / "config" / "skills"
             state_path = sdir / "_state.json"
             state = _api_read_skills_state(state_path)
-            files = []
+            files: list[dict] = []
             seen: set[str] = set()
+
+            # 1. Project-level skills (if project_path is given)
+            if project_path_str:
+                pdir = Path(project_path_str).resolve() / ".codeagent" / aid / "skills"
+                if pdir.is_dir():
+                    pstate_path = pdir / "_state.json"
+                    pstate = _api_read_skills_state(pstate_path)
+                    files.extend(_api_scan_skills_dir(pdir, pstate, "project", seen))
+
+            # 2. Agent-level skills
             if sdir.is_dir():
-                for fp in sorted(sdir.iterdir()):
-                    if fp.name == "_state.json" or fp.name.startswith("."):
-                        continue
-                    if fp.suffix.lower() in (".md", ".txt"):
-                        enabled = state.get(fp.name, True)
-                        files.append(
-                            {
-                                "name": fp.name,
-                                "path": str(fp),
-                                "content": fp.read_text(encoding="utf-8"),
-                                "enabled": enabled,
-                                "scope": "agent",
-                            }
-                        )
-                        seen.add(fp.name)
+                files.extend(_api_scan_skills_dir(sdir, state, "agent", seen))
+
+            # 3. Global config/skills/*.md
             if skills_dir.is_dir():
+                gseen = {f["name"] for f in files}
                 for fp in sorted(skills_dir.iterdir()):
                     if fp.name.startswith("."):
                         continue
-                    if fp.suffix.lower() in (".md", ".txt") and fp.name not in seen:
+                    if fp.suffix.lower() in (".md", ".txt") and fp.name not in gseen:
                         enabled = state.get(fp.name, True)
                         files.append(
                             {
@@ -1300,6 +1364,15 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         except Exception:
             return JSONResponse({"detail": "invalid json"}, status_code=400)
         aid = (request.query_params.get("agent_id") or "").strip() or _default_agent_id()
+        project_path_str = (request.query_params.get("project_path") or "").strip()
+        project_id_str = (request.query_params.get("project_id") or "").strip()
+        # Resolve project_path from project_id if provided
+        if not project_path_str and project_id_str:
+            try:
+                from seed.core.proj_reg import resolve_project_path
+                project_path_str = resolve_project_path(aid, project_id_str)
+            except Exception:
+                pass
         action = body.get("action", "save")
         name = (body.get("name") or "").strip()
         if not name or "/" in name or "\\" in name:
@@ -1307,27 +1380,47 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         try:
             from codeagent.core.paths import agent_skills_dir, ensure_agent_scaffold
 
-            ensure_agent_scaffold(aid, base=project_root)
-            sdir = agent_skills_dir(aid, base=project_root)
+            # Determine target directory
+            if project_path_str:
+                sdir = Path(project_path_str).resolve() / ".codeagent" / aid / "skills"
+            else:
+                ensure_agent_scaffold(aid, base=project_root)
+                sdir = agent_skills_dir(aid, base=project_root)
             sdir.mkdir(parents=True, exist_ok=True)
             state_path = sdir / "_state.json"
-            fp = sdir / name
+
+            # New directory format: skills/<name>/SKILL.md
+            dir_format = sdir / name  # <name> dir
+            flat_file = sdir / f"{name}.md"
 
             # Load current state
             state = _api_read_skills_state(state_path)
+            state_key = f"{name}.md"
 
             if action == "delete":
-                if fp.is_file():
-                    fp.unlink()
-                state.pop(name, None)
+                # Try directory format first, then flat
+                if dir_format.is_dir():
+                    import shutil
+                    shutil.rmtree(dir_format)
+                elif flat_file.is_file():
+                    flat_file.unlink()
+                state.pop(state_key, None)
                 _api_write_skills_state(state_path, state)
                 return JSONResponse({"ok": True, "hint": f"已删除 {name}"})
+
             content = body.get("content", "")
+            # Prefer directory format for new saves
+            fp = dir_format / "SKILL.md"
+            fp.parent.mkdir(parents=True, exist_ok=True)
             fp.write_text(str(content), encoding="utf-8")
+
+            # Remove stale flat file if it exists
+            if flat_file.is_file():
+                flat_file.unlink()
 
             # Update enabled state if provided
             if "enabled" in body:
-                state[name] = bool(body["enabled"])
+                state[state_key] = bool(body["enabled"])
                 _api_write_skills_state(state_path, state)
 
             return JSONResponse({"ok": True, "path": str(fp), "hint": f"已保存 {name}，新会话生效。"})

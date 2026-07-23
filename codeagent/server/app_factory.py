@@ -360,6 +360,7 @@ def create_app():
                 agent_id,
                 user_text=content_text_for_skills(message),
                 workspace_suffix=_work_dir_suffix,
+                project_path=_wd,
             )
             if _forced_mcp_skill_suffix:
                 _skills_suffix = (_skills_suffix or "").rstrip() + _forced_mcp_skill_suffix

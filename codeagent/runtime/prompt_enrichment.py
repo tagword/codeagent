@@ -221,8 +221,17 @@ def build_skills_suffix(
     *,
     user_text: str,
     workspace_suffix: str = "",
+    project_path: str | Path | None = None,
 ) -> Optional[str]:
-    """Combine workspace hint + dynamically selected agent skills for ``skills_suffix``."""
+    """Combine workspace hint + dynamically selected agent skills for ``skills_suffix``.
+
+    Args:
+        agent_id: Target agent id.
+        user_text: The user's current message text (for skill matching).
+        workspace_suffix: Additional workspace context to append.
+        project_path: If set, also scan project-level skills from
+            ``<project>/.codeagent/{agent_id}/skills/``.
+    """
     parts: list[str] = []
     if workspace_suffix and workspace_suffix.strip():
         parts.append(workspace_suffix.strip())
@@ -235,6 +244,7 @@ def build_skills_suffix(
             appendix = build_selected_skills_appendix(
                 agent_id,
                 user_text=content_text_for_skills(user_text),
+                project_path=project_path,
             )
             if appendix:
                 parts.append(appendix)

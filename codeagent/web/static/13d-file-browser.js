@@ -310,7 +310,7 @@ function _fbRenderEditor() {
 
 window.webuiRefreshFileTreeIfVisible = function() {
   var filesSection = document.getElementById('sidebarFiles');
-  if (!filesSection || filesSection.style.display === 'none') return;
+  if (!filesSection || !filesSection.classList.contains('is-visible')) return;
 
   var container = document.getElementById('fileTreeContainer');
   if (!container) return;
@@ -347,7 +347,7 @@ window.webuiRefreshFileTreeIfVisible = function() {
   // Auto-refresh on project change
   window.addEventListener('project-changed', function() {
     var fs = document.getElementById('sidebarFiles');
-    if (fs && fs.style.display !== 'none') {
+    if (fs && fs.classList.contains('is-visible')) {
       window.webuiRefreshFileTreeIfVisible();
     }
   });
