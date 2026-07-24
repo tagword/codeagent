@@ -32,7 +32,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: CodeAgent-mac
-          path: dist/CodeAgent-mac.dmg
+          path: dist/CodeAgent-mac-*.dmg
 
   build-windows:
     runs-on: windows-latest
@@ -50,8 +50,8 @@ jobs:
           pip install -e .
           pip install pyinstaller
 
-      - name: Build with PyInstaller
-        run: pyinstaller packaging/CodeAgent.spec --distpath dist
+      - name: Build with PyInstaller (Windows spec)
+        run: pyinstaller packaging/CodeAgent.windows.spec --distpath dist
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -73,6 +73,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            CodeAgent-mac/CodeAgent-mac.dmg
-            CodeAgent-win/CodeAgent-win.exe
+            CodeAgent-mac/CodeAgent-mac-*.dmg
+            CodeAgent-win/CodeAgent.exe
           generate_release_notes: true

@@ -3,7 +3,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-APP="${ROOT}/dist/CodeAgent.app"
+MONO="$(cd "$ROOT/.." && pwd)"
+APP="${MONO}/dist/CodeAgent.app"
 DMG="${CODEAGENT_DMG_OUTPUT:-${ROOT}/dist/CodeAgent-mac.dmg}"
 TMP_IMG="${ROOT}/build/CodeAgent-template.sparseimage"
 

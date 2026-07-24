@@ -142,7 +142,7 @@ _run_arch pip install \
   -e "$MONO/seed-model-providers" \
   -e "$MONO/seed" \
   -e "$MONO/seed-tools[code]" \
-  -e "$ROOT"
+  -e "$MONO"
 
 echo "==> Install build deps"
 _run_arch pip install pyinstaller pillow rumps -q
