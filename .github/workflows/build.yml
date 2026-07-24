@@ -44,11 +44,27 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install dependencies
+      - name: Install dependencies (monorepo siblings from GitHub)
+        shell: pwsh
         run: |
           python -m pip install --upgrade pip
-          pip install -e .
+          # MONO = repo root (= parent of packaging/). Same logic as build_mac_dmg.sh
+          $mono = "${{ github.workspace }}"
+          # Clone missing monorepo siblings (seed, seed-tools, seed-model-providers)
+          # The spec file uses collect_all() on these packages + pathex includes MONO/<name>
+          $siblings = @("seed", "seed-tools", "seed-model-providers")
+          foreach ($src in $siblings) {
+            $dir = Join-Path $mono $src
+            if (-not (Test-Path (Join-Path $dir "pyproject.toml"))) {
+              Write-Host "==> Clone $src to $dir"
+              git clone --depth 1 "https://github.com/${{ github.repository_owner }}/${src}.git" $dir
+            }
+          }
+          # Install all monorepo packages (editable, so PyInstaller can find them)
+          pip install -e "$mono\seed-model-providers" -e "$mono\seed" -e "$mono\seed-tools[code]" -e "$mono"
           pip install pyinstaller
+        env:
+          GIT_TERMINAL_PROMPT: 0
 
       - name: Build with PyInstaller (Windows spec)
         run: pyinstaller packaging/CodeAgent.windows.spec --distpath dist
