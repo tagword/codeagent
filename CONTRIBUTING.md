@@ -1,5 +1,13 @@
 # Contributing
 
+## 项目文件
+
+| 文件 | 用途 |
+|------|------|
+| `Dockerfile` | 多阶段构建镜像；推送到 GHCR (`ghcr.io/tagword/codeagent`) |
+| `.dockerignore` | Docker build context 过滤规则 |
+| `.github/workflows/build.yml` | CI: tag push 时自动构建 macOS DMG + Windows exe + Docker 镜像 |
+
 ## 开发环境
 
 ```bash
@@ -25,6 +33,29 @@ CodeAgent 依赖以下核心包（三者均为私有仓库，通过 git+https �
 | `seed-kernel` | `seed-kernel` | `github.com/tagword/seed` |
 | `seed-toolbox` | `seed-toolbox` | `github.com/tagword/seed-tools` |
 | `seed-model-providers` | `seed-model-providers` | `github.com/tagword/seed-model-providers` |
+
+## Docker 本地构建
+
+```bash
+# 构建镜像
+docker build -t codeagent:dev .
+
+# 运行（挂载数据持久化）
+docker run -p 8765:8765 \
+  -v ~/.codeagent:/root/.codeagent \
+  -e CODEAGENT_HOME=/root/.codeagent \
+  codeagent:dev
+```
+
+## 一键运行（生产环境）
+
+```bash
+docker pull ghcr.io/tagword/codeagent:latest
+docker run -d --name codeagent \
+  -p 8765:8765 \
+  -v ~/.codeagent:/root/.codeagent \
+  ghcr.io/tagword/codeagent:latest
+```
 
 ```bash
 # 如需本地调试依赖包，可 clone 后 pip install -e 指向本地路径

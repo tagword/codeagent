@@ -145,29 +145,7 @@
     display: none;
   }
 
-  /* Files mode: compact file tree on top */
-  body[data-activity-mode="files"] .sidebar {
-    position: relative;
-    width: 100%;
-    transform: none;
-    box-shadow: none;
-    max-height: 38vh;
-    bottom: auto;
-    flex-shrink: 0;
-  }
-
-  body[data-activity-mode="files"] .app {
-    display: flex;
-    flex-direction: column;
-    height: 100dvh;
-  }
-
-  body[data-activity-mode="files"] .workspace {
-    flex: 1;
-    min-height: 0;
-    height: auto;
-    padding-bottom: var(--mobile-nav-h);
-  }
+  /* Files mode on mobile: same drawer layout as chat */
 
   /* Config / tasks / agent: hide sidebar from layout */
   body[data-activity-mode="config"] .sidebar,
@@ -219,7 +197,7 @@
     height: 18px;
   }
 
-  body:not([data-activity-mode="chat"]) .topbar__sidebar-btn {
+  body:not([data-activity-mode="chat"]):not([data-activity-mode="files"]) .topbar__sidebar-btn {
     display: none;
   }
 

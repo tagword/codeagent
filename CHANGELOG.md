@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.1.11 (2026-07-25)
+
+- feat: Docker 镜像支持 — 多阶段构建，自动推送到 GHCR（`ghcr.io/tagword/codeagent`）
+- feat: CI 增加 Docker 构建任务，tag push 时自动构建并推送
+- fix: 手机端 files 模式下汉堡菜单改为抽屉侧边栏（与 chat 模式一致）
+- docs: ARCHITECTURE.md 补充交付物说明和 Docker 使用方式
+- docs: CONTRIBUTING.md 补充 Docker 本地构建与生产运行说明
+
 ## 1.1.8 (2026-07-24)
 
 - feat: 项目级 skills 支持 — 自动扫描 `.codeagent/skills/`，Web UI 技能面板

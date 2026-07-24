@@ -1,0 +1,65 @@
+# ── Version Control ──
+.git
+.gitignore
+.gitattributes
+
+# ── Packaging ──
+dist/
+build/
+*.egg-info/
+packaging/
+
+# ── Virtualenv ──
+.venv
+venv/
+.build-venv/
+.build-venv-x86_64/
+
+# ── Python cache ──
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.ruff_cache/
+
+# ── Node / Web UI build ──
+node_modules/
+webui-v2/
+webui/
+
+# ── Local config & secrets ──
+.env
+.env.*
+config/codeagent.env
+config/seed.env
+*.pem
+*.key
+secrets/
+.secrets/
+
+# ── Internal docs & plans ──
+docs/
+plans/
+*-plan.md
+
+# ── Agent runtime (stays on host) ──
+.codeagent/
+.scripts/
+.tmp/
+llm_sessions/
+
+# ── CI / deploy ──
+.github/
+deploy/
+
+# ── OS junk ──
+.DS_Store
+Thumbs.db
+
+# ── Tests (not needed in runtime) ──
+tests/
+
+# ── Misc ──
+*.log
+*.bak
+saved_html.html

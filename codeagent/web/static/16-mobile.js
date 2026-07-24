@@ -16,7 +16,7 @@
   function openSidebar() {
     if (!isMobile()) return;
     var mode = document.body.getAttribute('data-activity-mode');
-    if (mode && mode !== 'chat') return;
+    if (mode && mode !== 'chat' && mode !== 'files') return;
     document.body.classList.add('sidebar-open');
     var btn = document.getElementById('btnToggleSidebar');
     if (btn) btn.classList.add('is-active');

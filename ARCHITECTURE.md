@@ -17,6 +17,31 @@ CodeAgent 是 **seed 引擎的人格层**（Personality Layer），运行在 `se
 └─────────────────────────────────────────┘
 ```
 
+## 交付物
+
+| 平台 | 产物 | 出处 |
+|------|------|------|
+| macOS | `.dmg` 桌面安装包 | `packaging/build_mac_dmg.sh` |
+| Windows | `.exe` 单文件 | `packaging/CodeAgent.windows.spec` |
+| Docker | 镜像 (`ghcr.io/tagword/codeagent`) | `Dockerfile` |
+
+CI 在 tag push 时自动构建全部三个平台产物，Docker 镜像通过 GitHub Container Registry (GHCR) 分发。
+
+### Docker 使用方式
+
+```bash
+# 拉取
+docker pull ghcr.io/tagword/codeagent:latest
+
+# 运行（挂载数据持久化）
+docker run -d --name codeagent \
+  -p 8765:8765 \
+  -v ~/.codeagent:/root/.codeagent \
+  ghcr.io/tagword/codeagent:latest
+
+# 浏览器打开 http://localhost:8765
+```
+
 ## 目录结构
 
 ```
