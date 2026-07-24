@@ -79,10 +79,11 @@ serve.log
 .pre-commit-config.yaml
 
 # Packaging scripts (macOS DMG, PyInstaller, icon generation)
-packaging/
+# Commented out: tracked in git for CI builds
+# packaging/
 
-# Local-only: docs, CI workflows, deploy config & tests (not pushed to remote)
-.github/
+# Local-only: docs, deploy config & tests (not pushed to remote)
+.github/deploy/
 deploy/
 docs/
 tests/
