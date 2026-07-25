@@ -130,6 +130,12 @@ jobs:
         with:
           name: CodeAgent-win
 
+      - name: List downloaded files
+        run: find . -name "*.dmg" -o -name "*.exe" | head -20
+
+      - name: List dist/ contents
+        run: ls -la dist/ 2>/dev/null || echo "dist/ does not exist"
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
@@ -137,3 +143,4 @@ jobs:
             dist/CodeAgent-mac-*.dmg
             dist/CodeAgent.exe
           generate_release_notes: true
+          fail_on_unmatched_files: true
