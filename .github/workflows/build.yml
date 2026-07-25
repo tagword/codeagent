@@ -140,7 +140,11 @@ jobs:
       - name: Prepare release files
         run: |
           mkdir -p dist
-          cp CodeAgent-mac/CodeAgent-mac-*.dmg dist/
+          echo "=== listing downloaded artifacts ==="
+          ls -la CodeAgent-mac/ CodeAgent-win/
+          dmg_file=$(find CodeAgent-mac/ -name "*.dmg" | head -1)
+          echo "DMG file: $dmg_file"
+          cp "$dmg_file" dist/
           cp CodeAgent-win/CodeAgent.exe dist/
           echo "=== dist/ contents ==="
           ls -la dist/
