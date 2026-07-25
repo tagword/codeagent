@@ -137,16 +137,13 @@ jobs:
         with:
           name: CodeAgent-win
 
-      - name: Debug downloaded files
+      - name: Prepare release files
         run: |
-          echo "=== GITHUB_WORKSPACE ==="
-          ls -la "${{ github.workspace }}"/
-          echo "=== dist/ ==="
-          ls -la "${{ github.workspace }}"/dist/ 2>/dev/null || echo "No dist/ directory"
-          echo "=== find all .dmg ==="
-          find "${{ github.workspace }}" -name "*.dmg" 2>/dev/null
-          echo "=== find all .exe ==="
-          find "${{ github.workspace }}" -name "*.exe" 2>/dev/null
+          mkdir -p dist
+          cp CodeAgent-mac/CodeAgent-mac-*.dmg dist/
+          cp CodeAgent-win/CodeAgent.exe dist/
+          echo "=== dist/ contents ==="
+          ls -la dist/
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
