@@ -139,15 +139,22 @@ jobs:
 
       - name: Prepare release files
         run: |
-          mkdir -p dist
-          echo "=== listing downloaded artifacts ==="
-          ls -la CodeAgent-mac/ CodeAgent-win/
-          dmg_file=$(find CodeAgent-mac/ -name "*.dmg" | head -1)
-          echo "DMG file: $dmg_file"
-          cp "$dmg_file" dist/
-          cp CodeAgent-win/CodeAgent.exe dist/
+          mkdir -p "${{ github.workspace }}"/dist/
+          dmg_file=$(find "${{ github.workspace }}" -maxdepth 1 -name "*.dmg" | head -1)
+          if [ -z "$dmg_file" ]; then
+            echo "ERROR: No .dmg file found in workspace"
+            exit 1
+          fi
+          echo "Found DMG: $dmg_file"
+          cp "$dmg_file" "${{ github.workspace }}"/dist/
+          if [ -f "${{ github.workspace }}"/CodeAgent.exe ]; then
+            cp "${{ github.workspace }}"/CodeAgent.exe "${{ github.workspace }}"/dist/
+          else
+            echo "ERROR: CodeAgent.exe not found in workspace"
+            exit 1
+          fi
           echo "=== dist/ contents ==="
-          ls -la dist/
+          ls -la "${{ github.workspace }}"/dist/
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
