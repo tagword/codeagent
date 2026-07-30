@@ -28,6 +28,12 @@ _hidden = [
     'setuptools._vendor.jaraco.functools',
     'setuptools._vendor.jaraco.context',
     'platformdirs',
+    # 系统托盘 pystray + PIL (Windows EXE)
+    'pystray',
+    'pystray._win32',
+    'PIL',
+    'PIL.Image',
+    'PIL._tkinter_finder',
 ]
 
 # Monorepo Python packages (editable installs need explicit collect_all)

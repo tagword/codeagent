@@ -2,7 +2,7 @@
 CodeAgent 启动器
 
 macOS → .app 菜单栏图标 (rumps)
-Windows → exe 系统托盘图标 (pystray，可选) / 无托盘后台运行
+Windows / Linux → 系统托盘图标 (pystray) / 无托盘后台保活（保底）
 """
 import os
 import sys
@@ -24,8 +24,9 @@ if _BUNDLED:
     sys.path.insert(0, sys._MEIPASS)
     setup_bundled_tools_env()
 
+# 端口与项目默认一致 (codeagent serve → 8765)
 SERVER_HOST = "127.0.0.1"
-SERVER_PORT = 8899
+SERVER_PORT = 8765
 SERVER_URL = f"http://{SERVER_HOST}:{SERVER_PORT}"
 
 # 托盘图标路径
@@ -49,6 +50,23 @@ def _wait_for_server(url: str = SERVER_URL, timeout: float = 10.0) -> bool:
             pass
         time.sleep(0.5)
     return False
+
+
+def _report_server_not_ready() -> None:
+    """弹出错误消息框（Windows）或打印到 stderr（其它平台）。"""
+    msg = (
+        f"CodeAgent Web 服务器未能在预期时间内启动。\n"
+        f"请检查防火墙或端口 {SERVER_PORT} 是否被占用，\n"
+        f"然后手动打开浏览器访问 {SERVER_URL}"
+    )
+    if _PLATFORM == 'win32':
+        try:
+            import ctypes
+            ctypes.windll.user32.MessageBoxW(0, msg, "CodeAgent", 0x10 | 0x1000)
+            return
+        except Exception:
+            pass
+    print(msg, file=sys.stderr)
 
 
 # ═══════════════════════════════════════════════════════
@@ -80,11 +98,35 @@ def _run_macos_tray() -> None:
 
 
 # ═══════════════════════════════════════════════════════
-#  Windows / Linux 后台保活
+#  Windows / Linux 系统托盘图标 (pystray)
 # ═══════════════════════════════════════════════════════
 
+def _run_tray() -> None:
+    """pystray 系统托盘图标（阻塞）。"""
+    import pystray
+    from PIL import Image
+
+    icon_img = Image.open(_ICON)
+
+    def on_open(_icon, _item):
+        webbrowser.open(SERVER_URL)
+
+    def on_quit(_icon, _item):
+        _icon.stop()
+        os._exit(0)
+
+    menu = pystray.Menu(
+        pystray.MenuItem("Open Browser", on_open, default=True),
+        pystray.Menu.SEPARATOR,
+        pystray.MenuItem("Quit", on_quit),
+    )
+
+    icon = pystray.Icon("CodeAgent", icon_img, "CodeAgent", menu)
+    icon.run()
+
+
 def _run_background() -> None:
-    """非 macOS: 保持进程存活。守护线程中的服务器会持续运行。"""
+    """纯后台保活（pystray 不可用时的保底方案）。"""
     _keep_alive = threading.Event()
     try:
         _keep_alive.wait()
@@ -120,12 +162,30 @@ def main() -> None:
     ok = _wait_for_server()
     if ok:
         webbrowser.open(SERVER_URL)
+    else:
+        _report_server_not_ready()
 
-    # 前台保持运行
+    # 前台保持运行 + 托盘图标
     if _PLATFORM == 'darwin':
         _run_macos_tray()
+    elif _PLATFORM == 'win32':
+        try:
+            import pystray  # noqa: F401 — 检查是否可用
+            _run_tray()
+        except ImportError:
+            print(
+                "pystray 不可用，将以无托盘后台模式运行。\n"
+                f"请手动打开浏览器访问 {SERVER_URL}",
+                file=sys.stderr,
+            )
+            _run_background()
     else:
-        _run_background()
+        # Linux — 同样尝试 pystray
+        try:
+            import pystray  # noqa: F401
+            _run_tray()
+        except ImportError:
+            _run_background()
 
 
 if __name__ == "__main__":

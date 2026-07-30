@@ -70,6 +70,8 @@ jobs:
           # Install all monorepo packages (editable, so PyInstaller can find them)
           pip install -e "$mono\seed-model-providers" -e "$mono\seed" -e "$mono\seed-tools[code]" -e "$mono"
           pip install pyinstaller
+          # 系统托盘图标 (pystray) + 图像处理 (Pillow)
+          pip install pystray pillow
         env:
           GIT_TERMINAL_PROMPT: 0
 
