@@ -6,6 +6,7 @@ Windows / Linux → 系统托盘图标 (pystray) / 无托盘后台保活（保�
 """
 import os
 import sys
+import tempfile
 import threading
 import time
 import webbrowser
@@ -57,7 +58,8 @@ def _report_server_not_ready() -> None:
     msg = (
         f"CodeAgent Web 服务器未能在预期时间内启动。\n"
         f"请检查防火墙或端口 {SERVER_PORT} 是否被占用，\n"
-        f"然后手动打开浏览器访问 {SERVER_URL}"
+        f"然后手动打开浏览器访问 {SERVER_URL}\n\n"
+        f"启动日志（如有）：{_SERVER_LOG}"
     )
     if _PLATFORM == 'win32':
         try:
@@ -138,6 +140,29 @@ def _run_background() -> None:
 #  Main
 # ═══════════════════════════════════════════════════════
 
+# 服务器启动日志（用于排查启动失败原因；写入用户临时目录确保可写）
+_SERVER_LOG = os.path.join(tempfile.gettempdir(), "codeagent_server_startup.log")
+
+
+def _run_server() -> None:
+    """在后台线程中启动服务器，异常时写入日志。"""
+    import traceback
+
+    try:
+        from codeagent.server import main as server_main
+
+        server_main(SERVER_HOST, SERVER_PORT)
+    except Exception:
+        try:
+            with open(_SERVER_LOG, "w", encoding="utf-8") as f:
+                f.write(
+                    f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] "
+                    f"服务器启动失败:\n{traceback.format_exc()}"
+                )
+        except Exception:
+            pass
+
+
 def main() -> None:
     # -m 模式: 用 CodeAgent.exe -m 模块名 参数... 替代 python -m
     if len(sys.argv) >= 3 and sys.argv[1] == "-m":
@@ -148,12 +173,16 @@ def main() -> None:
         runpy.run_module(module, run_name="__main__", alter_sys=True)
         return
 
-    # 后台启动服务器
-    from codeagent.server import main as server_main
+    # 清除上次的启动日志
+    try:
+        if os.path.exists(_SERVER_LOG):
+            os.remove(_SERVER_LOG)
+    except Exception:
+        pass
 
+    # 后台启动服务器（带异常捕获）
     t = threading.Thread(
-        target=server_main,
-        args=(SERVER_HOST, SERVER_PORT),
+        target=_run_server,
         daemon=True,
     )
     t.start()
