@@ -1,10 +1,8 @@
 """
-CodeAgent macOS .app 启动器（带菜单栏图标）
+CodeAgent 启动器
 
-双击 CodeAgent.app 后：
-1. 启动 CodeAgent Web 服务器（127.0.0.1:8899）
-2. 自动在默认浏览器打开 UI
-3. 菜单栏显示图标 → 可打开浏览器或退出
+macOS → .app 菜单栏图标 (rumps)
+Windows → exe 系统托盘图标 (pystray，可选) / 无托盘后台运行
 """
 import os
 import sys
@@ -13,11 +11,14 @@ import time
 import webbrowser
 from pathlib import Path
 
-import rumps
-
 from bundled_tools import is_frozen, setup_bundled_tools_env
 
-# PyInstaller 打包后, `sys._MEIPASS` 指向 .app/Contents/Resources
+# ── 平台相关导入 ──────────────────────────────────────
+_PLATFORM = sys.platform
+if _PLATFORM == 'darwin':
+    import rumps
+
+# PyInstaller 打包后, `sys._MEIPASS` 指向解压目录（.app/Contents/Resources 或 _MEIxxxx）
 _BUNDLED = is_frozen()
 if _BUNDLED:
     sys.path.insert(0, sys._MEIPASS)
@@ -27,11 +28,11 @@ SERVER_HOST = "127.0.0.1"
 SERVER_PORT = 8899
 SERVER_URL = f"http://{SERVER_HOST}:{SERVER_PORT}"
 
-# 托盘图标路径（打包后 sys._MEIPASS = Contents/Resources/）
-if _BUNDLED:
-    _ICON = str(Path(sys._MEIPASS) / "tray_icon.png")
-else:
-    _ICON = str(Path(__file__).parent.parent / "assets" / "tray_icon.png")
+# 托盘图标路径
+_ICON = str(
+    Path(sys._MEIPASS if _BUNDLED else Path(__file__).parent.parent / "assets")
+    / "tray_icon.png"
+)
 
 
 def _wait_for_server(url: str = SERVER_URL, timeout: float = 10.0) -> bool:
@@ -50,32 +51,53 @@ def _wait_for_server(url: str = SERVER_URL, timeout: float = 10.0) -> bool:
     return False
 
 
-class CodeAgentTray(rumps.App):
-    """菜单栏托盘应用。"""
+# ═══════════════════════════════════════════════════════
+#  macOS 菜单栏托盘 (rumps)
+# ═══════════════════════════════════════════════════════
 
-    def __init__(self):
-        super().__init__(
-            "CodeAgent",
-            icon=_ICON,
-            quit_button=None,  # 我们用自定义退出
-        )
-        self.menu = [
-            rumps.MenuItem("Open Browser", callback=self._open_browser),
-            None,  # 分隔线
-            rumps.MenuItem("Quit", callback=self._quit_app),
-        ]
+def _run_macos_tray() -> None:
+    """运行 macOS 菜单栏托盘（阻塞）。"""
 
-    @staticmethod
-    def _open_browser(_):
-        webbrowser.open(SERVER_URL)
+    class CodeAgentTray(rumps.App):
+        def __init__(self):
+            super().__init__("CodeAgent", icon=_ICON, quit_button=None)
+            self.menu = [
+                rumps.MenuItem("Open Browser", callback=self._open_browser),
+                None,
+                rumps.MenuItem("Quit", callback=self._quit_app),
+            ]
 
-    @staticmethod
-    def _quit_app(_):
-        rumps.quit_application()
-        os._exit(0)
+        @staticmethod
+        def _open_browser(_):
+            webbrowser.open(SERVER_URL)
 
+        @staticmethod
+        def _quit_app(_):
+            rumps.quit_application()
+            os._exit(0)
+
+    CodeAgentTray().run()
+
+
+# ═══════════════════════════════════════════════════════
+#  Windows / Linux 后台保活
+# ═══════════════════════════════════════════════════════
+
+def _run_background() -> None:
+    """非 macOS: 保持进程存活。守护线程中的服务器会持续运行。"""
+    _keep_alive = threading.Event()
+    try:
+        _keep_alive.wait()
+    except KeyboardInterrupt:
+        pass
+
+
+# ═══════════════════════════════════════════════════════
+#  Main
+# ═══════════════════════════════════════════════════════
 
 def main() -> None:
+    # -m 模式: 用 CodeAgent.exe -m 模块名 参数... 替代 python -m
     if len(sys.argv) >= 3 and sys.argv[1] == "-m":
         import runpy
 
@@ -99,8 +121,11 @@ def main() -> None:
     if ok:
         webbrowser.open(SERVER_URL)
 
-    # 前台运行菜单栏图标（阻塞）
-    CodeAgentTray().run()
+    # 前台保持运行
+    if _PLATFORM == 'darwin':
+        _run_macos_tray()
+    else:
+        _run_background()
 
 
 if __name__ == "__main__":
