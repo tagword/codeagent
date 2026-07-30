@@ -148,6 +148,13 @@ def _run_server() -> None:
     """在后台线程中启动服务器，异常时写入日志。"""
     import traceback
 
+    # PyInstaller GUI 模式 (console=False) → sys.stdout/sys.stderr = None
+    # uvicorn 初始化日志时调用 stream.isatty() 会崩溃，需提前修补
+    if sys.stdout is None:
+        sys.stdout = open(os.devnull, "w", encoding="utf-8")
+    if sys.stderr is None:
+        sys.stderr = open(os.devnull, "w", encoding="utf-8")
+
     try:
         from codeagent.server import main as server_main
 
