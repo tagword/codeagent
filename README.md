@@ -159,6 +159,7 @@ codeagent config init
 | `CODEAGENT_MODEL` | 模型名称 |
 | `CODEAGENT_BASE_URL` | API 端点地址 |
 | `CODEAGENT_AGENT_ID` | 当前 Agent 标识（默认 `default`） |
+| `CODEAGENT_WEBUI_COOKIE_SECURE` | Web UI 登录 cookie 加 `Secure` 标志（HTTPS 反向代理部署时设 `1`） |
 
 详细环境变量清单见 [docs/ENV_REFERENCE.md](docs/ENV_REFERENCE.md)。
 
