@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.1.22 (2026-08-03)
+
+- fix(webui): cookie 固定名 `ca_webui` + 统一读写端口来源（消除反向代理下登录后 401 循环）
+- fix(webui): 登出彻底清理 cookie（无多端口残留）+ 滑动过期（剩余 TTL 过半自动续期）
+- feat(webui): `CODEAGENT_WEBUI_COOKIE_SECURE` 环境变量，HTTPS 反代生产可开启 Secure
+- fix: `_wd` 未初始化导致 project_id 为空时 UnboundLocalError（app_factory.py）
+
+## 1.1.21 (2026-07-30)
+
+- fix: PyInstaller GUI 模式 (console=False) 下 `sys.stdout=None` 导致 uvicorn 启动崩溃（启动前修补 stdout/stderr）
+
+## 1.1.20 (2026-07-30)
+
+- fix: 服务器启动失败诊断 — 添加异常捕获日志 + .spec 补充 h11/anyio/websockets/sniffio 隐性依赖
+
+## 1.1.19 (2026-07-30)
+
+- fix(windows): launcher 防护 macOS-only `import rumps`，修复 EXE 崩溃
+
+## 1.1.12 ~ 1.1.18 (2026-07-25)
+
+- fix(release): 连续修复 CI 发布资产路径问题（DMG/EXE 定位、upload-artifact 通配符、release 文件复制）
+
 ## 1.1.11 (2026-07-25)
 
 - feat: Docker 镜像支持 — 多阶段构建，自动推送到 GHCR（`ghcr.io/tagword/codeagent`）
