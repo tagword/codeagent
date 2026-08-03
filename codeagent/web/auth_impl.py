@@ -16,25 +16,14 @@ from seed.core.config_plane import project_root  # noqa: E402
 TOKEN_FILENAME = "webui.token"
 LEGACY_TOKEN_FILENAME = "codeagent.webui.token"
 
-# Cookie 名按端口隔离，防止本地多实例 cookie 互相覆盖（localhost 同域名）
-_DEFAULT_PORT = 8099
-
-
-def cookie_name(port: int = 0) -> str:
-    """返回端口限定的 cookie 名。port=0 时用默认值，兼容旧 cookie 名。"""
-    p = port or _DEFAULT_PORT
-    return f"ca_webui_{p}"
-
-
-def _port_from_scope(scope: dict) -> int:
-    """从 ASGI scope 提取服务端口。"""
-    try:
-        server = scope.get("server")
-        if server and len(server) >= 2:
-            return int(server[1])
-    except (TypeError, ValueError):
-        pass
-    return _DEFAULT_PORT
+# Cookie 固定名：不按端口命名（浏览器 cookie 本就忽略端口，按端口命名在反向代理
+# 场景下写/读端口来源不一致，导致登录后立即 401）。同一项目多端口实例共享同一
+# token，cookie 可互验复用；不同项目（不同 token）后登录的实例覆盖旧 cookie，属预期。
+COOKIE_NAME = "ca_webui"
+# 会话有效期（秒）——单一来源：签发、续期、Set-Cookie max-age 共用。
+COOKIE_TTL_SEC = 604800
+# 滑动续期阈值：剩余有效期低于一半时重签，避免"用着用着突然掉线"。
+COOKIE_REFRESH_HALF = 0.5
 
 
 def _project_root() -> Path:
@@ -75,7 +64,7 @@ def _cookie_signing_key(token: str) -> bytes:
     return hmac.new(b"codeagent-webui-cookie-v1", token.encode("utf-8"), hashlib.sha256).digest()
 
 
-def make_webui_cookie_value(token: str, ttl_sec: int = 604800) -> str:
+def make_webui_cookie_value(token: str, ttl_sec: int = COOKIE_TTL_SEC) -> str:
     exp = int(time.time()) + max(60, int(ttl_sec))
     exp_s = str(exp).encode("utf-8")
     sig = hmac.new(_cookie_signing_key(token), exp_s, hashlib.sha256).hexdigest()
@@ -96,6 +85,23 @@ def verify_webui_cookie(token: str, cookie_val: str | None) -> bool:
         return hmac.compare_digest(expected.lower(), sig.lower())
     except (ValueError, TypeError, OSError):
         return False
+
+
+def should_refresh_cookie(cookie_val: str | None, ttl_sec: int = COOKIE_TTL_SEC) -> bool:
+    """滑动过期：剩余有效期不足 ttl_sec/2 时建议重签（避免到期突然掉线）。"""
+    if not cookie_val or "." not in cookie_val:
+        return False
+    try:
+        exp = int(cookie_val.rsplit(".", 1)[0])
+    except (ValueError, TypeError):
+        return False
+    remaining = exp - time.time()
+    return 0 < remaining < max(60, int(ttl_sec)) * COOKIE_REFRESH_HALF
+
+
+def cookie_secure() -> bool:
+    """生产部署（HTTPS 反向代理）可开启 Secure 标志；本地 HTTP 保持关闭。"""
+    return _env_truthy("CODEAGENT_WEBUI_COOKIE_SECURE", "0")
 
 
 def _setup_incomplete(project_root: Path | None = None) -> bool:
@@ -235,6 +241,26 @@ class WebUIAuthMiddleware:
         self.app = app
         self.project_root = Path(project_root).resolve()
 
+    async def _call_with_sliding_refresh(self, scope, receive, send, token: str, ck: str) -> None:
+        """验证通过后按滑动过期策略续期：剩余 TTL 不足一半时重签并注入 Set-Cookie。"""
+        if not should_refresh_cookie(ck, COOKIE_TTL_SEC):
+            await self.app(scope, receive, send)
+            return
+        fresh = make_webui_cookie_value(token, COOKIE_TTL_SEC)
+        set_cookie_hdr = (
+            f"{COOKIE_NAME}={fresh}; Max-Age={COOKIE_TTL_SEC}; Path=/; "
+            f"HttpOnly; SameSite=Lax" + ("; Secure" if cookie_secure() else "")
+        ).encode("latin-1")
+
+        async def send_with_cookie(message):
+            if message["type"] == "http.response.start":
+                headers = [h for h in (message.get("headers") or []) if not (h[0].lower() == b"set-cookie")]
+                headers.append((b"set-cookie", set_cookie_hdr))
+                message["headers"] = headers
+            await send(message)
+
+        await self.app(scope, receive, send_with_cookie)
+
     async def __call__(self, scope, receive, send):
         if scope["type"] == "websocket":
             path = scope.get("path") or ""
@@ -242,8 +268,7 @@ class WebUIAuthMiddleware:
             # Some dev proxies / IDE previews rewrite websocket paths like:
             #   /ws//127.0.0.1%3A8765/ws?...  (still our Web UI websocket)
             if tok and (path == "/ws" or path.startswith("/ws/")):
-                port = _port_from_scope(scope)
-                ck = _read_cookie_from_scope(scope, cookie_name(port))
+                ck = _read_cookie_from_scope(scope, COOKIE_NAME)
                 ok = verify_webui_cookie(tok, ck)
                 if not ok and ws_query_token_bridge_enabled():
                     ok = _raw_token_matches(tok, _first_query_value(scope, "webui_token"))
@@ -304,10 +329,9 @@ class WebUIAuthMiddleware:
         if not tok or is_public_webui_route(path, method):
             await self.app(scope, receive, send)
             return
-        port = _port_from_scope(scope)
-        ck = _read_cookie_from_scope(scope, cookie_name(port))
+        ck = _read_cookie_from_scope(scope, COOKIE_NAME)
         if verify_webui_cookie(tok, ck):
-            await self.app(scope, receive, send)
+            await self._call_with_sliding_refresh(scope, receive, send, tok, ck)
             return
 
         # Wizard step 1 saves LLM presets before user gets a signed cookie; env token alone must not block.
