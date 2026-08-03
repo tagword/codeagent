@@ -340,6 +340,7 @@ def create_app():
                 )
             # ── 工作目录注入 ──
             _work_dir_suffix = ""
+            _wd = None
             if project_id:
                 _wd = resolve_project_path(agent_id, project_id)
                 if _wd:
