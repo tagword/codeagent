@@ -846,6 +846,23 @@ a.chat-img-btn--dl:hover {
   border-radius: 8px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
 }
+.chat-img-lightbox__svg {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  max-width: 96vw;
+  max-height: 92vh;
+  overflow: auto;
+}
+.chat-img-lightbox__svg.is-visible {
+  display: flex;
+}
+.chat-img-lightbox__svg svg {
+  display: block;
+  max-width: 96vw;
+  max-height: 92vh;
+  height: auto;
+}
 .chat-img-lightbox__actions {
   position: absolute;
   top: 8px;

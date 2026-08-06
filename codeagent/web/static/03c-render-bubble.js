@@ -75,13 +75,14 @@ function ensureChatImageLightbox() {
   root.setAttribute('aria-hidden', 'true');
   root.innerHTML =
     '<div class="chat-img-lightbox__backdrop" data-close="1"></div>' +
+    '<div class="chat-img-lightbox__actions">' +
+    '  <button type="button" class="chat-img-btn chat-img-lightbox__close" title="关闭" aria-label="关闭">&times;</button>' +
+    '  <a class="chat-img-btn chat-img-lightbox__dl" href="#" download title="下载" aria-label="下载">↓</a>' +
+    '</div>' +
     '<div class="chat-img-lightbox__panel" role="dialog" aria-modal="true" aria-label="图片预览">' +
     '  <div class="chat-img-lightbox__stage">' +
     '    <img class="chat-img-lightbox__img" alt=""/>' +
-    '    <div class="chat-img-lightbox__actions">' +
-    '      <button type="button" class="chat-img-btn chat-img-lightbox__close" title="关闭" aria-label="关闭">&times;</button>' +
-    '      <a class="chat-img-btn chat-img-lightbox__dl" href="#" download title="下载" aria-label="下载">↓</a>' +
-    '    </div>' +
+    '    <div class="chat-img-lightbox__svg"></div>' +
     '  </div>' +
     '</div>';
   document.body.appendChild(root);
@@ -89,6 +90,7 @@ function ensureChatImageLightbox() {
     root.classList.remove('is-open');
     root.setAttribute('aria-hidden', 'true');
     document.body.classList.remove('chat-img-lightbox-open');
+    _resetChatImageLightbox({ root: root });
   }
   root.querySelector('.chat-img-lightbox__backdrop').addEventListener('click', closeLb);
   root.querySelector('.chat-img-lightbox__close').addEventListener('click', closeLb);
@@ -99,10 +101,32 @@ function ensureChatImageLightbox() {
   return _chatImageLightbox;
 }
 
+var _chatSvgBlobUrl = null;
+
+function _revokeChatSvgBlob() {
+  if (_chatSvgBlobUrl) {
+    try { URL.revokeObjectURL(_chatSvgBlobUrl); } catch (_) {}
+    _chatSvgBlobUrl = null;
+  }
+}
+
+/** 打开 lightbox 前重置两个内容容器（img / svg），避免残留状态互相干扰 */
+function _resetChatImageLightbox(lb) {
+  const img = lb.root.querySelector('.chat-img-lightbox__img');
+  const svgBox = lb.root.querySelector('.chat-img-lightbox__svg');
+  if (img) img.style.display = '';
+  if (svgBox) {
+    svgBox.classList.remove('is-visible');
+    svgBox.innerHTML = '';
+  }
+  _revokeChatSvgBlob();
+}
+
 function openChatImageLightbox(src, downloadName) {
   const url = String(src || '').trim();
   if (!url) return;
   const lb = ensureChatImageLightbox();
+  _resetChatImageLightbox(lb);
   const img = lb.root.querySelector('.chat-img-lightbox__img');
   const dl = lb.root.querySelector('.chat-img-lightbox__dl');
   img.src = url;
@@ -110,6 +134,53 @@ function openChatImageLightbox(src, downloadName) {
   if (dl) {
     dl.href = url;
     dl.download = downloadName || 'image.png';
+  }
+  lb.root.classList.add('is-open');
+  lb.root.setAttribute('aria-hidden', 'false');
+  document.body.classList.add('chat-img-lightbox-open');
+}
+
+/**
+ * 以 SVG DOM 直插方式打开放大预览（mermaid 图专用）。
+ *
+ * 为什么不用 PNG data URL：
+ *  - mermaid SVG 含 <foreignObject>（文本标签），绘制到 canvas 必然污染画布
+ *    （SecurityError: Tainted canvases may not be exported），svgToPngDataUrl 必失败；
+ *  - SVG 作为 <img> 加载时 foreignObject 文字不渲染（浏览器安全限制）；
+ *  - SVG 原始 width="100%" 在 lightbox 的 flex/fit-content 布局里会递归塌陷成 0×0。
+ * DOM 直插可保留文字、矢量放大不模糊，并可用 CSS 控制缩放。
+ */
+function openChatSvgLightbox(svgStr, downloadName) {
+  const raw = String(svgStr || '').trim();
+  if (!raw) return;
+  const lb = ensureChatImageLightbox();
+  _resetChatImageLightbox(lb);
+  const img = lb.root.querySelector('.chat-img-lightbox__img');
+  const svgBox = lb.root.querySelector('.chat-img-lightbox__svg');
+  const dl = lb.root.querySelector('.chat-img-lightbox__dl');
+  svgBox.innerHTML = raw;
+  const svgEl = svgBox.querySelector('svg');
+  if (svgEl) {
+    // 覆盖 mermaid 的 width="100%" / inline max-width / cursor:zoom-in。
+    // 必须显式设置 viewBox 像素尺寸：SVG 无 width/height 时固有尺寸为 0，
+    // 在 flex/fit-content 布局里会塌陷成 0×0。CSS 的 max-width/max-height 负责缩放。
+    svgEl.removeAttribute('style');
+    const vb = svgEl.getAttribute('viewBox');
+    if (vb) {
+      const p = vb.split(/[\s,]+/).map(Number);
+      if (p && p.length >= 4 && p[2] > 0 && p[3] > 0) {
+        svgEl.setAttribute('width', String(p[2]));
+        svgEl.setAttribute('height', String(p[3]));
+      }
+    }
+  }
+  if (img) img.style.display = 'none';
+  svgBox.classList.add('is-visible');
+  if (dl) {
+    const blob = new Blob([raw], { type: 'image/svg+xml;charset=utf-8' });
+    _chatSvgBlobUrl = URL.createObjectURL(blob);
+    dl.href = _chatSvgBlobUrl;
+    dl.download = downloadName || 'diagram.svg';
   }
   lb.root.classList.add('is-open');
   lb.root.setAttribute('aria-hidden', 'false');
@@ -428,9 +499,9 @@ async function renderMermaidInBubble(root) {
           if (pngDataUrl) {
             openChatImageLightbox(pngDataUrl, pngFileName);
           } else {
-            // fallback：转换失败时用 SVG data URL
-            const svgDataUrl = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgStr);
-            openChatImageLightbox(svgDataUrl, svgFileName);
+            // fallback：PNG 转换失败（mermaid SVG 含 foreignObject 会污染 canvas）
+            // 直接以 SVG DOM 方式放大预览，保留文字且矢量无损
+            openChatSvgLightbox(svgStr, svgFileName);
           }
         } catch (_) {}
       });
