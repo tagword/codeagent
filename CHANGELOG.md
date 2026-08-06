@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.24 (2026-08-06)
+
+- fix(packaging): Windows exe 内置 ruff 二进制 — spec 将构建机 `Scripts/ruff.exe` stage 到 bundle `tools/bin` + `collect_all("ruff")`（此前 prepare_bundle_tools.py 为 macOS-only，Windows 构建无工具目录，code_check 运行时提示 ruff 缺失）；配套 seed-toolbox 1.0.5 的 frozen 探测逻辑
+
 ## 1.1.23 (2026-08-06)
 
 - fix(webui): mermaid 放大预览空白 — 根因是含 foreignObject 的 SVG 绘制 canvas 必然污染（SecurityError），PNG 转换 fallback 的原始 SVG `width="100%"` 在 lightbox flex/fit-content 布局里塌陷成 0×0；改为 SVG DOM 直插放大预览（保留文字、矢量无损），显式设置 viewBox 像素尺寸，操作按钮移到弹窗右上角不再遮挡节点，关闭时完整重置状态

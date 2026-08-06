@@ -1,13 +1,14 @@
 # -*- mode: python ; coding: utf-8 -*-
 # Windows-specific PyInstaller spec (no BUNDLE step — macOS only)
+import os
+import shutil
+import sysconfig
 from pathlib import Path
 
 from PyInstaller.utils.hooks import collect_all
 
 ROOT = Path(SPECPATH)  # noqa: F405
-MONO = ROOT.parent
-
-# ── Data files ──────────────────────────────────────────────
+MONO = ROOT.parent# ── Data files ──────────────────────────────────────────────
 _datas = []
 _binaries = []
 _hidden = [
@@ -85,6 +86,34 @@ for _pkg in ('seed', 'seed_model_providers', 'seed_tools', 'codeagent'):
     _datas += _pd
     _binaries += _pb
     _hidden += _ph
+
+# ── ruff 二进制（Windows 关键修复）─────────────────────────────
+# ruff 是 Rust 编译的独立可执行文件，hiddenimports 只收集 Python 模块壳，
+# 真实二进制位于 scripts 目录（Scripts/ruff.exe）。prepare_bundle_tools.py
+# 是 macOS-only，Windows 构建无 tools/bin，这里直接在构建机找到 ruff.exe
+# 打进 bundle 的 tools/bin，运行时由 code_check 的 _get_ruff_argv() 探测。
+# ── ruff 二进制（Windows 关键修复）─────────────────────────────
+# ruff 是 Rust 编译的独立可执行文件，hiddenimports 只收集 Python 模块壳，
+# 真实二进制位于 scripts 目录（Scripts/ruff.exe）。prepare_bundle_tools.py
+# 是 macOS-only，Windows 构建无 tools/bin，这里直接在构建机找到 ruff.exe
+# 打进 bundle 的 tools/bin，运行时由 code_check 的 _get_ruff_argv() 探测。
+_ruff_exe = shutil.which("ruff")
+if not _ruff_exe:
+    _scripts = sysconfig.get_path("scripts")
+    if _scripts:
+        _cand = Path(_scripts) / ("ruff.exe" if os.name == "nt" else "ruff")
+        if _cand.is_file():
+            _ruff_exe = str(_cand)
+if _ruff_exe:
+    print(f"[spec] staging ruff binary: {_ruff_exe} -> tools/bin")
+    _binaries.append((_ruff_exe, "tools/bin"))
+    # ruff Python 模块壳（_find_ruff.py / __main__.py）— 供 -m ruff 兜底
+    _pd, _pb, _ph = collect_all("ruff")
+    _datas += _pd
+    _binaries += _pb
+    _hidden += _ph
+else:
+    print("[spec] WARNING: ruff binary not found — code_check will fall back to syntax check")
 
 # Bundled dev tools — staged by prepare_bundle_tools.py
 _tools_root = MONO / "build" / "bundle-tools"
