@@ -64,7 +64,7 @@ jobs:
             $dir = Join-Path $mono $src
             if (-not (Test-Path (Join-Path $dir "pyproject.toml"))) {
               Write-Host "==> Clone $src to $dir"
-              git clone --depth 1 "https://github.com/${{ github.repository_owner }}/${src}.git" $dir
+              git clone --depth 1 -b main "https://github.com/${{ github.repository_owner }}/${src}.git" $dir
             }
           }
           # Install all monorepo packages (editable, so PyInstaller can find them)
@@ -74,6 +74,10 @@ jobs:
           pip install pystray pillow
         env:
           GIT_TERMINAL_PROMPT: 0
+
+      - name: Stage bundled tools (git/node/eslint/ast-grep/ruff for Windows)
+        shell: pwsh
+        run: python packaging/prepare_bundle_tools.py
 
       - name: Build with PyInstaller (Windows spec)
         run: pyinstaller packaging/CodeAgent.windows.spec --distpath dist

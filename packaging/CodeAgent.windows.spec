@@ -94,26 +94,34 @@ for _pkg in ('seed', 'seed_model_providers', 'seed_tools', 'codeagent'):
 # 打进 bundle 的 tools/bin，运行时由 code_check 的 _get_ruff_argv() 探测。
 # ── ruff 二进制（Windows 关键修复）─────────────────────────────
 # ruff 是 Rust 编译的独立可执行文件，hiddenimports 只收集 Python 模块壳，
-# 真实二进制位于 scripts 目录（Scripts/ruff.exe）。prepare_bundle_tools.py
-# 是 macOS-only，Windows 构建无 tools/bin，这里直接在构建机找到 ruff.exe
-# 打进 bundle 的 tools/bin，运行时由 code_check 的 _get_ruff_argv() 探测。
-_ruff_exe = shutil.which("ruff")
-if not _ruff_exe:
-    _scripts = sysconfig.get_path("scripts")
-    if _scripts:
-        _cand = Path(_scripts) / ("ruff.exe" if os.name == "nt" else "ruff")
-        if _cand.is_file():
-            _ruff_exe = str(_cand)
-if _ruff_exe:
-    print(f"[spec] staging ruff binary: {_ruff_exe} -> tools/bin")
-    _binaries.append((_ruff_exe, "tools/bin"))
-    # ruff Python 模块壳（_find_ruff.py / __main__.py）— 供 -m ruff 兜底
-    _pd, _pb, _ph = collect_all("ruff")
-    _datas += _pd
-    _binaries += _pb
-    _hidden += _ph
+# 真实二进制位于 scripts 目录（Scripts/ruff.exe）。Windows workflow 现已调用
+# prepare_bundle_tools.py（跨平台版）把 ruff.exe stage 到 build/bundle-tools/bin，
+# 下面仅作兜底：若 bundle-tools 不存在 ruff 时直接从构建机 Scripts 收集。
+_tools_ruff = None
+_tools_bin_dir = MONO / "build" / "bundle-tools" / "bin"
+if _tools_bin_dir.is_dir():
+    _ruff_hits = sorted(_tools_bin_dir.glob("ruff*"))
+    _tools_ruff = _ruff_hits[0] if _ruff_hits else None
+if _tools_ruff:
+    print(f"[spec] ruff binary staged by prepare_bundle_tools: {_tools_ruff}")
 else:
-    print("[spec] WARNING: ruff binary not found — code_check will fall back to syntax check")
+    _ruff_exe = shutil.which("ruff")
+    if not _ruff_exe:
+        _scripts = sysconfig.get_path("scripts")
+        if _scripts:
+            _cand = Path(_scripts) / ("ruff.exe" if os.name == "nt" else "ruff")
+            if _cand.is_file():
+                _ruff_exe = str(_cand)
+    if _ruff_exe:
+        print(f"[spec] staging ruff binary: {_ruff_exe} -> tools/bin")
+        _binaries.append((_ruff_exe, "tools/bin"))
+        # ruff Python 模块壳（_find_ruff.py / __main__.py）— 供 -m ruff 兜底
+        _pd, _pb, _ph = collect_all("ruff")
+        _datas += _pd
+        _binaries += _pb
+        _hidden += _ph
+    else:
+        print("[spec] WARNING: ruff binary not found — code_check will fall back to syntax check")
 
 # Bundled dev tools — staged by prepare_bundle_tools.py
 _tools_root = MONO / "build" / "bundle-tools"

@@ -30,7 +30,7 @@ RUN set -eux; \
     for pkg in seed-model-providers seed seed-tools; do \
         dest="$MONO/$pkg"; \
         echo "==> Cloning $pkg ..."; \
-        git clone --depth 1 "https://github.com/tagword/${pkg}.git" "$dest"; \
+        git clone --depth 1 -b main "https://github.com/tagword/${pkg}.git" "$dest"; \
     done
 
 # 安装所有包（先兄弟包再自己）

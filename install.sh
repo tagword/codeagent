@@ -27,7 +27,7 @@ git_clone_safe() {
   while [ $attempts -lt $max ]; do
     attempts=$((attempts + 1))
     info "  git clone $repo（尝试 $attempts/$max）..."
-    if timeout 45 git clone --depth 1 "https://github.com/tagword/${repo}.git" "$dest"; then
+    if timeout 45 git clone --depth 1 -b main "https://github.com/tagword/${repo}.git" "$dest"; then
       # 验证克隆结果——目录非空且有 Python 文件
       if [ -f "$dest/pyproject.toml" ] || [ -f "$dest/setup.py" ] || [ -f "$dest/setup.cfg" ]; then
         return 0

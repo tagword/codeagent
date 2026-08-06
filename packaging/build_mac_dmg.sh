@@ -28,7 +28,7 @@ _ensure_mono_repo() {
   fi
   command -v git &>/dev/null || { echo "✗ git required to clone $name"; exit 1; }
   echo "==> Clone $name (missing at $dir)"
-  git clone --depth 1 "https://github.com/${GITHUB_ORG}/${name}.git" "$dir"
+  git clone --depth 1 -b main "https://github.com/${GITHUB_ORG}/${name}.git" "$dir"
 }
 
 _resolve_build_python() {

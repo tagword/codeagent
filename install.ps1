@@ -99,7 +99,7 @@ function Install-SeedPkg($pkg) {
     $attempts++
     info "  git clone $pkg（尝试 $attempts/2）..."
     try {
-      $job = Start-Job -ScriptBlock { param($u,$d) git clone --depth 1 $u $d 2>$null } -ArgumentList "https://github.com/tagword/${pkg}.git", $srcDir
+      $job = Start-Job -ScriptBlock { param($u,$d) git clone --depth 1 -b main $u $d 2>$null } -ArgumentList "https://github.com/tagword/${pkg}.git", $srcDir
       $job | Wait-Job -Timeout 45 -ErrorAction SilentlyContinue | Out-Null
       if ($job.State -eq "Running") {
         $job.Stop(); Remove-Job $job -Force

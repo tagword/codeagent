@@ -37,17 +37,22 @@ NODE_VERSION = os.environ.get("CODEAGENT_NODE_VERSION", "20.18.2")
 
 
 def _machine() -> str:
+    """ast-grep asset arch: aarch64-apple-darwin / x86_64-apple-darwin / x86_64-pc-windows-msvc"""
     forced = os.environ.get("CODEAGENT_BUNDLE_ARCH", "").strip().lower()
-    if forced in ("arm64", "aarch64"):
-        return "aarch64-apple-darwin"
-    if forced in ("x86_64", "amd64"):
-        return "x86_64-apple-darwin"
-    m = platform.machine().lower()
-    if m in ("arm64", "aarch64"):
-        return "aarch64-apple-darwin"
-    if m in ("x86_64", "amd64"):
-        return "x86_64-apple-darwin"
-    raise SystemExit(f"Unsupported macOS arch: {platform.machine()}")
+    if sys.platform == "darwin":
+        if forced in ("arm64", "aarch64"):
+            return "aarch64-apple-darwin"
+        if forced in ("x86_64", "amd64"):
+            return "x86_64-apple-darwin"
+        m = platform.machine().lower()
+        if m in ("arm64", "aarch64"):
+            return "aarch64-apple-darwin"
+        if m in ("x86_64", "amd64"):
+            return "x86_64-apple-darwin"
+        raise SystemExit(f"Unsupported macOS arch: {platform.machine()}")
+    if sys.platform == "win32":
+        return "x86_64-pc-windows-msvc"  # windows-latest 均为 x64
+    raise SystemExit(f"Unsupported platform: {sys.platform}")
 
 
 def _chmod_exec(path: Path) -> None:
@@ -63,13 +68,16 @@ def _copy_exec(src: Path, dest: Path) -> None:
 
 
 def _venv_bin(name: str) -> Path | None:
+    """Locate a CLI executable inside the build venv (bin/ on POSIX, Scripts/ on Windows)."""
+    bin_dir = "Scripts" if sys.platform == "win32" else "bin"
+    exe = name + (".exe" if sys.platform == "win32" else "")
     venv = os.environ.get("VIRTUAL_ENV", "").strip()
     if venv:
-        p = Path(venv) / "bin" / name
+        p = Path(venv) / bin_dir / exe
         if p.is_file():
             return p
-    for candidate in (ROOT / ".build-venv" / "bin", ROOT / ".venv" / "bin"):
-        p = candidate / name
+    for candidate in (ROOT / ".build-venv" / bin_dir, ROOT / ".venv" / bin_dir):
+        p = candidate / exe
         if p.is_file():
             return p
     which = shutil.which(name)
@@ -104,6 +112,11 @@ def _minos_gt(version: str, target: str) -> bool:
 
 
 def _bundle_git() -> None:
+    if sys.platform == "win32":
+        print("==> git (Windows: use system git — not bundled)")
+        # Git for Windows 是目录结构（cmd/git.exe + mingw64 + bin，~200MB），捆绑成本高；
+        # Windows 桌面版运行时走 PATH 查找 git。WebUI 会提示用户安装/配置。
+        return
     print("==> git")
     candidates = [
         Path("/usr/bin/git"),
@@ -162,6 +175,16 @@ def _bundle_git() -> None:
 
 def _write_python_shim() -> None:
     """``python -m pytest`` etc. via the frozen CodeAgent binary (see package_launcher)."""
+    if sys.platform == "win32":
+        shim = BIN / "python.cmd"
+        shim.write_text(
+            "@echo off\r\n"
+            'set "RES=%~dp0..\\.."\r\n'
+            '"%RES%\\CodeAgent.exe" -m %*\r\n',
+            encoding="utf-8",
+        )
+        print("  ✓ python.cmd shim (→ CodeAgent.exe -m …)")
+        return
     shim = BIN / "python"
     shim.write_text(
         "#!/bin/bash\n"
@@ -252,10 +275,13 @@ def _bundle_from_venv(name: str) -> None:
     if src is None:
         print(f"  ⚠ {name} not found in venv — skip")
         return
-    _copy_exec(src, BIN / name)
+    dest_name = name + (".exe" if sys.platform == "win32" else "")
+    _copy_exec(src, BIN / dest_name)
 
 
 def _node_platform() -> str:
+    if sys.platform == "win32":
+        return "win-x64"
     return "darwin-arm64" if _machine() == "aarch64-apple-darwin" else "darwin-x64"
 
 
@@ -264,6 +290,71 @@ def _bundle_node() -> None:
     print("==> node / npm / eslint")
     node_home = OUT / "node"
     npm_prefix = OUT / "npm-global"
+
+    if sys.platform == "win32":
+        # ── Windows：node-vXX-win-x64.zip 根布局（node.exe / npm.cmd 在根目录）──
+        node_exe = node_home / "node.exe"
+        if not node_exe.is_file():
+            plat = _node_platform()  # win-x64
+            tarball = f"node-v{NODE_VERSION}-{plat}.zip"
+            url = f"https://nodejs.org/dist/v{NODE_VERSION}/{tarball}"
+            CACHE.mkdir(parents=True, exist_ok=True)
+            zip_path = CACHE / tarball
+            if not zip_path.is_file():
+                print(f"  ↓ {url}")
+                try:
+                    urllib.request.urlretrieve(url, zip_path)
+                except Exception as exc:
+                    print(f"  ⚠ download failed: {exc}")
+                    node_sys = shutil.which("node")
+                    if node_sys:
+                        _copy_exec(Path(node_sys), BIN / "node.exe")
+                        npm_sys = shutil.which("npm")
+                        if npm_sys:
+                            _copy_exec(Path(npm_sys), BIN / "npm.cmd")
+                        print("  ✓ node/npm ← system (fallback)")
+                        return
+                    raise SystemExit(
+                        "node download failed and no local node on PATH. Retry with network."
+                    ) from exc
+            with tempfile.TemporaryDirectory(prefix="codeagent-node-") as tmp:
+                with zipfile.ZipFile(zip_path) as zf:
+                    zf.extractall(Path(tmp) / "extract")
+                extracted = Path(tmp) / "extract" / f"node-v{NODE_VERSION}-{plat}"
+                if not extracted.is_dir():
+                    extracted = next(p for p in (Path(tmp) / "extract").iterdir() if p.is_dir())
+                if node_home.exists():
+                    shutil.rmtree(node_home)
+                extracted.rename(node_home)
+            print(f"  ✓ node {NODE_VERSION}  ← {tarball}")
+
+        for name in ("node.exe", "npm.cmd", "npx.cmd"):
+            src = node_home / name
+            if src.is_file():
+                _copy_exec(src, BIN / name)
+
+        npm_prefix.mkdir(parents=True, exist_ok=True)
+        eslint_cmd = npm_prefix / "node_modules" / ".bin" / "eslint.cmd"
+        if not eslint_cmd.is_file():
+            env = os.environ.copy()
+            env["npm_config_prefix"] = str(npm_prefix)
+            try:
+                subprocess.run(
+                    [str(node_home / "npm.cmd"), "install", "-g", "eslint@9"],
+                    check=True,
+                    env=env,
+                    capture_output=True,
+                    text=True,
+                    timeout=180,
+                )
+                print("  ✓ eslint (npm global)")
+            except Exception as exc:
+                print(f"  ⚠ eslint install skipped: {exc}")
+        if eslint_cmd.is_file():
+            _copy_exec(eslint_cmd, BIN / "eslint.cmd")
+        return
+
+    # ── macOS 原逻辑 ──
     node_bin = node_home / "bin" / "node"
 
     if not node_bin.is_file():
@@ -359,10 +450,10 @@ def _write_manifest() -> None:
 
 
 def main() -> None:
-    if sys.platform != "darwin":
-        raise SystemExit("prepare_bundle_tools.py is macOS-only")
+    if sys.platform not in ("darwin", "win32"):
+        raise SystemExit(f"prepare_bundle_tools.py supports macOS / Windows only (got {sys.platform})")
 
-    print(f"Staging tools → {OUT}")
+    print(f"Staging tools → {OUT}  [{sys.platform}]")
     if OUT.exists():
         shutil.rmtree(OUT)
     BIN.mkdir(parents=True)
@@ -373,29 +464,20 @@ def main() -> None:
     _bundle_python_tools()
     _write_manifest()
 
-    try:
-        ver = subprocess.check_output([str(BIN / "git"), "--version"], text=True).strip()
-        print(f"  git: {ver}")
-    except Exception as exc:
-        print(f"  ⚠ git smoke test failed: {exc}")
+    def _smoke(tool: str) -> None:
+        exe = BIN / (tool + (".exe" if sys.platform == "win32" else ""))
+        if not exe.is_file():
+            return
+        try:
+            ver = subprocess.check_output([str(exe), "--version"], text=True, stderr=subprocess.DEVNULL).strip()
+            print(f"  {tool}: {ver}")
+        except Exception as exc:
+            print(f"  ⚠ {tool} smoke test failed: {exc}")
 
-    try:
-        ver = subprocess.check_output([str(BIN / "ast-grep"), "--version"], text=True).strip()
-        print(f"  ast-grep: {ver}")
-    except Exception as exc:
-        print(f"  ⚠ ast-grep smoke test failed: {exc}")
-
-    try:
-        ver = subprocess.check_output([str(BIN / "node"), "--version"], text=True).strip()
-        print(f"  node: {ver}")
-    except Exception as exc:
-        print(f"  ⚠ node smoke test failed: {exc}")
-
-    try:
-        ver = subprocess.check_output([str(BIN / "eslint"), "--version"], text=True).strip()
-        print(f"  eslint: {ver}")
-    except Exception as exc:
-        print(f"  ⚠ eslint smoke test failed: {exc}")
+    _smoke("git")
+    _smoke("ast-grep")
+    _smoke("node")
+    _smoke("eslint")
 
     print("✅ bundle-tools ready")
 

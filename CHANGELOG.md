@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.25 (2026-08-06)
+
+- fix(packaging): 跨平台化 `prepare_bundle_tools.py`（支持 macOS + Windows）— Windows 打包内置 node/npm/eslint/ast-grep/ruff 到 bundle `tools/bin`（git 因体积/结构走系统 PATH）；Windows workflow 增加工具 stage 步骤
+- fix(packaging): 所有 monorepo 兄弟包 `git clone` 显式 `-b main`（修复 seed-model-providers GitHub 默认分支为 master 导致 Docker 镜像/桌面应用拿到旧版 1.0.0 的问题，Dockerfile / build.yml / build_mac_dmg.sh / install.sh / install.ps1 共 5 处）
+- fix(packaging): Windows spec ruff 收集与 prepare_bundle_tools 输出去重（bundle-tools 已有 ruff 时跳过 spec 直取）
+
 ## 1.1.24 (2026-08-06)
 
 - fix(packaging): Windows exe 内置 ruff 二进制 — spec 将构建机 `Scripts/ruff.exe` stage 到 bundle `tools/bin` + `collect_all("ruff")`（此前 prepare_bundle_tools.py 为 macOS-only，Windows 构建无工具目录，code_check 运行时提示 ruff 缺失）；配套 seed-toolbox 1.0.5 的 frozen 探测逻辑
