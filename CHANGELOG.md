@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.26 (2026-08-06)
+
+- fix(packaging): Windows 构建修复 — ast-grep stage 支持 `.exe` 二进制查找（win zip 解压出 `sg.exe`，此前 `rglob("sg")` 匹配不到导致 SystemExit 构建失败）；eslint 经 `cmd /c` 执行 npm.cmd；Windows 上用副本替代 symlink（无特权时 symlink 失败）
+
 ## 1.1.25 (2026-08-06)
 
 - fix(cron): 启动时 register_main_loop() 记录 uvicorn 主循环 — seed_cron_apply/reload 在 worker 线程通过 run_coroutine_threadsafe 安全触发 cron reload（app_factory.py）

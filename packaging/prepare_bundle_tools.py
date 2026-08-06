@@ -209,7 +209,8 @@ def _valid_zip(path: Path) -> bool:
 
 def _download_ast_grep() -> None:
     print("==> ast-grep")
-    dest = BIN / "ast-grep"
+    dest_name = "ast-grep" + (".exe" if sys.platform == "win32" else "")
+    dest = BIN / dest_name
     if dest.is_file():
         print(f"  ✓ ast-grep already staged ({dest})")
         return
@@ -257,17 +258,28 @@ def _download_ast_grep() -> None:
     with tempfile.TemporaryDirectory(prefix="codeagent-sg-") as tmp:
         with zipfile.ZipFile(zip_path) as zf:
             zf.extractall(Path(tmp) / "extract")
-        extracted = list((Path(tmp) / "extract").rglob("sg"))
-        if not extracted:
-            extracted = list((Path(tmp) / "extract").rglob("ast-grep"))
+        # Windows 解压出 sg.exe / ast-grep.exe；POSIX 为 sg / ast-grep
+        extracted = (
+            list((Path(tmp) / "extract").rglob("sg.exe"))
+            or list((Path(tmp) / "extract").rglob("ast-grep.exe"))
+            or list((Path(tmp) / "extract").rglob("sg"))
+            or list((Path(tmp) / "extract").rglob("ast-grep"))
+        )
         if not extracted:
             raise SystemExit(f"ast-grep binary not found inside {asset}")
         _copy_exec(extracted[0], dest)
 
-    sg_link = BIN / "sg"
-    if not sg_link.exists():
-        sg_link.symlink_to("ast-grep")
-    print("  ✓ sg → ast-grep")
+    if sys.platform == "win32":
+        # Windows symlink 需要特权，直接复制副本
+        sg_link = BIN / "sg.exe"
+        if not sg_link.is_file():
+            shutil.copy2(dest, sg_link)
+            print("  ✓ sg.exe → ast-grep.exe")
+    else:
+        sg_link = BIN / "sg"
+        if not sg_link.exists():
+            sg_link.symlink_to("ast-grep")
+        print("  ✓ sg → ast-grep")
 
 
 def _bundle_from_venv(name: str) -> None:
@@ -338,9 +350,14 @@ def _bundle_node() -> None:
         if not eslint_cmd.is_file():
             env = os.environ.copy()
             env["npm_config_prefix"] = str(npm_prefix)
+            npm_cmd = (
+                ["cmd", "/c", str(node_home / "npm.cmd"), "install", "-g", "eslint@9"]
+                if sys.platform == "win32"
+                else [str(node_home / "bin" / "npm"), "install", "-g", "eslint@9"]
+            )
             try:
                 subprocess.run(
-                    [str(node_home / "npm.cmd"), "install", "-g", "eslint@9"],
+                    npm_cmd,
                     check=True,
                     env=env,
                     capture_output=True,
@@ -405,9 +422,15 @@ def _bundle_node() -> None:
     if not eslint_bin.is_file():
         env = os.environ.copy()
         env["npm_config_prefix"] = str(npm_prefix)
+        # Windows 上 .cmd 需经 cmd /c 执行
+        npm_cmd = (
+            ["cmd", "/c", str(node_home / "npm.cmd"), "install", "-g", "eslint@9"]
+            if sys.platform == "win32"
+            else [str(node_home / "bin" / "npm"), "install", "-g", "eslint@9"]
+        )
         try:
             subprocess.run(
-                [str(node_home / "bin" / "npm"), "install", "-g", "eslint@9"],
+                npm_cmd,
                 check=True,
                 env=env,
                 capture_output=True,
