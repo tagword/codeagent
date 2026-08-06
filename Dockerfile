@@ -1,67 +1,31 @@
 # ──────────────────────────────────────────────────────────────────────
-# CodeAgent — Docker 镜像
-# 多阶段构建：Builder 阶段安装依赖，Runtime 阶段最小化镜像
+# CodeAgent — Docker 镜像（pip 版）
+# 本体与全部依赖（seed-kernel / seed-model-providers / seed-toolbox）均
+# 从 PyPI 安装，版本与 monorepo main 对齐；无需 git clone / 编译工具链。
 # ──────────────────────────────────────────────────────────────────────
 ARG PYTHON_VERSION=3.11
 ARG CODEAGENT_PORT=8765
 
-# ============================================================
-# Stage 1: Builder — 克隆 monorepo 兄弟包 + 安装项目依赖
-# ============================================================
-FROM python:${PYTHON_VERSION}-slim AS builder
-
-WORKDIR /build
-
-# 系统构建依赖（git 用于克隆，gcc 用于编译 C 扩展如 lxml）
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    git \
-    gcc \
-    libxml2-dev \
-    libxslt1-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-# 复制项目文件
-COPY . /build/codeagent/
-
-# 克隆 monorepo 兄弟包（seed、seed-model-providers、seed-tools）
-# 这些不在 PyPI 上，必须从 GitHub 克隆
-RUN set -eux; \
-    MONO=/build; \
-    for pkg in seed-model-providers seed seed-tools; do \
-        dest="$MONO/$pkg"; \
-        echo "==> Cloning $pkg ..."; \
-        git clone --depth 1 -b main "https://github.com/tagword/${pkg}.git" "$dest"; \
-    done
-
-# 安装所有包（先兄弟包再自己）
-RUN pip install --no-cache-dir -e /build/seed-model-providers && \
-    pip install --no-cache-dir -e /build/seed && \
-    pip install --no-cache-dir -e "/build/seed-tools[code]" && \
-    pip install --no-cache-dir -e /build/codeagent
-
-# ============================================================
-# Stage 2: Runtime — 最小镜像，只保留运行所需
-# ============================================================
-FROM python:${PYTHON_VERSION}-slim AS runtime
+FROM python:${PYTHON_VERSION}-slim
 
 ARG CODEAGENT_PORT
 ENV CODEAGENT_PORT=${CODEAGENT_PORT}
 EXPOSE ${CODEAGENT_PORT}
 
-# 运行时系统依赖（仅 libxml2 for lxml，不需要 build-essential）
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# lxml wheel 自带二进制，系统库仅作兼容保险（极小）
+# apt 源切换清华镜像加速（deb822 格式，先替换 security 再替换主源）
+RUN sed -i \
+        -e 's|http://deb.debian.org/debian-security|https://mirrors.tuna.tsinghua.edu.cn/debian-security|' \
+        -e 's|http://deb.debian.org/debian$|https://mirrors.tuna.tsinghua.edu.cn/debian|' \
+        /etc/apt/sources.list.d/debian.sources \
+    && apt-get update && apt-get install -y --no-install-recommends \
     libxml2 \
     libxslt1.1 \
     && rm -rf /var/lib/apt/lists/*
 
-# 从 builder 复制已安装的 Python 包
-COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages/
-COPY --from=builder /usr/local/bin /usr/local/bin/
-
-# 复制项目文件（运行时需要 web/static 等静态资源）
-COPY --from=builder /build/codeagent /app
-
-WORKDIR /app
+# 从 PyPI 安装本体 + 依赖（seed-kernel / seed-model-providers / seed-toolbox[code] / uvicorn）
+# 使用清华 PyPI 镜像加速（PyPI 直连在国内慢）
+RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple tagword-codeagent
 
 # 数据卷：~/.codeagent 持久化（会话、配置、记忆等）
 VOLUME /root/.codeagent

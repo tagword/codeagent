@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.31 (2026-08-06)
+
+- fix(core): `codeagent.__version__` 改为从包元数据动态读取（此前写死 1.1.8，与 pyproject 版本脱节，显示误导）
+- build(docker): Dockerfile 重构为纯 PyPI 安装 — 本体与依赖（seed-kernel / seed-model-providers / seed-toolbox[code]）均从 PyPI 拉取（版本与 main 对齐），apt 切清华源、pip 用清华 PyPI 镜像；修复原 editable 安装导致的 `ModuleNotFoundError: No module named 'codeagent'` 镜像无法启动问题
+
 ## 1.1.30 (2026-08-06)
 
 - fix(packaging): Windows stage 卡死根因修复 — node 下载改用带 120s 超时的 `urlopen`（此前 `urlretrieve` 无超时，网络挂起会无限等待卡死构建）；Windows 优先复用系统 node（runner 预装，本地复制零网络风险）；stage 步骤加 `timeout-minutes: 15` 保险
