@@ -25,6 +25,15 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
+# Windows 控制台默认 cp1252/charmap，无法编码 ✓/←/→/⚠ 等 Unicode 输出 →
+# UnicodeEncodeError 崩溃（mac 默认 UTF-8 无此问题）。强制 UTF-8 + 容错。
+if sys.platform == "win32":
+    for _stream in (sys.stdout, sys.stderr):
+        try:
+            _stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
+
 ROOT = Path(__file__).resolve().parent
 OUT = ROOT / "build" / "bundle-tools"
 CACHE = ROOT / "build" / "cache"

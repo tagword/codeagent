@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.29 (2026-08-06)
+
+- fix(packaging): Windows stage 崩溃根因修复 — 脚本输出含 `✓/←/→/⚠` 等 Unicode，Windows 控制台默认 cp1252 无法编码抛 `UnicodeEncodeError`；启动时强制 stdout/stderr UTF-8 容错（mac 默认 UTF-8 无此问题）
+
 ## 1.1.28 (2026-08-06)
 
 - fix(packaging): Windows stage 失败诊断 — prepare_bundle_tools 异常输出 `::error::` annotation（check-runs 匿名可读），workflow 步骤失败时输出日志尾部，便于定位 Windows 构建问题
