@@ -508,4 +508,16 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except SystemExit as e:
+        # GitHub Actions 会把 ::error:: 转成 annotation（匿名可读，便于诊断）
+        print(f"::error::prepare_bundle_tools SystemExit: {e}")
+        raise
+    except Exception as e:
+        import traceback
+
+        print(f"::error::prepare_bundle_tools failed: {e}")
+        for line in traceback.format_exc().splitlines():
+            print(f"::error::{line}")
+        raise

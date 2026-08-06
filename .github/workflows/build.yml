@@ -79,7 +79,11 @@ jobs:
         shell: pwsh
         run: |
           python packaging/prepare_bundle_tools.py 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP\stage-tools.log"
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($LASTEXITCODE -ne 0) {
+            "::error::===== stage-tools.log (tail 40) ====="
+            Get-Content "$env:RUNNER_TEMP\stage-tools.log" -Tail 40 | ForEach-Object { "::error::$_" }
+            exit $LASTEXITCODE
+          }
 
       - name: Upload stage diagnostics (always)
         if: always()

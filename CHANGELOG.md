@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.28 (2026-08-06)
+
+- fix(packaging): Windows stage 失败诊断 — prepare_bundle_tools 异常输出 `::error::` annotation（check-runs 匿名可读），workflow 步骤失败时输出日志尾部，便于定位 Windows 构建问题
+
 ## 1.1.27 (2026-08-06)
 
 - fix(packaging): Windows 构建修复 #2 — node 解压改用 `shutil.move`（`TemporaryDirectory` 在 `%TEMP%`（C 盘）而 workspace 在 D 盘，跨盘 `rename` 抛 WinError 17）；Windows stage 步骤输出日志并上传诊断 artifact（失败可查）
