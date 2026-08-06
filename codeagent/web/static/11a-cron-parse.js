@@ -37,6 +37,15 @@ function parseCronToFreq(expr) {
     result.mode = 'hours';
     result.interval = parseInt(hour.split('/')[1]) || 1;
     result.minute = min;
+  } else if (min !== '*' && hour === '*' && dom === '*' && mon === '*' && dow === '*') {
+    // 每小时的第 min 分钟（如 "0 * * * *" = 每小时整点；"15 * * * *" = 每小时第 15 分）
+    result.mode = 'hours';
+    result.interval = 1;
+    result.minute = min;
+  } else if (min === '*' && hour === '*' && dom === '*' && mon === '*' && dow === '*') {
+    // 每分钟
+    result.mode = 'minutes';
+    result.interval = 1;
   } else if (hour !== '*' && dom === '*' && mon === '*' && dow === '*') {
     result.mode = 'daily';
     result.minute = min === '*' ? '0' : min;
@@ -64,10 +73,10 @@ function freqToCron(f) {
   switch (f.mode) {
     case 'minutes':
       var iv = parseInt(f.interval) || 30;
-      return '*/' + iv + ' * * * *';
+      return (iv === 1 ? '*' : '*/' + iv) + ' * * * *';
     case 'hours':
       var ih = parseInt(f.interval) || 1;
-      return (f.minute || '0') + ' */' + ih + ' * * *';
+      return (f.minute || '0') + ' ' + (ih === 1 ? '*' : '*/' + ih) + ' * * *';
     case 'daily':
       return (f.minute || '0') + ' ' + (f.hour || '8') + ' * * *';
     case 'weekly':
@@ -88,10 +97,47 @@ function describeCron(expr) {
     case 'minutes': return '每 ' + (parseInt(f.interval) || 30) + ' 分钟执行一次';
     case 'hours':   return '每 ' + (parseInt(f.interval) || 1) + ' 小时（' + f.minute + ' 分）执行一次';
     case 'daily':   return '每天 ' + timeStr + ' 执行';
-    case 'weekly':  return '每' + (DAY_NAMES[parseInt(f.dayOfWeek)] || '周' + f.dayOfWeek) + ' ' + timeStr + ' 执行';
+    case 'weekly':  return '每' + describeDow(f.dayOfWeek) + ' ' + timeStr + ' 执行';
     case 'monthly': return '每月 ' + f.dayOfMonth + ' 日 ' + timeStr + ' 执行';
     default:        return '每天 ' + timeStr + ' 执行';
   }
+}
+
+/** Human label for a DOW cron field: single day, range (1-5) or list (1,3,5) */
+function describeDow(expr) {
+  var e = String(expr == null ? '' : expr).trim();
+  if (!e || e === '*') return '';
+  function name(d) {
+    var x = parseInt(d);
+    if (isNaN(x)) return d;
+    if (x === 7) x = 0; // cron 允许 7 表示周日
+    return DAY_NAMES[x] || ('周' + d);
+  }
+  if (e.indexOf('-') !== -1) {
+    var r = e.split('-');
+    return name(r[0]) + '至' + name(r[1]);
+  }
+  if (e.indexOf(',') !== -1) {
+    return e.split(',').map(name).join('、');
+  }
+  return name(e);
+}
+
+/** Whether a DOW field (single/range/list, e.g. "1", "1-5", "1,3,5") contains dayIndex */
+function dowExprMatches(expr, dayIndex) {
+  var e = String(expr == null ? '' : expr).trim();
+  if (!e || e === '*') return false;
+  function norm(d) { var x = parseInt(d); return isNaN(x) ? -1 : (x === 7 ? 0 : x); }
+  if (e.indexOf('-') !== -1) {
+    var r = e.split('-');
+    var a = norm(r[0]), b = norm(r[1]);
+    if (a < 0 || b < 0) return false;
+    return dayIndex >= Math.min(a, b) && dayIndex <= Math.max(a, b);
+  }
+  if (e.indexOf(',') !== -1) {
+    return e.split(',').some(function(x) { return norm(x) === dayIndex; });
+  }
+  return norm(e) === dayIndex;
 }
 
 /**

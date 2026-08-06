@@ -29,7 +29,8 @@ function hoursOptions(current) {
   var opts = '';
   for (var i = 0; i < 24; i++) {
     var sel = (parseInt(current) === i || (current === '*' && i === 8)) ? ' selected' : '';
-    opts += '<option value="' + i + '"' + sel + '>' + (i < 10 ? '0' : '') + i + ':00</option>';
+    // 显示纯小时（分钟由旁边的分钟下拉决定），避免 "08:00" 误导
+    opts += '<option value="' + i + '"' + sel + '>' + (i < 10 ? '0' : '') + i + '</option>';
   }
   return opts;
 }
@@ -37,10 +38,64 @@ function hoursOptions(current) {
 function minutesOptions(current) {
   var opts = '';
   var vals = [0,5,10,15,20,25,30,35,40,45,50,55];
+  var cur = parseInt(current);
+  // current 不在档位（如 cron 里手写的 7/12/58 分）时动态插入，保证回显不失真
+  if (!isNaN(cur) && cur >= 0 && cur <= 59 && vals.indexOf(cur) === -1) {
+    vals = vals.concat([cur]).sort(function(a, b) { return a - b; });
+  }
   for (var i = 0; i < vals.length; i++) {
     var v = vals[i];
     var sel = (parseInt(current) === v || (current === '*' && v === 0)) ? ' selected' : '';
     opts += '<option value="' + v + '"' + sel + '>' + (v < 10 ? '0' : '') + v + '</option>';
+  }
+  return opts;
+}
+
+/** 间隔分钟下拉：档位 [5,10,15,20,30,45]，current 不在档位时动态插入 */
+function intervalMinutesOptions(current) {
+  var opts = '';
+  var vals = [5,10,15,20,30,45];
+  var cur = parseInt(current);
+  if (!isNaN(cur) && cur > 0 && cur <= 1440 && vals.indexOf(cur) === -1) {
+    vals = vals.concat([cur]).sort(function(a, b) { return a - b; });
+  }
+  for (var i = 0; i < vals.length; i++) {
+    var v = vals[i];
+    var sel = ((parseInt(current) || 30) === v) ? ' selected' : '';
+    opts += '<option value="' + v + '"' + sel + '>每 ' + v + ' 分钟</option>';
+  }
+  return opts;
+}
+
+/** 间隔小时下拉：档位 [1,2,3,4,6,8,12]，current 不在档位时动态插入 */
+function intervalHoursOptions(current) {
+  var opts = '';
+  var vals = [1,2,3,4,6,8,12];
+  var cur = parseInt(current);
+  if (!isNaN(cur) && cur > 0 && cur <= 168 && vals.indexOf(cur) === -1) {
+    vals = vals.concat([cur]).sort(function(a, b) { return a - b; });
+  }
+  for (var i = 0; i < vals.length; i++) {
+    var v = vals[i];
+    var sel = ((parseInt(current) || 1) === v) ? ' selected' : '';
+    opts += '<option value="' + v + '"' + sel + '>每 ' + v + ' 小时</option>';
+  }
+  return opts;
+}
+
+/** 每月日期下拉：常规 1-28，29/30/31 按需动态插入（保证回显不失真） */
+function domOptions(current) {
+  var opts = '';
+  var vals = [];
+  for (var i = 1; i <= 28; i++) vals.push(i);
+  var cur = parseInt(current);
+  if (!isNaN(cur) && cur >= 1 && cur <= 31 && vals.indexOf(cur) === -1) {
+    vals = vals.concat([cur]).sort(function(a, b) { return a - b; });
+  }
+  for (var i = 0; i < vals.length; i++) {
+    var v = vals[i];
+    var sel = ((parseInt(current) || 1) === v) ? ' selected' : '';
+    opts += '<option value="' + v + '"' + sel + '>' + v + ' 日</option>';
   }
   return opts;
 }

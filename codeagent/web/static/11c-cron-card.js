@@ -76,14 +76,14 @@ function buildCronEditFormHTML(j) {
     + '<div class="cron-freq-block cron-freq-minutes' + (f.mode === 'minutes' ? '' : ' cron-freq-hidden') + '">'
     + '  <label class="form-label">间隔分钟数</label>'
     + '  <select class="cron-fld-interval md-select" style="max-width:100%;">'
-    + [5,10,15,20,30,45].map(function(v) { return '<option value="' + v + '"' + ((parseInt(f.interval) || 30) === v ? ' selected' : '') + '>每 ' + v + ' 分钟</option>'; }).join('')
+    + intervalMinutesOptions(f.interval)
     + '  </select>'
     + '</div>'
     /* interval hours */
     + '<div class="cron-freq-block cron-freq-hours' + (f.mode === 'hours' ? '' : ' cron-freq-hidden') + '">'
     + '  <label class="form-label">间隔小时数</label>'
     + '  <select class="cron-fld-interval md-select" style="max-width:100%;">'
-    + [1,2,3,4,6,8,12].map(function(v) { return '<option value="' + v + '"' + ((parseInt(f.interval) || 1) === v ? ' selected' : '') + '>每 ' + v + ' 小时</option>'; }).join('')
+    + intervalHoursOptions(f.interval)
     + '  </select>'
     + '  <div style="margin-top:var(--sp-2);"><label class="form-label">在每小时的第几分钟</label>'
     + '  <select class="cron-fld-minute md-select" style="max-width:100%;">'
@@ -102,7 +102,7 @@ function buildCronEditFormHTML(j) {
     + '<div class="cron-freq-block cron-freq-weekly' + (f.mode === 'weekly' ? '' : ' cron-freq-hidden') + '">'
     + '  <label class="form-label">选择星期</label>'
     + '  <div style="display:flex;flex-wrap:wrap;gap:var(--sp-1);">'
-    + DAY_NAMES.map(function(dn, i) { return '<label class="cron-day-pill' + (f.dayOfWeek === String(i) ? ' cron-day-pill--on' : '') + '" data-day="' + i + '">' + dn + '</label>'; }).join('')
+    + DAY_NAMES.map(function(dn, i) { return '<label class="cron-day-pill' + (dowExprMatches(f.dayOfWeek, i) ? ' cron-day-pill--on' : '') + '" data-day="' + i + '">' + dn + '</label>'; }).join('')
     + '  </div>'
     + '  <input class="cron-fld-dow" type="hidden" value="' + escAttr(f.dayOfWeek) + '"/>'
     + '</div>'
@@ -110,7 +110,7 @@ function buildCronEditFormHTML(j) {
     + '<div class="cron-freq-block cron-freq-monthly' + (f.mode === 'monthly' ? '' : ' cron-freq-hidden') + '">'
     + '  <label class="form-label">每月几号</label>'
     + '  <select class="cron-fld-dom md-select" style="max-width:100%;">'
-    + [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28].map(function(v) { return '<option value="' + v + '"' + (parseInt(f.dayOfMonth || '1') === v ? ' selected' : '') + '>' + v + ' 日</option>'; }).join('')
+    + domOptions(f.dayOfMonth)
     + '  </select>'
     + '</div>'
     + '<div><label class="form-label">Agent</label><input class="cron-fld-agent" type="text" value="' + escAttr(j.agent_id || 'default') + '" placeholder="default"/></div>'
