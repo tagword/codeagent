@@ -1232,8 +1232,13 @@ def create_app():
     @asynccontextmanager
     async def _lifespan(_app: Starlette):
         try:
-            from seed.integrations.cron_sched import start_cron_scheduler
+            from seed.integrations.cron_sched import (
+                register_main_loop,
+                start_cron_scheduler,
+            )
 
+            # 记录主事件循环：让 worker 线程（agent 工具环境）也能安全触发 cron reload
+            register_main_loop()
             start_cron_scheduler()
         except Exception as exc:
             logger.warning("cron scheduler startup failed: %s", exc)
