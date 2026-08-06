@@ -337,7 +337,9 @@ def _bundle_node() -> None:
                     extracted = next(p for p in (Path(tmp) / "extract").iterdir() if p.is_dir())
                 if node_home.exists():
                     shutil.rmtree(node_home)
-                extracted.rename(node_home)
+                # 跨盘安全：TemporaryDirectory 在 %TEMP%（C:），workspace 在 D: → rename 会抛
+                # WinError 17，必须用 shutil.move（copy+delete）
+                shutil.move(str(extracted), str(node_home))
             print(f"  ✓ node {NODE_VERSION}  ← {tarball}")
 
         for name in ("node.exe", "npm.cmd", "npx.cmd"):

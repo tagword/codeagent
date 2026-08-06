@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.27 (2026-08-06)
+
+- fix(packaging): Windows 构建修复 #2 — node 解压改用 `shutil.move`（`TemporaryDirectory` 在 `%TEMP%`（C 盘）而 workspace 在 D 盘，跨盘 `rename` 抛 WinError 17）；Windows stage 步骤输出日志并上传诊断 artifact（失败可查）
+
 ## 1.1.26 (2026-08-06)
 
 - fix(packaging): Windows 构建修复 — ast-grep stage 支持 `.exe` 二进制查找（win zip 解压出 `sg.exe`，此前 `rglob("sg")` 匹配不到导致 SystemExit 构建失败）；eslint 经 `cmd /c` 执行 npm.cmd；Windows 上用副本替代 symlink（无特权时 symlink 失败）
