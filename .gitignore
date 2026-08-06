@@ -82,8 +82,7 @@ serve.log
 # Commented out: tracked in git for CI builds
 # packaging/
 
-# Local-only: docs, deploy config & tests (not pushed to remote)
+# Local-only: docs & deploy config (not pushed to remote)
 .github/deploy/
 deploy/
 docs/
-tests/
