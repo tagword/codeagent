@@ -24,8 +24,12 @@ RUN sed -i \
     && rm -rf /var/lib/apt/lists/*
 
 # 从 PyPI 安装本体 + 依赖（seed-kernel / seed-model-providers / seed-toolbox[code] / uvicorn）
-# 使用清华 PyPI 镜像加速（PyPI 直连在国内慢）；版本固定保证可复现 + 规避 BuildKit 层缓存
-RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple tagword-codeagent==1.1.31
+# 清华源优先（快），官方 PyPI 兜底（清华镜像同步有延迟，新版本可能未同步）；
+# 版本固定保证可复现 + 规避 BuildKit 层缓存
+RUN pip install --no-cache-dir \
+        --index-url https://pypi.tuna.tsinghua.edu.cn/simple \
+        --extra-index-url https://pypi.org/simple \
+        "tagword-codeagent==1.1.31" "seed-kernel==1.0.16"
 
 # 数据卷：~/.codeagent 持久化（会话、配置、记忆等）
 VOLUME /root/.codeagent
