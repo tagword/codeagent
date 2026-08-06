@@ -16,10 +16,22 @@ from seed.core.config_plane import project_root  # noqa: E402
 TOKEN_FILENAME = "webui.token"
 LEGACY_TOKEN_FILENAME = "codeagent.webui.token"
 
-# Cookie 固定名：不按端口命名（浏览器 cookie 本就忽略端口，按端口命名在反向代理
-# 场景下写/读端口来源不一致，导致登录后立即 401）。同一项目多端口实例共享同一
-# token，cookie 可互验复用；不同项目（不同 token）后登录的实例覆盖旧 cookie，属预期。
-COOKIE_NAME = "ca_webui"
+# Cookie 名按 token 派生（ca_webui_{sha256(token)[:8]}），而非固定名或端口名：
+# - 同一项目多端口 / 反代多 worker 共享同一 token → cookie 名相同 → 互验复用，不互踢；
+# - 不同项目（不同 token）同 host 共存 → cookie 名不同 → 互不覆盖，多实例可同时登录；
+# - 不按端口命名：浏览器 cookie 本就忽略端口，按端口命名在反向代理场景下写/读端口
+#   来源不一致 → 登录后立即 401（历史教训：git bad386b 引入，cb61efb 回退）。
+# LEGACY_COOKIE_NAME 仅用于读 fallback：老用户升级后旧 cookie 仍可验证；
+# 登录成功后写新名并清除旧名，登出时新旧名一并删除。
+LEGACY_COOKIE_NAME = "ca_webui"
+
+
+def cookie_name_for(token: str) -> str:
+    """返回当前 token 对应的 cookie 名。同 token 共享同名，异 token 隔离。"""
+    digest = hashlib.sha256(token.encode("utf-8")).hexdigest()[:8]
+    return f"ca_webui_{digest}"
+
+
 # 会话有效期（秒）——单一来源：签发、续期、Set-Cookie max-age 共用。
 COOKIE_TTL_SEC = 604800
 # 滑动续期阈值：剩余有效期低于一半时重签，避免"用着用着突然掉线"。
@@ -234,6 +246,22 @@ def _read_cookie_from_scope(scope: dict, name: str) -> str | None:
     return None
 
 
+def _read_webui_cookie(scope: dict, token: str) -> str | None:
+    """先读 token 派生名，缺省时 fallback 旧固定名（老用户升级兼容）。"""
+    ck = _read_cookie_from_scope(scope, cookie_name_for(token))
+    if ck is None:
+        ck = _read_cookie_from_scope(scope, LEGACY_COOKIE_NAME)
+    return ck
+
+
+def get_webui_cookie_value(cookies: dict, token: str) -> str | None:
+    """同 _read_webui_cookie，但面向 Request.cookies（webui_api_app 用）。"""
+    ck = cookies.get(cookie_name_for(token))
+    if ck is None:
+        ck = cookies.get(LEGACY_COOKIE_NAME)
+    return ck
+
+
 class WebUIAuthMiddleware:
     """ASGI middleware: require signed cookie when Web UI token is configured."""
 
@@ -248,7 +276,7 @@ class WebUIAuthMiddleware:
             return
         fresh = make_webui_cookie_value(token, COOKIE_TTL_SEC)
         set_cookie_hdr = (
-            f"{COOKIE_NAME}={fresh}; Max-Age={COOKIE_TTL_SEC}; Path=/; "
+            f"{cookie_name_for(token)}={fresh}; Max-Age={COOKIE_TTL_SEC}; Path=/; "
             f"HttpOnly; SameSite=Lax" + ("; Secure" if cookie_secure() else "")
         ).encode("latin-1")
 
@@ -268,7 +296,7 @@ class WebUIAuthMiddleware:
             # Some dev proxies / IDE previews rewrite websocket paths like:
             #   /ws//127.0.0.1%3A8765/ws?...  (still our Web UI websocket)
             if tok and (path == "/ws" or path.startswith("/ws/")):
-                ck = _read_cookie_from_scope(scope, COOKIE_NAME)
+                ck = _read_webui_cookie(scope, tok)
                 ok = verify_webui_cookie(tok, ck)
                 if not ok and ws_query_token_bridge_enabled():
                     ok = _raw_token_matches(tok, _first_query_value(scope, "webui_token"))
@@ -329,7 +357,7 @@ class WebUIAuthMiddleware:
         if not tok or is_public_webui_route(path, method):
             await self.app(scope, receive, send)
             return
-        ck = _read_cookie_from_scope(scope, COOKIE_NAME)
+        ck = _read_webui_cookie(scope, tok)
         if verify_webui_cookie(tok, ck):
             await self._call_with_sliding_refresh(scope, receive, send, tok, ck)
             return

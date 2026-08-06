@@ -66,10 +66,12 @@ codeagent/
 │   │   ├── webui_api_app.py    # WebUI API 路由
 │   │   └── ...                 # 其他 API 模块
 │   │
-│   ├── web/static/             # Web UI 前端（单页应用）
-│   │   ├── body.html           # HTML 骨架
-│   │   ├── *.css               # 样式文件
-│   │   └── *.js                # JS 模块（按功能拆分）
+│   ├── web/
+│   │   ├── auth_impl.py        # WebUI 认证（签名 cookie 签发/校验/中间件）
+│   │   └── static/             # Web UI 前端（单页应用）
+│   │       ├── body.html       # HTML 骨架
+│   │       ├── *.css           # 样式文件
+│   │       └── *.js            # JS 模块（按功能拆分）
 │   │
 │   ├── persona_defaults/       # 默认人格模板（每个新 Agent 的初始配置）
 │   │   ├── agent.md
@@ -85,6 +87,7 @@ codeagent/
 │
 ├── packaging/                  # 构建/打包脚本（macOS DMG 等）
 ├── assets/                     # 图标等资源
+├── tests/                      # pytest 测试（认证、核心逻辑回归）
 │
 ├── .codeagent/                 # 本地开发配置（不提交 Git）
 │   ├── default/                # 默认 Agent 工作区
@@ -154,6 +157,15 @@ codeagent/
 ### 5. 项目级 `.codeagent/`
 - 每个项目可独立配置 rules.md 和 skills
 - 项目级技能自动发现，与 agent 级技能共存
+
+### 6. WebUI 认证：无状态签名 cookie，按 token 派生 cookie 名
+- 登录态是无状态 HMAC 签名 cookie（`{exp}.{sig}`），服务端不存 session
+- cookie 名 `ca_webui_{sha256(token)[:8]}` 按 token 派生：
+  - 同项目多端口/反代多 worker 共享同一 token → cookie 名相同 → 互验复用，不互踢
+  - 不同项目同 host → cookie 名不同 → 互不覆盖，多实例可同时登录
+  - 不按端口命名（历史教训：bad386b 引入 → 反代写/读端口来源不一致 401 → cb61efb 回退）
+- 7 天 TTL + 半程滑动续期；HttpOnly + SameSite=Lax；Secure 由 `CODEAGENT_WEBUI_COOKIE_SECURE` 控制
+- 旧固定名 `ca_webui` 仅读 fallback，登录后清除，保证老用户平滑升级
 
 ## 数据流
 
