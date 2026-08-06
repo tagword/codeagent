@@ -76,6 +76,7 @@ jobs:
           GIT_TERMINAL_PROMPT: 0
 
       - name: Stage bundled tools (git/node/eslint/ast-grep/ruff for Windows)
+        timeout-minutes: 15
         shell: pwsh
         run: |
           python packaging/prepare_bundle_tools.py 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP\stage-tools.log"

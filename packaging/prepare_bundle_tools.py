@@ -316,40 +316,38 @@ def _bundle_node() -> None:
         # ── Windows：node-vXX-win-x64.zip 根布局（node.exe / npm.cmd 在根目录）──
         node_exe = node_home / "node.exe"
         if not node_exe.is_file():
-            plat = _node_platform()  # win-x64
-            tarball = f"node-v{NODE_VERSION}-{plat}.zip"
-            url = f"https://nodejs.org/dist/v{NODE_VERSION}/{tarball}"
-            CACHE.mkdir(parents=True, exist_ok=True)
-            zip_path = CACHE / tarball
-            if not zip_path.is_file():
-                print(f"  ↓ {url}")
-                try:
-                    urllib.request.urlretrieve(url, zip_path)
-                except Exception as exc:
-                    print(f"  ⚠ download failed: {exc}")
-                    node_sys = shutil.which("node")
-                    if node_sys:
-                        _copy_exec(Path(node_sys), BIN / "node.exe")
-                        npm_sys = shutil.which("npm")
-                        if npm_sys:
-                            _copy_exec(Path(npm_sys), BIN / "npm.cmd")
-                        print("  ✓ node/npm ← system (fallback)")
-                        return
-                    raise SystemExit(
-                        "node download failed and no local node on PATH. Retry with network."
-                    ) from exc
-            with tempfile.TemporaryDirectory(prefix="codeagent-node-") as tmp:
-                with zipfile.ZipFile(zip_path) as zf:
-                    zf.extractall(Path(tmp) / "extract")
-                extracted = Path(tmp) / "extract" / f"node-v{NODE_VERSION}-{plat}"
-                if not extracted.is_dir():
-                    extracted = next(p for p in (Path(tmp) / "extract").iterdir() if p.is_dir())
-                if node_home.exists():
-                    shutil.rmtree(node_home)
-                # 跨盘安全：TemporaryDirectory 在 %TEMP%（C:），workspace 在 D: → rename 会抛
-                # WinError 17，必须用 shutil.move（copy+delete）
-                shutil.move(str(extracted), str(node_home))
-            print(f"  ✓ node {NODE_VERSION}  ← {tarball}")
+            # 优先复用系统 node（Windows runner 预装；本地复制零网络挂起风险）
+            node_sys = shutil.which("node")
+            if node_sys:
+                src_dir = Path(node_sys).resolve().parent
+                shutil.copytree(src_dir, node_home, dirs_exist_ok=True)
+                print(f"  ✓ node ← system directory {src_dir}")
+            else:
+                plat = _node_platform()  # win-x64
+                tarball = f"node-v{NODE_VERSION}-{plat}.zip"
+                url = f"https://nodejs.org/dist/v{NODE_VERSION}/{tarball}"
+                CACHE.mkdir(parents=True, exist_ok=True)
+                zip_path = CACHE / tarball
+                if not zip_path.is_file():
+                    print(f"  ↓ {url}")
+                    try:
+                        req = urllib.request.Request(url, headers={"User-Agent": "CodeAgent-bundle/1.0"})
+                        with urllib.request.urlopen(req, timeout=120) as resp, open(zip_path, "wb") as out:
+                            shutil.copyfileobj(resp, out)
+                    except Exception as exc:
+                        raise SystemExit(f"node download failed and no system node found: {exc}") from exc
+                with tempfile.TemporaryDirectory(prefix="codeagent-node-") as tmp:
+                    with zipfile.ZipFile(zip_path) as zf:
+                        zf.extractall(Path(tmp) / "extract")
+                    extracted = Path(tmp) / "extract" / f"node-v{NODE_VERSION}-{plat}"
+                    if not extracted.is_dir():
+                        extracted = next(p for p in (Path(tmp) / "extract").iterdir() if p.is_dir())
+                    if node_home.exists():
+                        shutil.rmtree(node_home)
+                    # 跨盘安全：TemporaryDirectory 在 %TEMP%（C:），workspace 在 D: → rename 会抛
+                    # WinError 17，必须用 shutil.move（copy+delete）
+                    shutil.move(str(extracted), str(node_home))
+                print(f"  ✓ node {NODE_VERSION}  ← {tarball}")
 
         for name in ("node.exe", "npm.cmd", "npx.cmd"):
             src = node_home / name

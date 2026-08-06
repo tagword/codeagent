@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.30 (2026-08-06)
+
+- fix(packaging): Windows stage 卡死根因修复 — node 下载改用带 120s 超时的 `urlopen`（此前 `urlretrieve` 无超时，网络挂起会无限等待卡死构建）；Windows 优先复用系统 node（runner 预装，本地复制零网络风险）；stage 步骤加 `timeout-minutes: 15` 保险
+
 ## 1.1.29 (2026-08-06)
 
 - fix(packaging): Windows stage 崩溃根因修复 — 脚本输出含 `✓/←/→/⚠` 等 Unicode，Windows 控制台默认 cp1252 无法编码抛 `UnicodeEncodeError`；启动时强制 stdout/stderr UTF-8 容错（mac 默认 UTF-8 无此问题）
