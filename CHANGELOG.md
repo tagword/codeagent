@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.32 (2026-08-18)
+
+- fix(webui): cron 定时任务时间配置保存 bug — ①daily/weekly/monthly 修改「分钟」保存不生效（`readFreqFromForm` 用 `querySelector('.cron-fld-minute')` 误取 hidden 的 hours-block 分钟下拉）；②「每 N 小时」模式非档位分钟（如 7 分）无选中项静默变 0 分（硬编码档位表缺动态插入）；③后端 `save_cron_job` 丢弃 `max_continuations`、`cron_status_for_ui` 不回显 `max_tool_rounds`/`max_continuations`（UI 编辑已有任务时轮数静默回退默认 30→12）。修复：minute select 类名按模式区分（`cron-fld-minute-hours`/`cron-fld-minute-time`）+ 改用 `minutesOptions()` 动态插入非档位值；依赖 seed-kernel ≥1.0.17 保留字段
+- fix(webui): cron 调度器启动失败可见化 — `app_factory._lifespan` 用 `getattr` 兼容旧版 seed 缺失 `register_main_loop`，ImportError 不再吞掉整个调度器启动；cron 面板展示 `startup_error` / scheduler 未运行告警（此前静默白屏）
+- test: tests/test_cron_time_options.js 新增 6 个时间保存回归用例（44 通过）
+
 ## 1.1.31 (2026-08-06)
 
 - fix(core): `codeagent.__version__` 改为从包元数据动态读取（此前写死 1.1.8，与 pyproject 版本脱节，显示误导）
