@@ -1231,17 +1231,32 @@ def create_app():
     # ── Cron：Starlette 1.x 用 lifespan（on_startup 已移除）；且 AsyncIOScheduler 需要已有运行中的 loop ──
     @asynccontextmanager
     async def _lifespan(_app: Starlette):
+        # 兼容旧版 seed：register_main_loop 是 v1.0.8+ 才有的线程安全 reload 前置；
+        # 缺失时降级（reload 走自身线程的 loop，仍可用），但绝不因 ImportError 吞掉整个调度器。
         try:
-            from seed.integrations.cron_sched import (
-                register_main_loop,
-                start_cron_scheduler,
-            )
+            from seed.integrations import cron_sched as _cron_sched
 
-            # 记录主事件循环：让 worker 线程（agent 工具环境）也能安全触发 cron reload
-            register_main_loop()
-            start_cron_scheduler()
+            _register_main_loop = getattr(_cron_sched, "register_main_loop", None)
+            _start_cron_scheduler = getattr(_cron_sched, "start_cron_scheduler", None)
+            if _start_cron_scheduler is None:
+                logger.error(
+                    "cron: installed seed (%s) too old — no start_cron_scheduler; "
+                    "scheduled jobs will not run",
+                    getattr(_cron_sched, "__file__", "?"),
+                )
+            else:
+                if _register_main_loop is not None:
+                    try:
+                        # 记录主事件循环：让 worker 线程（agent 工具环境）也能安全触发 cron reload
+                        _register_main_loop()
+                    except Exception as exc:
+                        logger.warning("cron: register_main_loop failed: %s", exc)
+                try:
+                    _start_cron_scheduler()
+                except Exception as exc:
+                    logger.exception("cron scheduler startup failed: %s", exc)
         except Exception as exc:
-            logger.warning("cron scheduler startup failed: %s", exc)
+            logger.exception("cron scheduler startup failed: %s", exc)
         yield
         try:
             from seed.core._session_cache import cancel_all_active_chats

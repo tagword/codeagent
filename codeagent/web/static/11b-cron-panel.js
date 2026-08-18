@@ -8,7 +8,23 @@
     const f = await r.json();
     const c = f.cron;
     if (!c || c.error) {
+      // 状态接口失败：给用户可见提示，而不是静默白屏
+      const st = document.getElementById('cronUiStatus');
+      if (st) {
+        st.classList.add('is-err');
+        st.textContent = 'cron 状态获取失败' + (c && c.error ? '：' + c.error : '');
+      }
       return;
+    }
+
+    // 调度器未启动/启动失败：明确告警（配置启用但 scheduler 没跑 = 任务不会执行）
+    const st = document.getElementById('cronUiStatus');
+    const warn = c.startup_error || (c.config_enabled && !c.env_disabled && !c.scheduler_running
+      ? '调度器未运行（scheduler not running），定时任务不会执行；请检查服务日志'
+      : '');
+    if (st) {
+      st.classList.toggle('is-err', !!warn);
+      st.textContent = warn;
     }
 
     // Global enabled state
@@ -24,6 +40,8 @@
       jobs.forEach(function(j) { list.appendChild(buildCronJobCard(j)); });
     }
   } catch (e) {
+    const st = document.getElementById('cronUiStatus');
+    if (st) { st.classList.add('is-err'); st.textContent = 'cron 面板加载失败：' + String(e); }
   }
 }
 
