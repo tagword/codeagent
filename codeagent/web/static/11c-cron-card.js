@@ -86,8 +86,8 @@ function buildCronEditFormHTML(j) {
     + intervalHoursOptions(f.interval)
     + '  </select>'
     + '  <div style="margin-top:var(--sp-2);"><label class="form-label">在每小时的第几分钟</label>'
-    + '  <select class="cron-fld-minute md-select" style="max-width:100%;">'
-    + [0,5,10,15,20,25,30,35,40,45,50,55].map(function(v) { return '<option value="' + v + '"' + (parseInt(f.minute || '0') === v ? ' selected' : '') + '>' + v + ' 分</option>'; }).join('')
+    + '  <select class="cron-fld-minute-hours md-select" style="max-width:100%;">'
+    + minutesOptions(f.minute)
     + '  </select></div>'
     + '</div>'
     /** daily/weekly/monthly: time picker */
@@ -95,7 +95,7 @@ function buildCronEditFormHTML(j) {
     + '  <label class="form-label">执行时间</label>'
     + '  <div style="display:flex;gap:var(--sp-2);align-items:center;">'
     + '    <select class="cron-fld-hour md-select" style="width:80px;">' + hoursOptions(f.hour) + '</select><span>:</span>'
-    + '    <select class="cron-fld-minute md-select" style="width:80px;">' + minutesOptions(f.minute) + '</select>'
+    + '    <select class="cron-fld-minute-time md-select" style="width:80px;">' + minutesOptions(f.minute) + '</select>'
     + '  </div>'
     + '</div>'
     /* weekly day picker */

@@ -1,6 +1,12 @@
   var interval = parseInt(el.querySelector('.cron-fld-interval').value) || 30;
   var hour = el.querySelector('.cron-fld-hour') ? el.querySelector('.cron-fld-hour').value : '*';
-  var minute = el.querySelector('.cron-fld-minute') ? el.querySelector('.cron-fld-minute').value : '0';
+  // 分钟 select 有两处：hours 模式用 .cron-fld-minute-hours，daily/weekly/monthly 用
+  // .cron-fld-minute-time（time-picker）。绝不能 querySelector 拿第一个——那会命中
+  // hidden 的 hours block，导致 daily 改分钟保存不生效。
+  var minuteSel = mode === 'hours'
+    ? el.querySelector('.cron-fld-minute-hours')
+    : el.querySelector('.cron-fld-minute-time');
+  var minute = minuteSel ? minuteSel.value : '0';
   var dow = el.querySelector('.cron-fld-dow') ? el.querySelector('.cron-fld-dow').value : '*';
   var dom = el.querySelector('.cron-fld-dom') ? el.querySelector('.cron-fld-dom').value : '*';
   return { mode: mode, interval: interval, hour: hour, minute: minute, dayOfWeek: dow, dayOfMonth: dom };

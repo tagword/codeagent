@@ -92,5 +92,16 @@ check('表单对 31 日回显选中', html31.includes('value="31" selected'));
 const html9 = sandbox.buildCronEditFormHTML({ id: 't', title: 't', cron: '7 9 * * *', agent_id: 'default', enabled: true, prompt: 'x' });
 check('表单对 9:07 回显选中', html9.includes('value="7" selected') && html9.includes('value="9" selected'));
 
+console.log('== P4: 分钟 select 语义修复（daily 改分钟 / hours 非档位分钟） ==');
+// 修复 1：hours block 与 time-picker 的 minute select 类名区分（避免 readFreqFromForm 误读 hidden 项）
+check('hours 模式分钟用 .cron-fld-minute-hours', html9.includes('cron-fld-minute-hours'), '');
+check('time-picker 分钟用 .cron-fld-minute-time', sandbox.buildCronEditFormHTML({ id: 't', title: 't', cron: '0 8 * * *', agent_id: 'default', enabled: true, prompt: 'x' }).includes('cron-fld-minute-time'));
+// 修复 2：hours 模式非档位分钟（7 分）在 hours block 中被动态插入并选中（此前硬编码档位无 7 → 静默变 0 分）
+check('hours block 对 7 分动态插入选中', html9.includes('value="7" selected'), (html9.match(/value="7" selected/g) || []).length + ' 处');
+check('7 * * * * 回存不变（每小时第 7 分）', roundtrip('7 * * * *') === '7 * * * *', roundtrip('7 * * * *'));
+// 修复 3：daily 改分钟 roundtrip
+check('30 8 * * * 回存不变', roundtrip('30 8 * * *') === '30 8 * * *', roundtrip('30 8 * * *'));
+check('30 8 * * * 描述', describeCron('30 8 * * *') === '每天 8:30 执行', describeCron('30 8 * * *'));
+
 console.log('\n结果: ' + pass + ' 通过, ' + fail + ' 失败');
 process.exit(fail ? 1 : 0);
