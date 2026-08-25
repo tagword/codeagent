@@ -7,6 +7,7 @@
 [![CI](https://github.com/tagword/codeagent/actions/workflows/build.yml/badge.svg)](https://github.com/tagword/codeagent/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](pyproject.toml)
+[![Website](https://img.shields.io/badge/🌐-codeagent.tagword.cn-4f46e5)](https://codeagent.tagword.cn/)
 
 ---
 
