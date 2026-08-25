@@ -5,10 +5,27 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "tagword-codeagent"
 version = "1.1.32"
-description = "LLM agent with Markdown config, tool loop, Web UI, sessions, memory, and webhooks"
+description = "Autonomous AI coding agent driven by Markdown config — DeepSeek-ready, CLI + Web UI, 45+ tools, self-hosted"
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.9"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Environment :: Web Environment",
+    "Framework :: AsyncIO",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
+]
 dependencies = [
     "seed-kernel",
     "seed-model-providers",
@@ -16,6 +33,12 @@ dependencies = [
     "uvicorn[standard]>=0.30.0",
     "starlette>=0.37.0"
 ]
+
+[project.urls]
+Homepage = "https://github.com/tagword/codeagent"
+Repository = "https://github.com/tagword/codeagent"
+Changelog = "https://github.com/tagword/codeagent/blob/main/CHANGELOG.md"
+Documentation = "https://github.com/tagword/codeagent#readme"
 
 [project.optional-dependencies]
 dev = ["pytest>=7.0"]

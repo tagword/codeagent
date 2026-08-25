@@ -12,11 +12,11 @@
 
 ## 界面预览
 
-![CodeAgent Web UI 工作台](assets/screenshots/webui-main.png)
+![CodeAgent Web UI 工作台](https://raw.githubusercontent.com/tagword/codeagent/main/assets/screenshots/webui-main.png)
 
 内置 Web UI（单页应用，零构建）—— 项目/会话树、工具调用链、mermaid 图表、思考开关、模型切换，开箱即用。
 
-![CodeAgent 登录页](assets/screenshots/webui-login.png)
+![CodeAgent 登录页](https://raw.githubusercontent.com/tagword/codeagent/main/assets/screenshots/webui-login.png)
 
 ## 为什么选 CodeAgent
 
