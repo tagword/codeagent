@@ -449,9 +449,20 @@ def create_app():
 
             def _on_tool_round_persist(tt: list, tu: list) -> None:
                 try:
+                    # mid-loop compact 会原地重建 api_msgs（长度骤减），使 n_before_ref
+                    # 索引失效、后续增量 tail 恒为空 → 本轮输出丢失。退化为「最后一条
+                    # user 之后」为合并起点（与 merge_llm_tail_into_full 的容错一致）。
+                    _start = n_before_ref[0]
+                    if len(api_msgs) < _start:
+                        _last_ui = -1
+                        for _i2, _m2 in enumerate(api_msgs):
+                            if isinstance(_m2, dict) and _m2.get("role") == "user":
+                                _last_ui = _i2
+                        _start = _last_ui + 1
+                        n_before_ref[0] = _start
                     new_tail = [
                         message
-                        for message in api_msgs[n_before_ref[0]:]
+                        for message in api_msgs[_start:]
                         if not (
                             isinstance(message, dict)
                             and (
