@@ -96,35 +96,13 @@ def create_app():
         return HTMLResponse(get_setup_html())
 
     async def api_chat(request: Request) -> JSONResponse:
-        from seed.core.agent_context import set_active_llm_session
-        from seed.core.agent_runtime import (
-            apply_context_usage_metadata,
-            build_api_projection_messages,
-            build_context_usage_from_run,
-            build_context_usage_snapshot,
-            maybe_compact_context_messages,
-            merge_llm_tail_into_full,
-            persist_compact_summary,
-            resolve_compact_trigger_tokens,
-            run_llm_tool_loop,
-            strip_ephemeral_message_fields,
-        )
-        from codeagent.runtime.prompt_enrichment import (
-            build_skills_suffix,
-            fresh_system_prompt,
-            get_cached_system_prompt,
-            record_chat_turn_diary,
-        )
-        from seed.core.llm_exec import LLMError
-        from seed.core.llm_presets import llm_executor_from_resolved, resolve_preset
-        from seed.core.llm_sess import load_or_create_chat_session, merge_fresh_system, persist_chat_session
-        from seed.core.mem_bridge import finalize_episodic_for_llm
-        from seed.core.chat_events import set_chat_cancel_checker, reset_chat_cancel_checker
-        from seed.integrations.session_title import maybe_llm_refresh_session_title
-        from datetime import datetime, timezone
-        import threading
+        """WebUI 聊天入口：HTTP 解析/多模态校验/``/skill`` 命令 → run_chat_turn。
 
-        from . import SESSIONS, _DEFAULT_AUTO_CONTINUE_NUDGE, _running_add, _running_discard, _running_contains, tools_for_agent, ACTIVE_CHAT_CANCELS, PENDING_INJECTIONS
+        核心逻辑见 :func:`codeagent.server.chat_turn.run_chat_turn`（WebUI 与
+        cron 共用）。薄壳只做请求层工作，不持有会话状态。
+        """
+        from codeagent.server.chat_turn import run_chat_turn
+        from seed.core.llm_exec import LLMError
 
         try:
             body = await request.json()
@@ -133,818 +111,112 @@ def create_app():
 
         session_id = str(body.get("session_id") or "web-chat").strip() or "web-chat"
         from codeagent.core import env as ca_env
-        from seed.core.env_access import (
-            CHAT_AUTO_CONTINUE_MAX_SEGMENTS,
-            CHAT_AUTO_CONTINUE_ON_LIMIT,
-            MAX_TOOL_ROUNDS,
-            env_truthy,
-            pick_int,
-        )
 
-        _run_started = False
-        _run_was_cancelled = False
-        _run_mkey = ""
-        _cancel_token = None
+        agent_id = str(body.get("agent_id") or ca_env.default_agent_id()).strip() or "default"
+        body["agent_id"] = agent_id
+        body["session_id"] = session_id
+
+        llm_id = str(body.get("llm_id") or "").strip()
+        vision_llm_id = str(body.get("vision_llm_id") or "").strip()
+        image_gen_llm_id = str(body.get("image_gen_llm_id") or "").strip()
+        audio_llm_id = str(body.get("audio_llm_id") or "").strip()
+        music_llm_id = str(body.get("music_llm_id") or "").strip()
+        video_gen_llm_id = str(body.get("video_gen_llm_id") or "").strip()
+
+        from codeagent.server.attachment_api import parse_chat_multimodal_body
 
         try:
-            agent_id = str(body.get("agent_id") or ca_env.default_agent_id()).strip() or "default"
-            body["agent_id"] = agent_id
-            body["session_id"] = session_id
-            _run_mkey = _memkey(agent_id, session_id)
+            user_msg, _att_ids, has_image, _extra = parse_chat_multimodal_body(body)
+        except ValueError as e:
+            return JSONResponse({"detail": str(e)}, status_code=400)
 
-            llm_id = str(body.get("llm_id") or "").strip()
-            vision_llm_id = str(body.get("vision_llm_id") or "").strip()
-            image_gen_llm_id = str(body.get("image_gen_llm_id") or "").strip()
-            audio_llm_id = str(body.get("audio_llm_id") or "").strip()
-            music_llm_id = str(body.get("music_llm_id") or "").strip()
-            video_gen_llm_id = str(body.get("video_gen_llm_id") or "").strip()
+        has_video = bool(_extra.get("has_video"))
+        has_audio = bool(_extra.get("has_audio"))
 
-            from codeagent.server.attachment_api import parse_chat_multimodal_body
-            from codeagent.core.attachments import content_text_for_skills
-            from codeagent.core.audio_models import preset_supports_audio_id
-            from codeagent.core.vision_models import resolve_main_llm
+        message = str(user_msg.get("content") or "").strip()
+        from codeagent.core.image_understanding import (
+            image_attachment_allowed,
+            video_attachment_allowed,
+        )
+        from codeagent.core.audio_models import preset_supports_audio_id
+
+        if has_image and not image_attachment_allowed(vision_llm_id):
+            return JSONResponse(
+                {
+                    "detail": (
+                        "发送图片需要 supports_vision 的多模态预设，"
+                        "或已配置 MiniMax MCP（understand_image）"
+                    )
+                },
+                status_code=400,
+            )
+        if has_video and not video_attachment_allowed(vision_llm_id):
+            return JSONResponse(
+                {"detail": "发送视频需要选择支持多模态的模型 (vision_llm_id)"},
+                status_code=400,
+            )
+        if has_audio:
+            if not audio_llm_id or not preset_supports_audio_id(audio_llm_id):
+                return JSONResponse(
+                    {"detail": "需要选择支持音频转写的模型 (audio_llm_id)"},
+                    status_code=400,
+                )
+
+        project_id = str(body.get("project_id") or "").strip()
+        if project_id == "__unassigned__":
+            project_id = ""
+
+        _forced_mcp_skill_suffix = ""
+        if message.startswith("/skill") or (message.startswith("/") and ":" in message.split(None, 1)[0]):
+            from codeagent.server.webui_api_app import _parse_mcp_skill_slash_command
+            from seed_tools.mcp import mcp_skill_handler
 
             try:
-                user_msg, _att_ids, has_image, _extra = parse_chat_multimodal_body(body)
+                _mcp_sid, _mcp_skill, _mcp_args = _parse_mcp_skill_slash_command(message)
             except ValueError as e:
                 return JSONResponse({"detail": str(e)}, status_code=400)
-
-            has_video = bool(_extra.get("has_video"))
-            has_audio = bool(_extra.get("has_audio"))
-
-            message = str(user_msg.get("content") or "").strip()
-            from codeagent.core.image_understanding import (
-                MCP_VISION_SENTINEL,
-                image_attachment_allowed,
-                video_attachment_allowed,
+            _mcp_skill_text = await asyncio.to_thread(
+                mcp_skill_handler,
+                _mcp_sid,
+                _mcp_skill,
+                _mcp_args,
             )
-
-            if has_image and not image_attachment_allowed(vision_llm_id):
-                return JSONResponse(
-                    {
-                        "detail": (
-                            "发送图片需要 supports_vision 的多模态预设，"
-                            "或已配置 MiniMax MCP（understand_image）"
-                        )
-                    },
-                    status_code=400,
-                )
-            if has_video and not video_attachment_allowed(vision_llm_id):
-                return JSONResponse(
-                    {"detail": "发送视频需要选择支持多模态的模型 (vision_llm_id)"},
-                    status_code=400,
-                )
-            if has_audio:
-                if not audio_llm_id or not preset_supports_audio_id(audio_llm_id):
-                    return JSONResponse(
-                        {"detail": "需要选择支持音频转写的模型 (audio_llm_id)"},
-                        status_code=400,
-                    )
-
-            project_id = str(body.get("project_id") or "").strip()
-            if project_id == "__unassigned__":
-                project_id = ""
-
-            _forced_mcp_skill_suffix = ""
-            if message.startswith("/skill") or (message.startswith("/") and ":" in message.split(None, 1)[0]):
-                from codeagent.server.webui_api_app import _parse_mcp_skill_slash_command
-                from seed_tools.mcp import mcp_skill_handler
-
-                try:
-                    _mcp_sid, _mcp_skill, _mcp_args = _parse_mcp_skill_slash_command(message)
-                except ValueError as e:
-                    return JSONResponse({"detail": str(e)}, status_code=400)
-                _mcp_skill_text = await asyncio.to_thread(
-                    mcp_skill_handler,
-                    _mcp_sid,
-                    _mcp_skill,
-                    _mcp_args,
-                )
-                if len(_mcp_skill_text) > 30000:
-                    _mcp_skill_text = _mcp_skill_text[:30000] + "\n\n[已截断：MCP skill 输出超过 30000 字符]"
-                _forced_mcp_skill_suffix = (
-                    "\n\n## MCP Skill\n\n"
-                    f"本轮已显式加载 MCP skill `{_mcp_sid}/{_mcp_skill}`。"
-                    "请按该 skill 的内容处理用户请求。\n\n"
-                    f"{_mcp_skill_text}\n"
-                )
-                message = f"请使用 MCP skill `{_mcp_sid}/{_mcp_skill}` 处理本轮请求。"
-                user_msg["content"] = message
-
-            # ── 同 session 并发注入 ──
-            # 仅当 session 确实在跑时才入队；否则清掉残留 queue 并正常发起新 run
-            if not _running_contains(_run_mkey):
-                PENDING_INJECTIONS.pop(_run_mkey, None)
-            existing_queue = PENDING_INJECTIONS.get(_run_mkey)
-            if existing_queue is not None and _running_contains(_run_mkey):
-                from datetime import datetime, timezone
-                queued = dict(user_msg)
-                queued.setdefault("ts", datetime.now(timezone.utc).isoformat())
-                existing_queue.append(queued)
-                with contextlib.suppress(Exception):
-                    await _broadcast_session_event(agent_id, session_id, {
-                        "type": "message_queued",
-                    })
-                return JSONResponse(
-                    {"queued": True, "session_id": session_id, "agent_id": agent_id},
-                    status_code=202,
-                )
-            PENDING_INJECTIONS[_run_mkey] = []
-            _running_add(_run_mkey)
-            _run_started = True
-            # 停止信号必须在 _running_add 后立即注册，消除
-            # _running_sessions 与 ACTIVE_CHAT_CANCELS 之间的时间窗口
-            try:
-                _cancel_event = ACTIVE_CHAT_CANCELS.setdefault(_run_mkey, threading.Event())
-                _cancel_token = set_chat_cancel_checker(lambda: _cancel_event.is_set())
-            except Exception:
-                pass
-
-            mkey = _memkey(agent_id, session_id)
-            try:
-                from codeagent.core.paths import ensure_agent_scaffold
-
-                ensure_agent_scaffold(agent_id)
-            except Exception:
-                pass
-
-            if mkey in SESSIONS:
-                chat_sess = SESSIONS[mkey]
-            else:
-                chat_sess = load_or_create_chat_session(session_id, agent_id, project_id or None)
-                SESSIONS[mkey] = chat_sess
-
-            fresh_sys = get_cached_system_prompt(chat_sess, agent_id=agent_id)
-            if not chat_sess.messages:
-                chat_sess.messages = [{"role": "system", "content": fresh_sys}]
-            else:
-                chat_sess.messages[:] = merge_fresh_system(chat_sess.messages, fresh_sys)
-
-            if isinstance(chat_sess.metadata, dict) and chat_sess.metadata.get("cursor"):
-                chat_sess.metadata.pop("cursor", None)
-
-            if body.get("clear_vision_context") and isinstance(chat_sess.metadata, dict):
-                chat_sess.metadata.pop("vision_context", None)
-
-            chat_sess.messages.append(user_msg)
-
-            max_rounds = pick_int(24, *MAX_TOOL_ROUNDS)
-
-            llm = resolve_main_llm(llm_id or None)
-            _raw_thinking = body.get("enable_thinking")
-            if _raw_thinking is None:
-                chat_enable_thinking = None
-            else:
-                chat_enable_thinking = bool(_raw_thinking)
-            _raw_effort = str(body.get("reasoning_effort") or "").strip().lower()
-            chat_reasoning_effort = _raw_effort if _raw_effort else None
-            reg, exe = tools_for_agent(agent_id)
-            from seed.core.agent_context import (
-                clear_active_project_workspace,
-                set_active_agent_id,
-                set_active_project_episodic,
-                set_active_project_workspace,
-                set_active_vision_preset,
-                set_active_image_gen_preset,
-                set_active_audio_preset,
-                set_active_music_preset,
-                set_active_video_gen_preset,
+            if len(_mcp_skill_text) > 30000:
+                _mcp_skill_text = _mcp_skill_text[:30000] + "\n\n[已截断：MCP skill 输出超过 30000 字符]"
+            _forced_mcp_skill_suffix = (
+                "\n\n## MCP Skill\n\n"
+                f"本轮已显式加载 MCP skill `{_mcp_sid}/{_mcp_skill}`。"
+                "请按该 skill 的内容处理用户请求。\n\n"
+                f"{_mcp_skill_text}\n"
             )
+            message = f"请使用 MCP skill `{_mcp_sid}/{_mcp_skill}` 处理本轮请求。"
+            user_msg["content"] = message
 
-            set_active_llm_session(f"{agent_id}::{session_id}")
-            set_active_agent_id(agent_id)
-            _vision_preset = vision_llm_id or None
-            if _vision_preset == MCP_VISION_SENTINEL:
-                _vision_preset = None
-            set_active_vision_preset(_vision_preset)
-            set_active_image_gen_preset(image_gen_llm_id or None)
-            set_active_audio_preset(audio_llm_id or None)
-            set_active_music_preset(music_llm_id or None)
-            set_active_video_gen_preset(video_gen_llm_id or None)
-            from seed.core.proj_reg import get_project, resolve_project_path
-            if project_id:
-                set_active_project_episodic(True, project_id)
-            else:
-                set_active_project_episodic(False)
-                set_active_project_workspace(None)
-
-            # backward-compat: seed 1.0.0 没有 cursor 参数
-            import inspect as _inspect
-            _sig = _inspect.signature(build_api_projection_messages)
-            _cursor_supported = "cursor" in _sig.parameters
-            _kwargs = {}
-            if _cursor_supported:
-                _kwargs["cursor"] = (
-                    chat_sess.metadata.get("cursor")
-                    if isinstance(chat_sess.metadata, dict) else None
-                )
-            # ── 工作目录注入 ──
-            _work_dir_suffix = ""
-            _wd = None
-            if project_id:
-                _wd = resolve_project_path(agent_id, project_id)
-                if _wd:
-                    set_active_project_workspace(_wd)
-                else:
-                    set_active_project_workspace(None)
-                _proj = get_project(agent_id, project_id)
-                if _proj and _wd:
-                    _work_dir_suffix = (
-                        "\n\n"
-                        "## Workspace\n\n"
-                        f"当前工作目录：`{_wd}`\n\n"
-                        "执行 shell 命令时，工作目录默认为此路径。"
-                        "除非有充分理由，否则请在此目录下操作，不要 cd 到其他目录。\n"
-                    )
-
-            _skills_suffix = build_skills_suffix(
-                agent_id,
-                user_text=content_text_for_skills(message),
-                workspace_suffix=_work_dir_suffix,
-                project_path=_wd,
-            )
-            if _forced_mcp_skill_suffix:
-                _skills_suffix = (_skills_suffix or "").rstrip() + _forced_mcp_skill_suffix
-            api_msgs = build_api_projection_messages(
-                chat_sess.messages,
-                skills_suffix=_skills_suffix,
-                **_kwargs,
-            )
-            _api_pt = None
-            _prev_cu = None
-            if isinstance(chat_sess.metadata, dict):
-                _prev_cu = chat_sess.metadata.get("context_usage")
-                if isinstance(_prev_cu, dict):
-                    _api_pt = resolve_compact_trigger_tokens(persisted=_prev_cu) or None
-            if not isinstance(chat_sess.metadata, dict):
-                chat_sess.metadata = {}
-            # episodic 在 compact 前注入，使 compact 判断与 LLM 实际输入一致
-            await asyncio.to_thread(
-                finalize_episodic_for_llm,
-                api_msgs,
-                chat_sess.metadata,
+        try:
+            result = await run_chat_turn(
                 agent_id=agent_id,
                 session_id=session_id,
-                project_id=project_id or None,
-                compact_happened=False,
+                user_msg=user_msg,
+                llm_id=llm_id,
+                vision_llm_id=vision_llm_id,
+                image_gen_llm_id=image_gen_llm_id,
+                audio_llm_id=audio_llm_id,
+                music_llm_id=music_llm_id,
+                video_gen_llm_id=video_gen_llm_id,
+                project_id=project_id,
+                enable_thinking=body.get("enable_thinking"),
+                reasoning_effort=str(body.get("reasoning_effort") or ""),
+                clear_vision_context=bool(body.get("clear_vision_context")),
+                if_busy="queue",
+                emit_ws=True,
+                broadcast_fn=_broadcast_session_event,
+                forced_skill_suffix=_forced_mcp_skill_suffix,
             )
-            compact_result = await asyncio.to_thread(
-                maybe_compact_context_messages,
-                api_msgs,
-                llm,
-                api_prompt_tokens=_api_pt,
-                persisted_context_usage=_prev_cu if isinstance(_prev_cu, dict) else None,
-            )
-            persist_compact_summary(chat_sess.messages, compact_result)
-            strip_ephemeral_message_fields(api_msgs)
-
-            from codeagent.runtime.compact_state import inject_state_into_system
-
-            if compact_result:
-                await asyncio.to_thread(
-                    inject_state_into_system,
-                    api_msgs,
-                    agent_id,
-                )
-                await asyncio.to_thread(
-                    finalize_episodic_for_llm,
-                    api_msgs,
-                    chat_sess.metadata,
-                    agent_id=agent_id,
-                    session_id=session_id,
-                    project_id=project_id or None,
-                    compact_happened=True,
-                )
-
-            def _on_mid_compact(compact_result: dict | None) -> None:
-                if not compact_result:
-                    return
-                persist_compact_summary(chat_sess.messages, compact_result)
-                inject_state_into_system(api_msgs, agent_id)
-
-            # ── WS 广播回调 ──
-            from seed.core.chat_events import reset_chat_event_emitter, set_chat_event_emitter
-
-            main_loop = asyncio.get_event_loop()
-            emitter_token = None
-
-            def _emit_progress_from_worker(evt: dict) -> None:
-                with contextlib.suppress(Exception):
-                    asyncio.run_coroutine_threadsafe(
-                        _broadcast_session_event(agent_id, session_id, evt), main_loop
-                    )
-
-            emitter_token = set_chat_event_emitter(_emit_progress_from_worker)
-
-            with contextlib.suppress(Exception):
-                asyncio.run_coroutine_threadsafe(
-                    _broadcast_session_event(agent_id, session_id, {"type": "run_started"}),
-                    main_loop,
-                )
-
-            n_before = len(api_msgs)
-            n_before_ref = [n_before]
-            _last_trace_len = [0]
-            _stream_placeholder_created = [False]
-
-            def _on_tool_round_persist(tt: list, tu: list) -> None:
-                try:
-                    # mid-loop compact 会原地重建 api_msgs（长度骤减），使 n_before_ref
-                    # 索引失效、后续增量 tail 恒为空 → 本轮输出丢失。退化为「最后一条
-                    # user 之后」为合并起点（与 merge_llm_tail_into_full 的容错一致）。
-                    _start = n_before_ref[0]
-                    if len(api_msgs) < _start:
-                        _last_ui = -1
-                        for _i2, _m2 in enumerate(api_msgs):
-                            if isinstance(_m2, dict) and _m2.get("role") == "user":
-                                _last_ui = _i2
-                        _start = _last_ui + 1
-                        n_before_ref[0] = _start
-                    new_tail = [
-                        message
-                        for message in api_msgs[_start:]
-                        if not (
-                            isinstance(message, dict)
-                            and (
-                                message.get("_auto_continue_nudge")
-                                or (
-                                    message.get("role") == "user"
-                                    and isinstance(message.get("content"), str)
-                                    and (
-                                        message["content"].startswith(_DEFAULT_AUTO_CONTINUE_NUDGE[:20])
-                                        or message["content"].startswith("上一段连续在")
-                                    )
-                                )
-                            )
-                        )
-                    ]
-                    if new_tail:
-                        rest = new_tail
-                        if rest:
-                            # ── 移除上一个流式占位符（_streaming=True），防止重复落盘 ──
-                            if _stream_placeholder_created[0]:
-                                for _pi in range(len(chat_sess.messages) - 1, -1, -1):
-                                    _pm = chat_sess.messages[_pi]
-                                    if isinstance(_pm, dict) and _pm.get("_streaming"):
-                                        del chat_sess.messages[_pi]
-                                        break
-                                _stream_placeholder_created[0] = False
-
-                            persisted_rest = []
-                            for message in rest:
-                                if not isinstance(message, dict):
-                                    persisted_rest.append(message)
-                                    continue
-                                copied = dict(message)
-                                strip_ephemeral_message_fields([copied])
-                                if "ts" not in copied or not copied.get("ts"):
-                                    copied["ts"] = datetime.now(timezone.utc).isoformat()
-                                persisted_rest.append(copied)
-                            chat_sess.messages.extend(persisted_rest)
-                        n_before_ref[0] = len(api_msgs)
-                    _stream_placeholder_created[0] = False
-                    if tt:
-                        new_trace = tt[_last_trace_len[0]:]
-                        if new_trace:
-                            for _i in range(len(chat_sess.messages) - 1, -1, -1):
-                                mm = chat_sess.messages[_i]
-                                if isinstance(mm, dict) and mm.get("role") == "assistant":
-                                    existing = mm.get("tool_trace")
-                                    if not isinstance(existing, list):
-                                        existing = []
-                                    chat_sess.messages[_i] = {
-                                        **mm,
-                                        "tool_trace": existing + new_trace,
-                                        "tools_used": list(tu) if tu else mm.get("tools_used", []),
-                                    }
-                                    break
-                        _last_trace_len[0] = len(tt)
-                    loop = asyncio.get_running_loop()
-                    loop.run_in_executor(None, persist_chat_session, chat_sess, agent_id)
-                except Exception:
-                    pass
-
-            def _on_text_delta(full_text: str) -> None:
-                try:
-                    if not _stream_placeholder_created[0]:
-                        chat_sess.messages.append({
-                            "role": "assistant",
-                            "content": "",
-                            "_streaming": True,
-                            "ts": datetime.now(timezone.utc).isoformat(),
-                        })
-                        _stream_placeholder_created[0] = True
-                    if chat_sess.messages and chat_sess.messages[-1].get("_streaming"):
-                        chat_sess.messages[-1]["content"] = full_text
-                    with contextlib.suppress(Exception):
-                        asyncio.run_coroutine_threadsafe(
-                            _broadcast_session_event(agent_id, session_id, {
-                                "type": "text_delta",
-                                "session_id": session_id,
-                                "agent_id": agent_id,
-                                "text": full_text,
-                            }), main_loop
-                        )
-                except Exception:
-                    pass
-
-            def _on_reasoning_delta(full_reasoning: str) -> None:
-                try:
-                    if (_stream_placeholder_created[0]
-                            and chat_sess.messages
-                            and chat_sess.messages[-1].get("_streaming")):
-                        chat_sess.messages[-1]["reasoning_content"] = full_reasoning
-                except Exception:
-                    pass
-
-            # ── 运行时消息注入：在每轮工具循环开始前捡起队列中的新消息 ──
-            def _drain_pending_injections() -> list:
-                msgs = list(PENDING_INJECTIONS.get(_run_mkey, []))
-                if msgs:
-                    PENDING_INJECTIONS[_run_mkey].clear()
-                return msgs
-
-            try:
-                # ── auto_continue 配置 ──
-                _ac_on = env_truthy(*CHAT_AUTO_CONTINUE_ON_LIMIT, default="0")
-                _max_seg = pick_int(4, *CHAT_AUTO_CONTINUE_MAX_SEGMENTS)
-                _max_seg = max(1, min(_max_seg, 50))
-
-                if _ac_on:
-                    from . import _auto_continue_nudge
-
-                    _segment = 0
-                    _all_trace: list[dict] = []
-                    _all_used: list[str] = []
-                    _final_reply = ""
-                    _final_meta: dict = {}
-                    _acc_usage: dict = {}
-                    _seg_last_meta: dict = {}
-                    _peak_across_segments = 0
-                    from seed.core.usage_accumulator import (
-                        begin_usage_accumulation,
-                        end_usage_accumulation,
-                        reset_usage_accumulation,
-                    )
-
-                    while _segment < _max_seg:
-                        _seg_token = begin_usage_accumulation()
-                        try:
-                            _seg_reply, _seg_last_meta, _seg_used, _seg_trace, _seg_meta = await run_llm_tool_loop(
-                                llm, exe,
-                                messages=api_msgs,
-                                registry=reg,
-                                max_tool_rounds=max_rounds,
-                                on_round_persist=_on_tool_round_persist,
-                                on_text_delta=_on_text_delta,
-                                on_reasoning_delta=_on_reasoning_delta,
-                                on_check_pending_messages=_drain_pending_injections,
-                                enable_thinking=chat_enable_thinking,
-                                reasoning_effort=chat_reasoning_effort,
-                                on_compact=_on_mid_compact,
-                            )
-                        except Exception:
-                            reset_usage_accumulation(_seg_token)
-                            raise
-                        else:
-                            _seg_usage = end_usage_accumulation(_seg_token)
-
-                        _all_trace.extend(_seg_trace or [])
-                        for _t in (_seg_used or []):
-                            if _t not in _all_used:
-                                _all_used.append(_t)
-                        if _seg_reply:
-                            _final_reply = _seg_reply
-                        _final_meta = _seg_meta or {}
-                        _peak_across_segments = max(
-                            _peak_across_segments,
-                            int((_seg_meta or {}).get("peak_prompt_tokens") or 0),
-                        )
-                        # 累加每个 segment 的 usage
-                        if _seg_usage:
-                            for _k in ("prompt_tokens", "completion_tokens", "total_tokens",
-                                       "prompt_cache_hit_tokens", "prompt_cache_miss_tokens"):
-                                _v = _seg_usage.get(_k, 0)
-                                if isinstance(_v, (int, float)):
-                                    _acc_usage[_k] = _acc_usage.get(_k, 0) + int(_v)
-
-                        if _seg_meta.get("stopped_reason") != "max_tool_rounds":
-                            if _seg_meta.get("stopped_reason") == "cancelled":
-                                _run_was_cancelled = True
-                            break
-
-                        _segment += 1
-                        if _segment >= _max_seg:
-                            break
-
-                        # Reset per-segment markers for next loop
-                        _last_trace_len[0] = 0
-                        _seg_peak = int((_seg_meta or {}).get("peak_prompt_tokens") or 0)
-                        _seg_compact = await asyncio.to_thread(
-                            maybe_compact_context_messages,
-                            api_msgs,
-                            llm,
-                            api_prompt_tokens=_seg_peak or None,
-                            loop_meta=_seg_meta if isinstance(_seg_meta, dict) else None,
-                        )
-                        persist_compact_summary(chat_sess.messages, _seg_compact)
-                        if _seg_compact:
-                            strip_ephemeral_message_fields(api_msgs)
-                            await asyncio.to_thread(
-                                inject_state_into_system,
-                                api_msgs,
-                                agent_id,
-                            )
-                            await asyncio.to_thread(
-                                finalize_episodic_for_llm,
-                                api_msgs,
-                                chat_sess.metadata,
-                                agent_id=agent_id,
-                                session_id=session_id,
-                                project_id=project_id or None,
-                                compact_happened=True,
-                            )
-                        # Inject nudge as user message to continue
-                        # n_before_ref deliberately NOT reset — nudge must be
-                        # picked up by _on_tool_round_persist in the next segment
-                        _nudge = _auto_continue_nudge(_seg_meta)
-                        api_msgs.append(
-                            {
-                                "role": "user",
-                                "content": _nudge,
-                                "_auto_continue_nudge": True,
-                            }
-                        )
-
-                    reply = _final_reply
-                    tools_used = _all_used
-                    tool_trace = _all_trace
-                    _loop_meta = _final_meta
-                    _last_meta = _seg_last_meta or {}
-                    if _peak_across_segments > 0:
-                        _loop_meta["peak_prompt_tokens"] = max(
-                            int(_loop_meta.get("peak_prompt_tokens") or 0),
-                            _peak_across_segments,
-                        )
-                    if _acc_usage:
-                        _loop_meta["usage_summary"] = _acc_usage
-                else:
-                    from seed.core.usage_accumulator import (
-                        begin_usage_accumulation,
-                        end_usage_accumulation,
-                        reset_usage_accumulation,
-                    )
-
-                    _norm_token = begin_usage_accumulation()
-                    try:
-                        reply, _meta, tools_used, tool_trace, _loop_meta = await run_llm_tool_loop(
-                            llm, exe,
-                            messages=api_msgs,
-                            registry=reg,
-                            max_tool_rounds=max_rounds,
-                            on_round_persist=_on_tool_round_persist,
-                            on_text_delta=_on_text_delta,
-                            on_reasoning_delta=_on_reasoning_delta,
-                            on_check_pending_messages=_drain_pending_injections,
-                            enable_thinking=chat_enable_thinking,
-                            reasoning_effort=chat_reasoning_effort,
-                            on_compact=_on_mid_compact,
-                        )
-                        _last_meta = _meta or {}
-                    except Exception:
-                        reset_usage_accumulation(_norm_token)
-                        raise
-                    else:
-                        _norm_usage = end_usage_accumulation(_norm_token)
-                        if _norm_usage:
-                            _loop_meta["usage_summary"] = _norm_usage
-
-                # ── WS: 广播 text_done + reply（两分支共享） ──
-                trace_out_ws = [
-                    {"tool": t.get("name", ""), "arguments": t.get("arguments", ""), "result": t.get("result", "")}
-                    for t in (tool_trace or [])
-                ]
-                with contextlib.suppress(Exception):
-                    asyncio.run_coroutine_threadsafe(
-                        _broadcast_session_event(agent_id, session_id, {
-                            "type": "text_done",
-                            "session_id": session_id,
-                            "agent_id": agent_id,
-                            "text": reply or "",
-                            "tool_trace": trace_out_ws,
-                            "tools_used": tools_used or [],
-                        }), main_loop
-                    )
-                with contextlib.suppress(Exception):
-                    asyncio.run_coroutine_threadsafe(
-                        _broadcast_session_event(agent_id, session_id, {
-                            "type": "reply",
-                            "session_id": session_id,
-                            "agent_id": agent_id,
-                            "text": reply or "",
-                            "tool_trace": trace_out_ws,
-                            "tools_used": tools_used or [],
-                        }), main_loop
-                    )
-
-                # ── 移除流式占位符，防止纯文本回复路径（无 tool rounds）重复落盘 ──
-                if _stream_placeholder_created[0]:
-                    for _pi in range(len(chat_sess.messages) - 1, -1, -1):
-                        _pm = chat_sess.messages[_pi]
-                        if isinstance(_pm, dict) and _pm.get("_streaming"):
-                            del chat_sess.messages[_pi]
-                            break
-                    _stream_placeholder_created[0] = False
-
-                tail = merge_llm_tail_into_full(chat_sess.messages, api_msgs, n_before_ref[0])
-                _model_name = getattr(llm, "model", "")
-                _ctx: dict[str, Any] = {}
-                # 先写入 context_usage（含 peak），避免后续异步 persist 落盘旧值
-                try:
-                    _proj_ctx = build_api_projection_messages(
-                        chat_sess.messages,
-                        skills_suffix=_skills_suffix,
-                        **_kwargs,
-                    )
-                    await asyncio.to_thread(
-                        finalize_episodic_for_llm,
-                        _proj_ctx,
-                        chat_sess.metadata,
-                        agent_id=agent_id,
-                        session_id=session_id,
-                        project_id=project_id or None,
-                        compact_happened=False,
-                    )
-                    _ctx = build_context_usage_from_run(
-                        _proj_ctx,
-                        loop_meta=_loop_meta,
-                        last_meta=_last_meta if isinstance(_last_meta, dict) else None,
-                        model_name=_model_name,
-                    )
-                except Exception:
-                    logger.exception("build context_usage snapshot failed")
-                    with contextlib.suppress(Exception):
-                        _ctx = build_context_usage_from_run(
-                            api_msgs,
-                            loop_meta=_loop_meta,
-                            last_meta=_last_meta if isinstance(_last_meta, dict) else None,
-                            model_name=_model_name,
-                        )
-                try:
-                    if isinstance(_ctx, dict) and _ctx:
-                        if not isinstance(chat_sess.metadata, dict):
-                            chat_sess.metadata = {}
-                        apply_context_usage_metadata(
-                            chat_sess.metadata,
-                            _ctx,
-                            updated_at=chat_sess.updated_at or "",
-                        )
-                        persist_chat_session(chat_sess, agent_id)
-                except Exception:
-                    logger.exception("persist context_usage failed")
-                try:
-                    loop = asyncio.get_running_loop()
-                    loop.run_in_executor(None, persist_chat_session, chat_sess, agent_id)
-                except Exception:
-                    logger.exception("persist_chat_session failed")
-                try:
-                    record_chat_turn_diary(
-                        agent_id,
-                        user_text=message,
-                        reply=reply or "",
-                        tools_used=tools_used,
-                        project_id=project_id or None,
-                    )
-                except Exception:
-                    pass
-                try:
-                    # auto-continue 注入的 nudge 消息不应参与标题生成
-                    # （否则标题会变成"继续完成未完成事项"而非用户原始意图）
-                    # 默认 nudge 以 "请继续完成未完成事项" 开头，
-                    # domain playbook 以 "上一段连续在" 开头
-                    _nudge_filtered: list[int] = []
-                    for _i, _m in enumerate(chat_sess.messages):
-                        if (
-                            isinstance(_m, dict)
-                            and _m.get("role") == "user"
-                            and isinstance(_m.get("content"), str)
-                            and (
-                                _m["content"].startswith(_DEFAULT_AUTO_CONTINUE_NUDGE[:20])
-                                or _m["content"].startswith("上一段连续在")
-                            )
-                        ):
-                            _nudge_filtered.append(_i)
-                    for _i in reversed(_nudge_filtered):
-                        chat_sess.messages.pop(_i)
-                    maybe_llm_refresh_session_title(llm, chat_sess)
-                except Exception:
-                    logger.exception("session title refresh failed")
-                trace_out = [
-                    {
-                        # WebUI 读 row.tool；run_llm_tool_loop 写 row.name — 两边对齐
-                        "tool": t.get("name", ""),
-                        "name": t.get("name", ""),
-                        "arguments": t.get("arguments", ""),
-                        "result": t.get("result", ""),
-                    }
-                    for t in tool_trace
-                ]
-                # ── Token 用量精确计算（基于 API 返回的 usage） ──
-                _acc = {}
-                _cost_info = {}
-                _total_cost_info = {}
-                _api_usage = {}
-                try:
-                    from codeagent.core.usage_billing import merge_accumulated_usage
-
-                    _api_usage = dict(_loop_meta.get("usage_summary", {}) or {})
-                    _model_name = getattr(llm, "model", "") or _model_name
-                    _prev = chat_sess.metadata.get("accumulated_usage", {}) or {}
-                    _acc, _cost_info, _total_cost_info = merge_accumulated_usage(
-                        _prev, _model_name, _api_usage
-                    )
-                    chat_sess.metadata["accumulated_usage"] = _acc
-                    from seed.core.agent_runtime import _get_compact_min_tokens as _get_cmt
-                    _ctx_pt = int(_ctx.get("prompt_tokens") or 0)
-                    _ws_evt = {
-                        "type": "context_usage",
-                        "session_id": session_id,
-                        "agent_id": agent_id,
-                        "prompt_tokens": _ctx_pt,
-                        "peak_prompt_tokens": int(_ctx.get("peak_prompt_tokens") or _ctx_pt),
-                        "context_limit": _ctx.get("context_limit", 0),
-                        "compact_min_tokens": _get_cmt(),
-                        "message_count": _ctx.get("message_count", 0),
-                        "token_usage": _api_usage,
-                        "accumulated_usage": _acc,
-                        "cost": _cost_info,
-                        "accumulated_cost": _total_cost_info,
-                        "model": _model_name,
-                    }
-                    asyncio.run_coroutine_threadsafe(
-                        _broadcast_session_event(agent_id, session_id, _ws_evt), main_loop
-                    )
-                except Exception:
-                    logger.exception("merge accumulated usage failed")
-                    _api_usage = {}
-                    _cost_info = {}
-                try:
-                    persist_chat_session(chat_sess, agent_id)
-                except Exception:
-                    logger.exception("persist session after billing failed")
-
-                return JSONResponse(
-                    {
-                        "reply": reply,
-                        "session_id": session_id,
-                        "tools_used": tools_used,
-                        "tool_trace": trace_out,
-                        "token_usage": _api_usage,
-                        "context": _ctx,
-                        "cost": _cost_info,
-                        "accumulated_cost": _total_cost_info,
-                        "accumulated_usage": _acc,
-                        "model": _model_name,
-                        "cancelled": bool(_run_was_cancelled),
-                    }
-                )
-            except LLMError as e:
-                with contextlib.suppress(Exception):
-                    chat_sess.messages.pop()
-                return JSONResponse({"detail": str(e)}, status_code=502)
-            finally:
-                set_active_llm_session(None)
-                set_active_project_episodic(False)
-                clear_active_project_workspace()
-                if emitter_token:
-                    with contextlib.suppress(Exception):
-                        reset_chat_event_emitter(emitter_token)
-
-        except asyncio.CancelledError:
-            _ev = ACTIVE_CHAT_CANCELS.get(_run_mkey)
-            if _ev is not None:
-                _ev.set()
-            raise
-        finally:
-            if _run_started:
-                _running_discard(_run_mkey)
-                PENDING_INJECTIONS.pop(_run_mkey, None)
-                _ev = ACTIVE_CHAT_CANCELS.get(_run_mkey)
-                if _ev is not None:
-                    _ev.set()
-                ACTIVE_CHAT_CANCELS.pop(_run_mkey, None)
-                if _cancel_token is not None:
-                    with contextlib.suppress(Exception):
-                        reset_chat_cancel_checker(_cancel_token)
-                with contextlib.suppress(Exception):
-                    await _broadcast_session_event(agent_id, session_id, {
-                        "type": "run_finished",
-                        "cancelled": bool(_run_was_cancelled),
-                    })
-                    if _run_was_cancelled:
-                        await _broadcast_session_event(agent_id, session_id, {
-                            "type": "chat_cancelled",
-                        })
+            if result.get("queued") or result.get("skipped"):
+                return JSONResponse(result, status_code=202)
+            return JSONResponse(result)
+        except LLMError as e:
+            return JSONResponse({"detail": str(e)}, status_code=502)
 
     async def api_chat_stop(request: Request) -> JSONResponse:
         try:
@@ -1239,6 +511,48 @@ def create_app():
     if tok:
         middleware.append(Middleware(WebUIAuthMiddleware, project_root=project_root))
 
+    # ── Cron 执行：复用 WebUI 消息口（run_chat_turn） ──
+    # seed 只负责"何时触发"（crontab 解析/防重入）；执行走 codeagent 的 chat
+    # 管道，cron 获得与 WebUI 一致的 running 状态、消息注入（插话）、可停止、
+    # 上下文压缩与持久化。通过 seed 的 register_cron_job_handler 单向注入
+    # （seed 不反向依赖 codeagent）。
+    async def _cron_run_via_chat_turn(job: dict) -> dict:
+        from codeagent.server.chat_turn import run_chat_turn
+        from datetime import datetime, timezone
+
+        jid = str(job.get("id") or "").strip() or "cron-job"
+        agent_id = str(job.get("agent_id") or "").strip() or "default"
+        sid = str(job.get("session_id") or "").strip() or f"cron-{jid}"
+        prompt = str(job.get("prompt") or "").strip()
+        if not prompt:
+            return {"skipped": True, "reason": "empty_prompt"}
+        max_rounds_raw = job.get("max_tool_rounds")
+        try:
+            max_rounds = (
+                max(1, int(max_rounds_raw)) if max_rounds_raw is not None else None
+            )
+        except (TypeError, ValueError):
+            max_rounds = None
+        user_msg = {
+            "role": "user",
+            "content": f"[cron:{jid}] {prompt}",
+            "ts": datetime.now(timezone.utc).isoformat(),
+        }
+        return await run_chat_turn(
+            agent_id=agent_id,
+            session_id=sid,
+            user_msg=user_msg,
+            project_id=str(job.get("project_id") or "").strip() or "",
+            max_tool_rounds=max_rounds,
+            channel="Cron",
+            source=f"cron:{jid}",
+            refresh_title=False,
+            log_diary=False,
+            emit_ws=True,
+            broadcast_fn=_broadcast_session_event,
+            if_busy="skip",
+        )
+
     # ── Cron：Starlette 1.x 用 lifespan（on_startup 已移除）；且 AsyncIOScheduler 需要已有运行中的 loop ──
     @asynccontextmanager
     async def _lifespan(_app: Starlette):
@@ -1262,6 +576,16 @@ def create_app():
                         _register_main_loop()
                     except Exception as exc:
                         logger.warning("cron: register_main_loop failed: %s", exc)
+                # cron 复用 WebUI 消息口：注入 run_chat_turn handler
+                # （seed 无 register_cron_job_handler 时降级为内置实现）
+                try:
+                    _register_handler = getattr(
+                        _cron_sched, "register_cron_job_handler", None
+                    )
+                    if _register_handler is not None:
+                        _register_handler(_cron_run_via_chat_turn)
+                except Exception as exc:
+                    logger.warning("cron: register_cron_job_handler failed: %s", exc)
                 try:
                     _start_cron_scheduler()
                 except Exception as exc:
