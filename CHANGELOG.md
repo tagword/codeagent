@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.34 (2026-08-27)
+
+- fix(mcp): `mcp_call` 调用必崩修复 — `ToolExecutor` 调度参数 `tool_name` 与 `mcp_call` 工具入参 `tool_name`（远程工具名）同名冲突，`execute_async("mcp_call", tool_name=..., ...)` 抛 `TypeError: got multiple values for argument 'tool_name'`，请求到不了 MCP server。修复：executor 调度参数改名为 `tool`（bundled seed-kernel，见 tagword/seed@57fceef）。新增 4 个回归用例（sync/async × execute/execute_with_validation）
+
 ## 1.1.33 (2026-08-27)
 
 - feat(chat): `api_chat` 抽薄壳 + `run_chat_turn` 核心抽取 — 聊天核心逻辑独立为 `chat_turn.py`，cron 任务复用 WebUI 消息口（同一套会话/上下文处理，不再各写各的）；`app_factory.py` 相应精简 ~800 行
