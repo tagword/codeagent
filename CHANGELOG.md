@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.33 (2026-08-27)
+
+- feat(chat): `api_chat` 抽薄壳 + `run_chat_turn` 核心抽取 — 聊天核心逻辑独立为 `chat_turn.py`，cron 任务复用 WebUI 消息口（同一套会话/上下文处理，不再各写各的）；`app_factory.py` 相应精简 ~800 行
+- fix(server): WebUI `on_round_persist` 增量合并兼容 mid-loop compact — `n_before_ref` 索引失效（compact 后消息位移）时退化为最后一条 user 消息之后，防止工具循环输出丢失
+- feat(packaging): PyPI 元数据营销优化 — classifiers + project_urls（Homepage/Repository/Changelog）+ description
+- docs(readme): 营销导向重写 + 真实界面截图（替换侧边栏暴露本地项目名的旧截图）+ 官网徽章（codeagent.tagword.cn）
+
 ## 1.1.32 (2026-08-18)
 
 - fix(webui): cron 定时任务时间配置保存 bug — ①daily/weekly/monthly 修改「分钟」保存不生效（`readFreqFromForm` 用 `querySelector('.cron-fld-minute')` 误取 hidden 的 hours-block 分钟下拉）；②「每 N 小时」模式非档位分钟（如 7 分）无选中项静默变 0 分（硬编码档位表缺动态插入）；③后端 `save_cron_job` 丢弃 `max_continuations`、`cron_status_for_ui` 不回显 `max_tool_rounds`/`max_continuations`（UI 编辑已有任务时轮数静默回退默认 30→12）。修复：minute select 类名按模式区分（`cron-fld-minute-hours`/`cron-fld-minute-time`）+ 改用 `minutesOptions()` 动态插入非档位值；依赖 seed-kernel ≥1.0.17 保留字段
