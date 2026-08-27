@@ -69,6 +69,37 @@ def _chmod_exec(path: Path) -> None:
     path.chmod(mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
 
+def _download_with_timeout(url: str, dest: Path, *, timeout: float = 120.0) -> None:
+    """Download a URL to dest with a hard cap on *any* stall.
+
+    `urllib.urlopen(timeout=...)` only bounds the TCP connect; once the
+    response body starts streaming, a stalled peer can hang `copyfileobj`
+    indefinitely (observed on Windows runners: node/ast-grep download hangs
+    the Stage step until GitHub kills the job).  We instead read in chunks
+    with an explicit per-read socket timeout, so a stalled transfer raises
+    within `timeout` seconds and we can fall back / fail loudly instead of
+    hanging.
+    """
+    import socket
+
+    req = urllib.request.Request(url, headers={"User-Agent": "CodeAgent-bundle/1.0"})
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        # 给底层 socket 设置读超时：resp.read(chunk) 在数据停滞时也会超时
+        sock = resp.fp.raw._sock if hasattr(resp, "fp") and hasattr(resp.fp, "raw") else None
+        if sock is not None:
+            try:
+                sock.settimeout(timeout)
+            except Exception:
+                pass
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        with open(dest, "wb") as out:
+            while True:
+                chunk = resp.read(64 * 1024)
+                if not chunk:
+                    break
+                out.write(chunk)
+
+
 def _copy_exec(src: Path, dest: Path) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(src, dest)
@@ -245,9 +276,7 @@ def _download_ast_grep() -> None:
             zip_path.unlink()
         print(f"  ↓ {url}")
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": "CodeAgent-bundle/1.0"})
-            with urllib.request.urlopen(req, timeout=120) as resp, open(zip_path, "wb") as out:
-                shutil.copyfileobj(resp, out)
+            _download_with_timeout(url, zip_path)
         except Exception as exc:
             print(f"  ⚠ download failed: {exc}")
             if _use_local_fallback():
@@ -331,9 +360,7 @@ def _bundle_node() -> None:
                 if not zip_path.is_file():
                     print(f"  ↓ {url}")
                     try:
-                        req = urllib.request.Request(url, headers={"User-Agent": "CodeAgent-bundle/1.0"})
-                        with urllib.request.urlopen(req, timeout=120) as resp, open(zip_path, "wb") as out:
-                            shutil.copyfileobj(resp, out)
+                        _download_with_timeout(url, zip_path)
                     except Exception as exc:
                         raise SystemExit(f"node download failed and no system node found: {exc}") from exc
                 with tempfile.TemporaryDirectory(prefix="codeagent-node-") as tmp:
@@ -393,7 +420,7 @@ def _bundle_node() -> None:
         if not tar_path.is_file():
             print(f"  ↓ {url}")
             try:
-                urllib.request.urlretrieve(url, tar_path)
+                _download_with_timeout(url, tar_path)
             except Exception as exc:
                 print(f"  ⚠ download failed: {exc}")
                 for name in ("node", "npm"):

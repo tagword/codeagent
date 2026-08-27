@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.35 (2026-08-27)
+
+- fix(packaging): Windows Stage 卡死根治 — 所有下载（node/ast-grep/mac node tarball）改用 `_download_with_timeout`：分块读取 + 每块 socket 读超时。`urllib.urlopen(timeout=120)` 只限制 TCP 连接建立，响应体开始流式后停滞的对端会让 `copyfileobj` 无限挂起（v1.1.29/1.1.34 Windows 构建反复在 Stage bundled tools 卡到 15min 超时被 kill 的根因）。现在任何停滞都会在超时内抛错 → fallback 或失败可见
+- feat(webui): git 凭据检查改用 `credential fill` 按 host 精确判定（`/api/ui/git` 新增 `action: fill`），前端 PAT 状态卡片不再用 `show` 结果做模糊字符串匹配，避免误判
+- fix(webui): 文件下载 Content-Disposition 支持非 ASCII 文件名 — 按 RFC 5987/6266 输出 `filename*=UTF-8''percent-encoded`（裸 `filename="中文"` 触发 latin-1 header 编码异常 → UnicodeEncodeError 500）
+- chore: `.gitignore` 忽略误建的 `home/` 测试数据库目录
+
 ## 1.1.34 (2026-08-27)
 
 - fix(mcp): `mcp_call` 调用必崩修复 — `ToolExecutor` 调度参数 `tool_name` 与 `mcp_call` 工具入参 `tool_name`（远程工具名）同名冲突，`execute_async("mcp_call", tool_name=..., ...)` 抛 `TypeError: got multiple values for argument 'tool_name'`，请求到不了 MCP server。修复：executor 调度参数改名为 `tool`（bundled seed-kernel，见 tagword/seed@57fceef）。新增 4 个回归用例（sync/async × execute/execute_with_validation）

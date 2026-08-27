@@ -563,19 +563,16 @@ async function _checkPresetPat(index) {
   var hostUrl = _getPresetHttpsUrl(p);
   el.innerHTML = '检查…';
   try {
-    // 用 git credential fill 检查该 host 是否有已存凭据
     var r = await fetch('/api/ui/git', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        command: 'credential', action: 'show',
+        command: 'credential', action: 'fill',
+        host: hostUrl,
       }),
     });
     var j = await r.json();
-    var text = (j && j.result) || '';
-    // 如果 show 结果包含了这个 host，认作已配置
-    var urlPart = hostUrl.replace(/^https?:\/\//, '');
-    el.innerHTML = text.indexOf(urlPart) !== -1 ? '✅' : '❌';
+    el.innerHTML = (j && j.has_credential) ? '✅' : '❌';
   } catch (_) { el.innerHTML = '⚠️'; }
 }
 

@@ -2505,6 +2505,21 @@ def build_webui_api_app(project_root: Path) -> Starlette:
             if action == "show":
                 text = await _git_credential_show(project_root)
                 return JSONResponse({"result": text})
+            if action == "fill":
+                # 按 host 精确检查该主机是否有已存凭据（供前端方案卡片 PAT 状态显示）
+                target = str(body.get("host") or "").strip()
+                if not target:
+                    return JSONResponse({"error": "缺少 host"}, status_code=400)
+                scheme, host = _git_host_from_url(target)
+                if not host:
+                    return JSONResponse({"error": f"无效的 host: {target}"}, status_code=400)
+                rc, out, err = await _git_credential_pipe(
+                    "fill",
+                    f"protocol={scheme}\nhost={host}\n",
+                )
+                if rc == 0 and "password=" in out:
+                    return JSONResponse({"has_credential": True, "host": host})
+                return JSONResponse({"has_credential": False, "host": host})
             if action == "clear":
                 text = await _git_credential_clear()
                 return JSONResponse({"result": text})
@@ -2689,10 +2704,16 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         media_type, _ = mimetypes.guess_type(filename)
         if media_type is None:
             media_type = "application/octet-stream"
+        # RFC 5987/6266：非 ASCII 文件名必须走 filename*=UTF-8''percent-encoded，
+        # 裸 filename="中文" 会触发 latin-1 header 编码异常（UnicodeEncodeError → 500）。
+        from urllib.parse import quote
+
+        ascii_name = filename.encode("ascii", "replace").decode("ascii").replace('"', "'") or "download"
+        disposition = f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(filename, safe='')}"
         return Response(
             content=content,
             media_type=media_type,
-            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+            headers={"Content-Disposition": disposition},
         )
 
     async def api_project_file_serve(request: Request) -> Response:
