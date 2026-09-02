@@ -142,7 +142,7 @@ function recalcTokenUsageFromDom() {
 function connectWs() {
   if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
   if (ws) { try { ws.close(); } catch (e) {} ws = undefined; }
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
   var wsTokQs = '';
   try {
     var wst = tryGetSS(STORAGE_KEYS.WS_TOKEN);
