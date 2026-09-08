@@ -2918,6 +2918,11 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         agent_id = (body.get("id") or "").strip()
         if not agent_id:
             return JSONResponse({"detail": "agent id is required"}, status_code=400)
+        from codeagent.core.paths import _sanitize_agent_id
+        safe_id = _sanitize_agent_id(agent_id)
+        if not safe_id:
+            return JSONResponse({"detail": "invalid agent id"}, status_code=400)
+        agent_id = safe_id
         # Check for conflict
         ad = _agents_dir()
         if (ad / agent_id).exists():
@@ -2970,7 +2975,11 @@ def build_webui_api_app(project_root: Path) -> Starlette:
 
     async def api_agents_update(request: Request) -> JSONResponse:
         agent_id = request.path_params.get("agent_id", "")
-        ad = _agents_dir() / agent_id
+        from codeagent.core.paths import _sanitize_agent_id
+        safe_id = _sanitize_agent_id(agent_id)
+        if not safe_id:
+            return JSONResponse({"detail": "agent not found"}, status_code=404)
+        ad = _agents_dir() / safe_id
         if not ad.is_dir() or not (ad / "persona").is_dir():
             return JSONResponse({"detail": "agent not found"}, status_code=404)
         try:
@@ -2980,7 +2989,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         # Update system prompt
         if "system_prompt" in body:
             sp = (body["system_prompt"] or "").strip()
-            _write_agent_file(agent_id, sp, "persona", "system.md")
+            _write_agent_file(safe_id, sp, "persona", "system.md")
         # Update description
         if "description" in body:
             desc = (body["description"] or "").strip()
@@ -2997,15 +3006,19 @@ def build_webui_api_app(project_root: Path) -> Starlette:
                 tools_file.write_text(json.dumps(tools, indent=2, ensure_ascii=False), encoding="utf-8")
             else:
                 tools_file.unlink(missing_ok=True)
-        return JSONResponse({"agent": {"id": agent_id, "name": agent_id}})
+        return JSONResponse({"agent": {"id": safe_id, "name": safe_id}})
 
     async def api_agents_delete(request: Request) -> JSONResponse:
         agent_id = request.path_params.get("agent_id", "")
-        ad = _agents_dir() / agent_id
+        from codeagent.core.paths import _sanitize_agent_id
+        safe_id = _sanitize_agent_id(agent_id)
+        if not safe_id:
+            return JSONResponse({"detail": "agent not found"}, status_code=404)
+        ad = _agents_dir() / safe_id
         if not ad.is_dir():
             return JSONResponse({"detail": "agent not found"}, status_code=404)
         # Cannot delete default agent
-        if agent_id == "default":
+        if safe_id == "default":
             return JSONResponse({"detail": "cannot delete default agent"}, status_code=403)
         # Recursive delete
         import shutil
