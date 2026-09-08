@@ -95,3 +95,18 @@
   background: var(--accent-soft, #eef2ff); color: var(--accent, #4f46e5);
   border-radius: 999px; font-size: .7rem; font-family: inherit; font-weight: 500;
 }
+
+/* 运行历史面板 */
+.team-history { border: 1px solid var(--border, #ddd); border-radius: 8px; padding: 12px; background: var(--bg-elev, #fafafa); }
+.team-history__head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.team-history__title { font-weight: 600; }
+.team-history__hint { color: var(--text-dim, #888); padding: 8px 0; }
+.team-history__list { display: flex; flex-direction: column; gap: 8px; }
+.team-history__row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 10px; border: 1px solid var(--border, #eee); border-radius: 6px; background: var(--bg, #fff); }
+.team-history__row-main { flex: 1; min-width: 0; }
+.team-history__row-top { display: flex; align-items: center; gap: 8px; }
+.team-history__team { font-weight: 600; }
+.team-history__status { font-size: .8rem; }
+.team-history__meta { font-size: .78rem; color: var(--text-dim, #888); margin-top: 2px; }
+.team-history__row-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.team-history__recover { color: #b45309; }

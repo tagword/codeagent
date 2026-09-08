@@ -189,6 +189,46 @@ def run_team(team_id: str, user_input: str, simulate: bool = False) -> dict:
     return get_run(run_id) or run
 
 
+def rerun_run(run_id: str, simulate: bool = False) -> dict | None:
+    """Re-execute an existing (failed/timeout) run in place.
+
+    Loads the stored run's team + user_input, clears its old steps, resets
+    status to ``running``, and drives the real workflow again in a background
+    thread. Returns the updated run, or ``None`` if the run/team is gone.
+    """
+    run = get_run(run_id)
+    if run is None:
+        return None
+    team_id = run.get("team_id") or ""
+    user_input = run.get("user_input") or ""
+    tf = _teams_dir() / f"{team_id}.json"
+    if not tf.is_file():
+        with contextlib.suppress(Exception):
+            update_run(run_id, {"status": RUN_STATUS_FAILED, "error": f"Team '{team_id}' not found"})
+        return get_run(run_id)
+    team = json.loads(tf.read_text(encoding="utf-8"))
+    team["id"] = team_id
+
+    mode = team.get("mode", "sequential")
+    if mode not in ("sequential", "parallel", "manager"):
+        update_run(run_id, {"status": RUN_STATUS_FAILED, "error": f"Unknown mode: {mode}"})
+        return get_run(run_id)
+
+    # 清空旧步骤，重置为 running 后后台重跑
+    update_run(run_id, {"status": RUN_STATUS_RUNNING, "error": None, "steps": []})
+
+    def _background() -> None:
+        try:
+            _execute_real(run_id, team, user_input, simulate)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("team rerun %s crashed", run_id)
+            with contextlib.suppress(Exception):
+                update_run(run_id, {"status": RUN_STATUS_FAILED, "error": str(exc)})
+
+    threading.Thread(target=_background, name=f"team-rerun-{run_id}", daemon=True).start()
+    return get_run(run_id)
+
+
 # ── 真实执行（后台线程内同步驱动） ────────────────────────────────
 
 def _execute_real(run_id: str, team: dict, user_input: str, simulate: bool) -> None:

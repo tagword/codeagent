@@ -303,36 +303,140 @@ function _stopTeamPoll(runId) {
 function _renderTeamRun(run) {
   var el = document.getElementById('trLive');
   if (!el) return;
-  var steps = run.steps || [];
-  var head = '<div class="team-run-status">' + _teamStatusIcon(run.status) + ' ' + escHtml(run.status)
+  el.innerHTML = _runHeadHtml(run) + '<div class="team-steps">' + _stepsHtml(run) + '</div>';
+}
+
+function _runHeadHtml(run) {
+  return '<div class="team-run-status">' + _teamStatusIcon(run.status) + ' ' + escHtml(run.status)
     + (run.error ? ' <span class="team-run-error">' + escHtml(run.error) + '</span>' : '')
     + '</div>';
-  var stepsHtml = steps.length === 0
-    ? '<div class="team-run-hint">等待成员启动...</div>'
-    : steps.map(function(s, i){
-        var icon = _STEP_ICON[s.type] || '•';
-        var out = s.output || '';
-        var outHtml = out
-          ? '<div class="team-step__output"><pre>' + escHtml(out) + '</pre></div>'
-          : '<div class="team-step__output team-step__output--empty">（该步骤暂无输出）</div>';
-        var inp = s.input ? '<div class="team-step__input"><span class="team-step__lbl">输入</span>' + escHtml(String(s.input).slice(0, 200)) + '</div>' : '';
-        return '<div class="team-step team-step--' + escAttr(s.status) + '">'
-          + '<div class="team-step__head">'
-          + '<span class="team-step__icon">' + icon + '</span>'
-          + '<span class="team-step__agent">' + escHtml(s.agent_id || '?') + '</span>'
-          + '<span class="team-step__type">' + escHtml(s.type || '') + '</span>'
-          + '<span class="team-step__status">' + _teamStatusIcon(s.status) + ' ' + escHtml(s.status) + '</span>'
-          + '</div>'
-          + inp
-          + outHtml
-          + '</div>';
-      }).join('');
-  el.innerHTML = head + '<div class="team-steps">' + stepsHtml + '</div>';
+}
+
+function _stepsHtml(run) {
+  var steps = run.steps || [];
+  if (steps.length === 0) return '<div class="team-run-hint">（无步骤）</div>';
+  return steps.map(function(s){
+    var icon = _STEP_ICON[s.type] || '•';
+    var out = s.output || '';
+    var outHtml = out
+      ? '<div class="team-step__output"><pre>' + escHtml(out) + '</pre></div>'
+      : '<div class="team-step__output team-step__output--empty">（该步骤暂无输出）</div>';
+    var inp = s.input ? '<div class="team-step__input"><span class="team-step__lbl">输入</span>' + escHtml(String(s.input).slice(0, 200)) + '</div>' : '';
+    return '<div class="team-step team-step--' + escAttr(s.status) + '">'
+      + '<div class="team-step__head">'
+      + '<span class="team-step__icon">' + icon + '</span>'
+      + '<span class="team-step__agent">' + escHtml(s.agent_id || '?') + '</span>'
+      + '<span class="team-step__type">' + escHtml(s.type || '') + '</span>'
+      + '<span class="team-step__status">' + _teamStatusIcon(s.status) + ' ' + escHtml(s.status) + '</span>'
+      + '</div>'
+      + inp
+      + outHtml
+      + '</div>';
+  }).join('');
+}
+
+// ── 运行历史 ────────────────────────────────────────────
+function openTeamHistory() {
+  var panel = document.getElementById('teamHistoryPanel');
+  if (!panel) return;
+  panel.style.display = 'block';
+  panel.innerHTML = '<div class="team-history"><div class="team-history__head">'
+    + '<span class="team-history__title">🕘 运行历史</span>'
+    + '<button class="btn btn--ghost btn--sm" onclick="closeTeamHistory()">关闭</button>'
+    + '</div><div class="team-history__hint">加载中...</div></div>';
+  panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  _loadTeamHistory();
+}
+
+function closeTeamHistory() {
+  var panel = document.getElementById('teamHistoryPanel');
+  if (panel) panel.style.display = 'none';
+}
+
+function _loadTeamHistory() {
+  _teamsApi('/api/ui/runs')
+    .then(function(data){
+      var runs = (data.runs || []).slice(0, 30);
+      _renderTeamHistory(runs);
+    })
+    .catch(function(err){
+      var panel = document.getElementById('teamHistoryPanel');
+      if (panel) panel.querySelector('.team-history__hint').textContent = '加载失败: ' + err.message;
+    });
+}
+
+function _renderTeamHistory(runs) {
+  var hintEl = document.querySelector('#teamHistoryPanel .team-history__hint');
+  if (!hintEl) return;
+  if (runs.length === 0) {
+    hintEl.textContent = '还没有运行记录。运行一个团队后，这里会展示历史。';
+    return;
+  }
+  var rows = runs.map(function(r){
+    var teamName = (_teamsCache.find(function(t){ return t.id === r.team_id; }) || {}).name || r.team_id || '?';
+    var when = r.created_at ? new Date(r.created_at * 1000).toLocaleString() : '';
+    var recoverBtn = (r.status === 'failed' || r.status === 'timeout')
+      ? '<button class="btn btn--ghost btn--sm team-history__recover" onclick="recoverTeamRun(\'' + escAttr(r.id) + '\')">恢复重跑</button>'
+      : '';
+    return '<div class="team-history__row">'
+      + '<div class="team-history__row-main">'
+      + '<div class="team-history__row-top">'
+      + '<span class="team-history__team">' + escHtml(teamName) + '</span>'
+      + '<span class="team-history__status">' + _teamStatusIcon(r.status) + ' ' + escHtml(r.status) + '</span>'
+      + '</div>'
+      + '<div class="team-history__meta">' + escHtml(when) + ' · ' + (r.steps ? r.steps.length : 0) + ' 个步骤'
+      + (r.user_input ? ' · ' + escHtml(String(r.user_input).slice(0, 60)) : '') + '</div>'
+      + '</div>'
+      + '<div class="team-history__row-actions">'
+      + '<button class="btn btn--ghost btn--sm" onclick="viewTeamRun(\'' + escAttr(r.id) + '\')">查看</button>'
+      + recoverBtn
+      + '</div>'
+      + '</div>';
+  }).join('');
+  var wrap = document.querySelector('#teamHistoryPanel .team-history');
+  if (wrap) {
+    var box = document.createElement('div');
+    box.className = 'team-history__list';
+    box.innerHTML = rows;
+    hintEl.replaceWith(box);
+  }
+}
+
+function viewTeamRun(runId) {
+  _teamsApi('/api/ui/runs/' + encodeURIComponent(runId))
+    .then(function(data){
+      var run = data.run || data;
+      var box = document.querySelector('#teamHistoryPanel .team-history');
+      if (!box) return;
+      box.innerHTML = '<div class="team-history__head">'
+        + '<span class="team-history__title">🕘 运行详情 ' + escHtml(run.id) + '</span>'
+        + '<button class="btn btn--ghost btn--sm" onclick="openTeamHistory()">← 返回列表</button>'
+        + '</div>'
+        + _runHeadHtml(run)
+        + '<div class="team-steps">' + _stepsHtml(run) + '</div>';
+    })
+    .catch(function(err){ setTeamsStatus('加载运行失败: ' + err.message, 'err'); });
+}
+
+function recoverTeamRun(runId) {
+  _teamsApi('/api/ui/runs/' + encodeURIComponent(runId) + '/recover', { method: 'POST' })
+    .then(function(){
+      setTeamsStatus('运行 ' + runId + ' 已标记为可恢复，正在重新执行', 'ok');
+      // 重新轮询该 run 直到结束
+      _startTeamPoll(runId);
+      viewTeamRun(runId);
+    })
+    .catch(function(err){ setTeamsStatus('恢复失败: ' + err.message, 'err'); });
 }
 
 // ── 初始化（随 Agent 页加载） ────────────────────────────
 function initTeamsPanel() {
   // 首次进入 agent 页时加载；之后每次切回 agent 页也可手动点刷新
+  var hb = document.getElementById('btnTeamHistory');
+  if (hb && !hb.getAttribute('data-bound')) {
+    hb.setAttribute('data-bound', '1');
+    hb.onclick = function(){ openTeamHistory(); };
+  }
   loadTeamsPanel();
 }
 

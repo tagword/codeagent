@@ -182,16 +182,18 @@ def build_teams_routes(project_root: Path) -> list[Route]:
     # ── Health / Watchdog ──────────────────────────────────────
 
     async def api_runs_recover(request: Request) -> JSONResponse:
-        """POST /api/ui/runs/{run_id}/recover — mark a failed run for recovery."""
+        """POST /api/ui/runs/{run_id}/recover — re-execute a failed/timeout run."""
         run_id = request.path_params.get("run_id", "")
-        from codeagent.server.team_engine import get_run, update_run
+        from codeagent.server.team_engine import get_run, rerun_run
         run = get_run(run_id)
         if run is None:
             return JSONResponse({"detail": "run not found"}, status_code=404)
         if run.get("status") not in ("failed", "timeout"):
             return JSONResponse({"detail": "only failed/timeout runs can be recovered"}, status_code=400)
-        update_run(run_id, {"status": "pending", "error": None})
-        return JSONResponse({"detail": f"run {run_id} marked for recovery", "run": update_run(run_id, {})})
+        updated = rerun_run(run_id)
+        if updated is None:
+            return JSONResponse({"detail": "run not found"}, status_code=404)
+        return JSONResponse({"detail": f"run {run_id} re-executing", "run": updated})
 
     # ── Routes ─────────────────────────────────────────────────
 

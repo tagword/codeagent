@@ -255,3 +255,27 @@ def test_real_manager_passes_worker_role_prompt(tmp_path, monkeypatch):
     assert captured["w1"]["role_prompt"] == "你是测试"
     assert captured["w2"]["role_prompt"] == "你是文档"
     assert "子任务A" in captured["w1"]["task"]
+
+
+# ── rerun_run（失败 run 恢复重跑） ────────────────────────
+
+def test_rerun_run_reexecutes_and_clears_steps(tmp_path, monkeypatch):
+    """rerun_run 应清空旧步骤、重置为 running、后台重跑同团队同输入。"""
+    _patch_dirs(monkeypatch, tmp_path)
+    # 建团队文件
+    td = eng._teams_dir()
+    td.mkdir(parents=True, exist_ok=True)
+    (td / "t1.json").write_text(json.dumps({"name": "t1", "members": ["a1", "a2"], "mode": "sequential"}), encoding="utf-8")
+    # 手动造一个 failed run（带旧步骤）
+    run = eng.create_run("t1", "input")
+    rid = run["id"]
+    eng.update_run(rid, {"status": "failed", "error": "boom", "steps": [{"step_id": "old", "status": "failed", "output": "x"}]})
+    # rerun（simulate 模式，不调真实 LLM）
+    updated = eng.rerun_run(rid, simulate=True)
+    assert updated["status"] == "running"
+    assert not updated.get("error")
+    assert updated["steps"] == []  # 旧步骤已清
+    # 等待后台线程跑完
+    done = _wait_done(rid)
+    assert done["status"] == "done"
+    assert len(done["steps"]) == 2  # 两个成员各一步（simulate）
