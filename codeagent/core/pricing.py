@@ -77,10 +77,16 @@ def calculate_cost(model: str, usage: dict[str, Any]) -> dict[str, Any]:
 
     prices = PRICING_TABLE[std_model]
 
-    cache_hit = int(usage.get("prompt_cache_hit_tokens", 0) or 0)
-    cache_miss = int(usage.get("prompt_cache_miss_tokens", 0) or 0)
-    output = int(usage.get("completion_tokens", 0) or 0)
+    def _safe_int(key: str) -> int:
+        """读取 usage 字段并安全转 int；非数值/缺失按 0 处理（容错异常 API 字段）。"""
+        try:
+            return int(usage.get(key, 0) or 0)
+        except (TypeError, ValueError):
+            return 0
 
+    cache_hit = _safe_int("prompt_cache_hit_tokens")
+    cache_miss = _safe_int("prompt_cache_miss_tokens")
+    output = _safe_int("completion_tokens")
     cache_hit_cost = cache_hit * prices["input_cache_hit"] / 1_000_000
     cache_miss_cost = cache_miss * prices["input_cache_miss"] / 1_000_000
     output_cost = output * prices["output"] / 1_000_000
