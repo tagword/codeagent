@@ -268,6 +268,39 @@ self_reflect / 经验提炼机制 / skill 系统 / cron 定时 / 自主多轮执
 - 要建 RSI 项目，需先在 git.tagword.cn 创建 codeagent 的远端副本（或确认用哪个仓库作为 RSI 迭代基地）。
 - **未决问题**：RSI 项目应基于哪个仓库？是否用 git.tagword.cn 的私有副本作为"隔离实验场"，GitHub 作为"稳定发布源"？
 
+### 6.8 RSI 项目落地：git.tagword.cn 建仓 + 隔离副本验证（2026-09-08 实测）
+
+**用户授权**：用户说"既然完全交给你了，你不应该问我"，授权 Agent 连续自主推进 B 方案。
+
+**已完成（代码托管层）**：
+- git.tagword.cn 建 `tagword` 组织
+- 建**私有**仓库 `tagword/codeagent-rsi`（RSI 隔离实验场）
+- 从 GitHub codeagent（85a2310）镜像基线到 main
+- 写入 `RSI-MANIFESTO.md`（北极星/双模式/价值契约/安全框架）+ `RSI-DESIGN.md`（完整讨论纪要），commit b0785bb 已推送
+- **注意**：codeagent 上游 `.gitignore` 忽略 `docs/`（稳定版既定规则），故 RSI 设计文档放仓库根部
+
+**隔离工作区（用户强调的纪律）**：
+- 建立 `/home/u2/agent/.rsi/`（repos / workspace / logs / manifest）
+- 撤销误加的 gitea-rsi remote（开发目录恢复干净）
+- 固化纪律文档 `.codeagent/default/docs/workspace-isolation-discipline.md`
+- **铁律**：副本/实验操作一律在 `.rsi/` 下，绝不混入 `codeagent/` 开发目录 或 `.codeagent/` 配置目录
+
+**副本隔离机制验证（决定性突破）**：
+- `call_agent`/`dispatch` 工具当前**不可用**（AgentRegistry 为空，需宿主进程注册 AutonomousAgent 实例）
+- **真正的副本机制 = 独立进程 + 环境变量隔离**：
+  ```
+  SEED_AGENT_ID=copy1  SEED_PROJECT_ROOT=/home/u2/agent/.rsi/home \
+    codeagent chat --llm --max-tool-rounds N "任务"
+  ```
+- **验证成功**：隔离副本（copy1）启动完整 LLM 工具循环，识别 72 工具，独立执行任务并返回结果
+- **隔离生效**：副本记忆/persona 落在 `.rsi/home/`，不污染真实配置 `/home/u2/.codeagent/agents/default/`
+- **LLM 配置**：副本需显式传 `SEED_LLM_BASEURL` / `SEED_LLM_MODEL` / `SEED_LLM_API_KEY`（或建隔离 config），因隔离 home 不继承真实 config
+- **LLM 模型**：deepseek/deepseek-v4-flash（真实预设，base https://api.deepseek.com/v1）
+
+**能力边界澄清**：
+- 副本能迭代的是**可编辑软件层**（persona 配置/skills/memory/流程），改不了底层模型权重
+- 副本机制解决"安全试错"，不解决"方向对不对"——方向需外部锚点（用户）把关
+
 ---
 
 ## 七、待落地事项（下一步）
