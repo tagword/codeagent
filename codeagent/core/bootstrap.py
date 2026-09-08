@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
-from typing import Optional
 
 from codeagent.core.env import apply_default_product_home
 from codeagent.core.seed_bridge import bridge_codeagent_env_to_seed
@@ -127,7 +126,7 @@ def _ensure_codeagent_bootstrap_md(home: Path) -> None:
     dest.write_text(_CODEAGENT_BOOTSTRAP_MD, encoding="utf-8")
 
 
-def bootstrap_codeagent_runtime(base: Optional[Path] = None) -> Path:
+def bootstrap_codeagent_runtime(base: Path | None = None) -> Path:
     """
     1. Default data root ``~/.codeagent`` (or ``CODEAGENT_HOME``)
     2. Set ``SEED_PROJECT_ROOT`` so Seed / seed-tools use the same tree

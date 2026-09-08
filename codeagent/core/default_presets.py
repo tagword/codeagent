@@ -16,7 +16,6 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Dict
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +69,7 @@ def _read_legacy_single_id() -> str:
         return ""
 
 
-def get_default_preset_ids() -> Dict[str, str]:
+def get_default_preset_ids() -> dict[str, str]:
     """Return a mapping ``{slot: preset_id}`` for every slot that has a default.
 
     Reads the new JSON map first; falls back to ``codeagent.default_preset_ids.json``
@@ -83,7 +82,7 @@ def get_default_preset_ids() -> Dict[str, str]:
         except (json.JSONDecodeError, OSError):
             data = {}
         if isinstance(data, dict):
-            out: Dict[str, str] = {}
+            out: dict[str, str] = {}
             for slot in SLOTS:
                 v = data.get(slot)
                 if isinstance(v, str) and v.strip():
@@ -97,7 +96,7 @@ def get_default_preset_ids() -> Dict[str, str]:
         except (json.JSONDecodeError, OSError):
             data = {}
         if isinstance(data, dict):
-            out: Dict[str, str] = {}
+            out: dict[str, str] = {}
             for slot in SLOTS:
                 v = data.get(slot)
                 if isinstance(v, str) and v.strip():
@@ -124,9 +123,9 @@ def set_default_preset_id_for_slot(slot: str, preset_id: str) -> None:
     _write_default_preset_ids(cur)
 
 
-def set_default_preset_ids(mapping: Dict[str, str]) -> None:
+def set_default_preset_ids(mapping: dict[str, str]) -> None:
     """Bulk-replace the entire default map (ignoring unknown slots)."""
-    out: Dict[str, str] = {}
+    out: dict[str, str] = {}
     for slot in SLOTS:
         if slot in mapping:
             v = mapping[slot]
@@ -135,7 +134,7 @@ def set_default_preset_ids(mapping: Dict[str, str]) -> None:
     _write_default_preset_ids(out)
 
 
-def _write_default_preset_ids(mapping: Dict[str, str]) -> None:
+def _write_default_preset_ids(mapping: dict[str, str]) -> None:
     p = _new_path()
     p.parent.mkdir(parents=True, exist_ok=True)
     try:

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Tuple
+from typing import Any
 
 from codeagent.core.pricing import calculate_cost
 
@@ -15,7 +15,7 @@ USAGE_KEYS = (
 )
 
 
-def _add_usage_keys(target: Dict[str, Any], source: Dict[str, Any]) -> None:
+def _add_usage_keys(target: dict[str, Any], source: dict[str, Any]) -> None:
     for key in USAGE_KEYS:
         value = source.get(key, 0)
         if not isinstance(value, (int, float)):
@@ -24,10 +24,10 @@ def _add_usage_keys(target: Dict[str, Any], source: Dict[str, Any]) -> None:
 
 
 def merge_accumulated_usage(
-    prev: Dict[str, Any] | None,
+    prev: dict[str, Any] | None,
     model_name: str,
-    api_usage: Dict[str, Any] | None,
-) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
+    api_usage: dict[str, Any] | None,
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     """Merge one LLM round into session ``accumulated_usage``.
 
     Returns:
@@ -36,11 +36,11 @@ def merge_accumulated_usage(
     prev = prev or {}
     api_usage = dict(api_usage or {})
 
-    acc: Dict[str, Any] = {}
+    acc: dict[str, Any] = {}
     _add_usage_keys(acc, prev)
     _add_usage_keys(acc, api_usage)
 
-    per_model: Dict[str, Dict[str, Any]] = {
+    per_model: dict[str, dict[str, Any]] = {
         name: dict(data) for name, data in (prev.get("per_model") or {}).items()
     }
     model_usage = dict(per_model.get(model_name) or {})

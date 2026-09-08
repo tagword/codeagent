@@ -6,7 +6,6 @@ import asyncio
 import contextlib
 import json
 import logging
-import os
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
@@ -33,8 +32,8 @@ def create_app():
     from starlette.routing import Mount, Route, WebSocketRoute
     from starlette.websockets import WebSocket
 
-    from codeagent.server.webui_api_app import build_webui_api_app
     from codeagent.core.bootstrap import bootstrap_codeagent_runtime
+    from codeagent.server.webui_api_app import build_webui_api_app
 
     bootstrap_codeagent_runtime()
 
@@ -134,11 +133,11 @@ def create_app():
         has_audio = bool(_extra.get("has_audio"))
 
         message = str(user_msg.get("content") or "").strip()
+        from codeagent.core.audio_models import preset_supports_audio_id
         from codeagent.core.image_understanding import (
             image_attachment_allowed,
             video_attachment_allowed,
         )
-        from codeagent.core.audio_models import preset_supports_audio_id
 
         if has_image and not image_attachment_allowed(vision_llm_id):
             return JSONResponse(
@@ -168,8 +167,9 @@ def create_app():
 
         _forced_mcp_skill_suffix = ""
         if message.startswith("/skill") or (message.startswith("/") and ":" in message.split(None, 1)[0]):
-            from codeagent.server.webui_api_app import _parse_mcp_skill_slash_command
             from seed_tools.mcp import mcp_skill_handler
+
+            from codeagent.server.webui_api_app import _parse_mcp_skill_slash_command
 
             try:
                 _mcp_sid, _mcp_skill, _mcp_args = _parse_mcp_skill_slash_command(message)
@@ -311,7 +311,7 @@ def create_app():
         if not isinstance(overrides_in, dict):
             return JSONResponse({"detail": "overrides must be an object"}, status_code=400)
         # Running sessions must be stopped first (consistency with rollback endpoint)
-        from . import _running_contains, _memkey
+        from . import _memkey, _running_contains
         if _running_contains(_memkey(agent_id, session_id)):
             return JSONResponse(
                 {"detail": "session is currently running, stop it first"}, status_code=409
@@ -344,7 +344,7 @@ def create_app():
         if not session_id:
             return JSONResponse({"detail": "session_id required"}, status_code=400)
         agent_id = _resolve_session_agent_id(body)
-        from . import _running_contains, _memkey
+        from . import _memkey, _running_contains
         if _running_contains(_memkey(agent_id, session_id)):
             return JSONResponse(
                 {"detail": "session is currently running, stop it first"}, status_code=409
@@ -359,7 +359,7 @@ def create_app():
 
     async def api_compact_config_get(request: Request) -> JSONResponse:
         """GET /api/ui/compact-config — return current compact min tokens."""
-        from seed.core.agent_runtime import _get_compact_min_tokens, _compact_min_tokens_override
+        from seed.core.agent_runtime import _compact_min_tokens_override, _get_compact_min_tokens
         return JSONResponse({
             "compact_min_tokens": _get_compact_min_tokens(),
             "runtime_override": _compact_min_tokens_override,
@@ -394,7 +394,8 @@ def create_app():
             {"ok": true, "message_idx": 42, "messages_since": [<messages from idx onwards>]}
         """
         from seed.core.llm_sess import load_or_create_chat_session, persist_chat_session
-        from . import _running_contains, _memkey
+
+        from . import _memkey, _running_contains
 
         try:
             body = await request.json()
@@ -403,13 +404,6 @@ def create_app():
 
         session_id = str(body.get("session_id") or "web-chat").strip() or "web-chat"
         from codeagent.core import env as ca_env
-        from seed.core.env_access import (
-            CHAT_AUTO_CONTINUE_MAX_SEGMENTS,
-            CHAT_AUTO_CONTINUE_ON_LIMIT,
-            MAX_TOOL_ROUNDS,
-            env_truthy,
-            pick_int,
-        )
 
         agent_id = str(body.get("agent_id") or ca_env.default_agent_id()).strip() or "default"
         # 0 = system message, so minimal sensible value is 1
@@ -517,8 +511,9 @@ def create_app():
     # 上下文压缩与持久化。通过 seed 的 register_cron_job_handler 单向注入
     # （seed 不反向依赖 codeagent）。
     async def _cron_run_via_chat_turn(job: dict) -> dict:
-        from codeagent.server.chat_turn import run_chat_turn
         from datetime import datetime, timezone
+
+        from codeagent.server.chat_turn import run_chat_turn
 
         jid = str(job.get("id") or "").strip() or "cron-job"
         agent_id = str(job.get("agent_id") or "").strip() or "default"

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Optional  # noqa: UP045
 
 import seed.core.env_access as _ea
 from codeagent.core import env as ca_env
@@ -33,7 +32,7 @@ def _compute_persona_hash(agent_id: str) -> str:
 
     # Also hash project-level rules files so edits invalidate the cache
     try:
-        from codeagent.core.paths import read_global_rules, read_agent_rules
+        from codeagent.core.paths import read_agent_rules, read_global_rules
         gr = read_global_rules()
         if gr:
             h.update(gr.encode("utf-8"))
@@ -77,9 +76,10 @@ def _codeagent_vars_dict(agent_id: str) -> dict[str, str]:
     The ``SESSIONS_ARTIFACTS`` remains under the system-level agent home
     (shared across all projects for cross-session artifact access).
     """
-    from seed.core.paths import agent_home
-    from codeagent.core.paths import _agent_work_dir
     from pathlib import Path
+
+    from codeagent.core.paths import _agent_work_dir
+    from seed.core.paths import agent_home
 
     root = Path.cwd().resolve()
     wd = _agent_work_dir(agent_id, root)
@@ -114,8 +114,8 @@ def _runtime_info_block() -> str:
     time, avoiding cross-platform command errors and stale LLM-training dates.
     """
     import datetime
-    import platform
     import os
+    import platform
     from pathlib import Path
 
     now = datetime.datetime.now(datetime.timezone.utc).astimezone()
@@ -163,7 +163,7 @@ def fresh_system_prompt(*, agent_id: str | None = None) -> str:
     )
 
     # ── Append project-level constraints (rules.md) ──
-    from codeagent.core.paths import read_global_rules, read_agent_rules
+    from codeagent.core.paths import read_agent_rules, read_global_rules
 
     rules_parts: list[str] = []
     gr = read_global_rules()
@@ -176,7 +176,7 @@ def fresh_system_prompt(*, agent_id: str | None = None) -> str:
         base += "\n\n---\n" + "\n\n".join(rules_parts)
 
     # Merge Seed vars + CodeAgent vars for memory.md rendering
-    from seed.core.config_plane import render_persona, _build_seed_vars_dict
+    from seed.core.config_plane import _build_seed_vars_dict, render_persona
 
     seed_vars = _build_seed_vars_dict(aid, project_root())
     ca_vars = _codeagent_vars_dict(aid)
@@ -223,7 +223,7 @@ def build_skills_suffix(
     user_text: str,
     workspace_suffix: str = "",
     project_path: str | Path | None = None,
-) -> Optional[str]:
+) -> str | None:
     """Combine workspace hint + dynamically selected agent skills for ``skills_suffix``.
 
     Args:

@@ -6,10 +6,10 @@ import fnmatch
 import mimetypes
 import os
 import re
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from codeagent.core import env as ca_env
 
@@ -33,7 +33,7 @@ class AttachmentMeta:
     filename: str
     size_bytes: int
     path: str = ""
-    extracted_text: Optional[str] = None
+    extracted_text: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {k: v for k, v in asdict(self).items() if v is not None}
@@ -101,8 +101,9 @@ def extract_document_text(raw: bytes, mime: str, filename: str = "") -> str:
         return raw.decode("utf-8", errors="replace").strip()
     if m == "application/pdf" or name.endswith(".pdf"):
         try:
-            from pypdf import PdfReader
             import io
+
+            from pypdf import PdfReader
 
             reader = PdfReader(io.BytesIO(raw))
             parts = []
@@ -159,14 +160,14 @@ def save_attachment(
     )
 
 
-def resolve_attachment_path(agent_id: str, session_id: str, attachment_id: str) -> Optional[Path]:
+def resolve_attachment_path(agent_id: str, session_id: str, attachment_id: str) -> Path | None:
     from seed.core.media_store import resolve_session_media_path
 
     p = resolve_session_media_path(agent_id, session_id, attachment_id)
     return p
 
 
-def load_attachment_meta(agent_id: str, session_id: str, attachment_id: str) -> Optional[AttachmentMeta]:
+def load_attachment_meta(agent_id: str, session_id: str, attachment_id: str) -> AttachmentMeta | None:
     p = resolve_attachment_path(agent_id, session_id, attachment_id)
     if not p or not p.is_file():
         return None
@@ -245,8 +246,8 @@ def scan_image_directory(
     workspace_root: Path,
     rel_path: str,
     *,
-    pattern: Optional[str] = None,
-    max_files: Optional[int] = None,
+    pattern: str | None = None,
+    max_files: int | None = None,
 ) -> tuple[list[Path], bool]:
     """Return (image paths, truncated). Paths resolved under workspace_root."""
     root = workspace_root.resolve()
@@ -277,7 +278,7 @@ def scan_image_directory(
     return found, truncated
 
 
-def _parse_globs(pattern: Optional[str]) -> tuple[str, ...]:
+def _parse_globs(pattern: str | None) -> tuple[str, ...]:
     if pattern and pattern.strip():
         return tuple(g.strip() for g in pattern.split(",") if g.strip())
     raw = ca_env.pick_default(

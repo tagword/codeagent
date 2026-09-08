@@ -6,7 +6,6 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import Optional, Tuple
 
 
 def has_graphical_session() -> bool:
@@ -20,7 +19,7 @@ def has_graphical_session() -> bool:
     )
 
 
-def pick_directory_sync() -> Tuple[str, bool, str]:
+def pick_directory_sync() -> tuple[str, bool, str]:
     """
     Blocking folder picker.
 
@@ -36,7 +35,7 @@ def pick_directory_sync() -> Tuple[str, bool, str]:
     return _pick_linux()
 
 
-def _pick_darwin() -> Tuple[str, bool, str]:
+def _pick_darwin() -> tuple[str, bool, str]:
     script = (
         'POSIX path of (choose folder with prompt '
         '"选择目录" default location (path to desktop folder))'
@@ -63,7 +62,7 @@ def _pick_darwin() -> Tuple[str, bool, str]:
     return "", False, ""
 
 
-def _pick_windows() -> Tuple[str, bool, str]:
+def _pick_windows() -> tuple[str, bool, str]:
     ps = r"""
 Add-Type -AssemblyName System.Windows.Forms
 $top = New-Object System.Windows.Forms.Form
@@ -103,7 +102,7 @@ try {
     return "", True, "PowerShell not found for folder picker"
 
 
-def _pick_linux() -> Tuple[str, bool, str]:
+def _pick_linux() -> tuple[str, bool, str]:
     if not has_graphical_session():
         return (
             "",
@@ -145,7 +144,7 @@ def _pick_linux() -> Tuple[str, bool, str]:
     return "", True, hint
 
 
-def _which(name: str) -> Optional[str]:
+def _which(name: str) -> str | None:
     from shutil import which as _w
 
     return _w(name)

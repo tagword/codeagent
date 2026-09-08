@@ -16,16 +16,17 @@ import asyncio
 import contextlib
 import logging
 import threading
+from collections.abc import Awaitable
 from datetime import datetime, timezone
-from typing import Any, Awaitable, Callable
+from typing import Any, Callable
 
 logger = logging.getLogger(__name__)
 
 from codeagent.server import (  # noqa: E402
+    _DEFAULT_AUTO_CONTINUE_NUDGE,
     ACTIVE_CHAT_CANCELS,
     PENDING_INJECTIONS,
     SESSIONS,
-    _DEFAULT_AUTO_CONTINUE_NUDGE,
     _auto_continue_nudge,
     _memkey,
     _running_add,
@@ -69,7 +70,6 @@ async def run_chat_turn(
     ``{"skipped": True}``（if_busy=skip 且 session 忙碌）。
     LLMError 会回滚追加的 user 消息后重新抛出，由调用方决定错误响应。
     """
-    from codeagent.core import env as ca_env
     from codeagent.core.attachments import content_text_for_skills
     from codeagent.core.image_understanding import MCP_VISION_SENTINEL
     from codeagent.core.vision_models import resolve_main_llm
@@ -207,13 +207,13 @@ async def run_chat_turn(
         from seed.core.agent_context import (
             clear_active_project_workspace,
             set_active_agent_id,
+            set_active_audio_preset,
+            set_active_image_gen_preset,
+            set_active_music_preset,
             set_active_project_episodic,
             set_active_project_workspace,
-            set_active_vision_preset,
-            set_active_image_gen_preset,
-            set_active_audio_preset,
-            set_active_music_preset,
             set_active_video_gen_preset,
+            set_active_vision_preset,
         )
 
         set_active_llm_session(f"{agent_id}::{session_id}")
@@ -665,7 +665,7 @@ async def run_chat_turn(
                         break
                 _stream_placeholder_created[0] = False
 
-            tail = merge_llm_tail_into_full(chat_sess.messages, api_msgs, n_before_ref[0])
+            merge_llm_tail_into_full(chat_sess.messages, api_msgs, n_before_ref[0])
             _model_name = getattr(llm, "model", "")
             _ctx: dict[str, Any] = {}
             # 先写入 context_usage（含 peak），避免后续异步 persist 落盘旧值
@@ -819,7 +819,7 @@ async def run_chat_turn(
                 "model": _model_name,
                 "cancelled": bool(_run_was_cancelled),
             }
-        except LLMError as e:
+        except LLMError:
             with contextlib.suppress(Exception):
                 chat_sess.messages.pop()
             raise
