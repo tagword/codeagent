@@ -762,8 +762,16 @@ def _list_team_metas() -> list[dict]:
 
 
 def _read_agent_file(agent_id: str, *rel_parts: str) -> str | None:
-    """Read a file inside an agent's directory if it exists."""
-    p = _agents_dir() / agent_id
+    """Read a file inside an agent's directory if it exists.
+
+    agent_id 用户可控，先净化防路径穿越（含 ../ 或 / 则拒绝）。
+    """
+    from codeagent.core.paths import _sanitize_agent_id
+
+    safe_id = _sanitize_agent_id(agent_id)
+    if not safe_id:
+        return None
+    p = _agents_dir() / safe_id
     for part in rel_parts:
         p = p / part
     try:
@@ -775,8 +783,16 @@ def _read_agent_file(agent_id: str, *rel_parts: str) -> str | None:
 
 
 def _write_agent_file(agent_id: str, content: str, *rel_parts: str) -> bool:
-    """Write a file inside an agent's directory. Returns True on success."""
-    p = _agents_dir() / agent_id
+    """Write a file inside an agent's directory. Returns True on success.
+
+    agent_id 用户可控，先净化防路径穿越（含 ../ 或 / 则拒绝）。
+    """
+    from codeagent.core.paths import _sanitize_agent_id
+
+    safe_id = _sanitize_agent_id(agent_id)
+    if not safe_id:
+        return False
+    p = _agents_dir() / safe_id
     for part in rel_parts:
         p = p / part
     try:
