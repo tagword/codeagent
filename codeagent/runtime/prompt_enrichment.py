@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 
 import seed.core.env_access as _ea
 from codeagent.core import env as ca_env
