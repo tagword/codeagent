@@ -819,15 +819,9 @@ def build_webui_api_app(project_root: Path) -> Starlette:
     from seed.core.llm_sess import (
         list_stored_sessions_meta,
     )
-    from seed.integrations.cron_sched import (
-        delete_cron_job,
-        load_cron_config,
-        reload_cron_scheduler,
-        save_cron_job,
-        write_cron_config,
-    )
 
     from .webui_handlers_auth import build_auth_routes
+    from .webui_handlers_cronallow import build_cronallow_routes
     from .webui_handlers_health import build_health_routes
     from .webui_handlers_envllm import build_envllm_routes
     from .webui_handlers_mcp import build_mcp_routes
@@ -836,68 +830,6 @@ def build_webui_api_app(project_root: Path) -> Starlette:
     from .webui_handlers_skills import build_skills_routes
 
     ensure_default_config_files(project_root_fn())
-
-    async def api_cron_toggle(request: Request) -> JSONResponse:
-        try:
-            body = await request.json()
-        except Exception:
-            return JSONResponse({"detail": "invalid json"}, status_code=400)
-        cfg = load_cron_config()
-        cfg["enabled"] = bool(body.get("enabled"))
-        write_cron_config(cfg)
-        reload_cron_scheduler()
-        return JSONResponse({"ok": True})
-
-    async def api_cron_job(request: Request) -> JSONResponse:
-        try:
-            body = await request.json()
-        except Exception:
-            return JSONResponse({"detail": "invalid json"}, status_code=400)
-        try:
-            save_cron_job(body)
-        except Exception as e:
-            return JSONResponse({"detail": str(e)}, status_code=400)
-        return JSONResponse({"ok": True})
-
-    async def api_cron_job_delete(request: Request) -> JSONResponse:
-        try:
-            body = await request.json()
-        except Exception:
-            return JSONResponse({"detail": "invalid json"}, status_code=400)
-        jid = str(body.get("job_id") or "").strip()
-        try:
-            delete_cron_job(jid)
-        except Exception as e:
-            return JSONResponse({"detail": str(e)}, status_code=400)
-        return JSONResponse({"ok": True})
-
-    async def api_allowlist_get(_: Request) -> JSONResponse:
-        p = _allowlist_path(project_root)
-        if not p.is_file():
-            return JSONResponse({"mode": "all", "paths": []})
-        try:
-            data = json.loads(p.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            return JSONResponse({"mode": "all", "paths": []})
-        if not isinstance(data, dict):
-            return JSONResponse({"mode": "all", "paths": []})
-        mode = str(data.get("mode") or "all")
-        paths = data.get("paths") if isinstance(data.get("paths"), list) else []
-        paths = [str(x) for x in paths if isinstance(x, str)]
-        return JSONResponse({"mode": mode, "paths": paths})
-
-    async def api_allowlist_post(request: Request) -> JSONResponse:
-        try:
-            body = await request.json()
-        except Exception:
-            return JSONResponse({"detail": "invalid json"}, status_code=400)
-        mode = str(body.get("mode") or "all")
-        paths = body.get("paths") if isinstance(body.get("paths"), list) else []
-        paths = [str(x).strip() for x in paths if str(x).strip()]
-        p = _allowlist_path(project_root)
-        p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(json.dumps({"mode": mode, "paths": paths}, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-        return JSONResponse({"ok": True})
 
     async def api_git_defaults_get(_: Request) -> JSONResponse:
         p = _git_defaults_path(project_root)
@@ -1841,11 +1773,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         *build_projects_routes(project_root),
         *build_sessions_routes(project_root),
         *build_envllm_routes(project_root),
-        Route("/cron/toggle", api_cron_toggle, methods=["POST"]),
-        Route("/cron/job", api_cron_job, methods=["POST"]),
-        Route("/cron/job/delete", api_cron_job_delete, methods=["POST"]),
-        Route("/allowlist", api_allowlist_get, methods=["GET"]),
-        Route("/allowlist", api_allowlist_post, methods=["POST"]),
+        *build_cronallow_routes(project_root),
         Route("/git/defaults", api_git_defaults_get, methods=["GET"]),
         Route("/git/defaults", api_git_defaults_put, methods=["PUT"]),
         Route("/git/proxy-config", api_git_proxy_config, methods=["POST"]),
