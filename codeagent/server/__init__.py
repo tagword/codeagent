@@ -143,7 +143,10 @@ def _auto_continue_nudge(loop_meta: dict[str, Any] | None) -> str:
     playbook = _AUTO_CONTINUE_DOMAIN_PLAYBOOKS.get(str(dom))
     if not playbook:
         return _DEFAULT_AUTO_CONTINUE_NUDGE
-    streak = int(loop_meta.get("failure_streak") or 0)
+    try:
+        streak = int(loop_meta.get("failure_streak") or 0)
+    except (TypeError, ValueError):
+        streak = 0
     recent_errors = loop_meta.get("recent_errors") or []
     lines: list[str] = [
         f"【策略切换触发】上一段连续 {streak} 次 tool 调用失败，均落在 `{dom}` 域。",
