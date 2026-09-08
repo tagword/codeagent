@@ -1,0 +1,83 @@
+/* 团队协作面板样式（25-teams-panel.js） */
+
+.teams__empty { color: var(--text-dim, #888); padding: var(--sp-3, 12px) 0; font-size: .9rem; }
+.teams__error { color: #e5484d; padding: var(--sp-3, 12px) 0; }
+
+.team-card {
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+  background: var(--bg-card, #fff);
+}
+.team-card__head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.team-card__title { font-weight: 600; font-size: .95rem; }
+.team-card__actions { display: flex; gap: 6px; }
+.team-card__meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 6px 0; font-size: .82rem; color: var(--text-dim, #888); }
+.team-card__desc { color: var(--text-dim, #888); }
+.team-card__members { display: flex; gap: 6px; flex-wrap: wrap; }
+.team-del-btn { color: #e5484d; }
+
+.team-mode-badge {
+  background: var(--accent-soft, #eef2ff);
+  color: var(--accent, #4f46e5);
+  border-radius: 4px;
+  padding: 1px 8px;
+  font-size: .75rem;
+  font-weight: 600;
+}
+.teams__pm { font-size: .78rem; color: var(--accent, #4f46e5); }
+
+.team-member-tag {
+  background: var(--bg-soft, #f3f4f6);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 999px;
+  padding: 1px 10px;
+  font-size: .78rem;
+  font-family: ui-monospace, monospace;
+}
+
+.team-detail { margin-top: 10px; padding: 10px 12px; background: var(--bg-soft, #f9fafb); border-radius: 6px; font-size: .85rem; display: grid; gap: 4px; }
+.team-detail__row { display: flex; gap: 8px; }
+.team-detail__label { color: var(--text-dim, #888); min-width: 70px; }
+
+/* 表单 */
+.team-form { border: 1px solid var(--border, #e5e7eb); border-radius: 8px; padding: 14px; background: var(--bg-card, #fff); }
+.team-form__title { font-weight: 600; margin-bottom: 10px; }
+.team-form__row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.team-form__row > label { min-width: 110px; font-size: .85rem; color: var(--text-dim, #888); }
+.team-form__row .input { flex: 1; }
+.team-form__members { display: flex; gap: 8px; flex-wrap: wrap; flex: 1; }
+.team-member-check { font-size: .85rem; }
+.team-form__actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; }
+
+/* 运行 */
+.team-run-box { border: 1px solid var(--border, #e5e7eb); border-radius: 8px; padding: 14px; background: var(--bg-card, #fff); margin-top: 12px; }
+.team-run-box__title { font-weight: 600; margin-bottom: 8px; }
+.team-run-box__input { width: 100%; box-sizing: border-box; resize: vertical; font-family: inherit; padding: 8px; border: 1px solid var(--border, #e5e7eb); border-radius: 6px; }
+.team-run-box__actions { display: flex; gap: 8px; margin-top: 8px; }
+.team-run-box__hint { color: var(--text-dim, #888); font-size: .85rem; margin-bottom: 8px; }
+.team-run-box__err { color: #e5484d; }
+
+.team-run-status { font-weight: 600; margin-bottom: 8px; }
+.team-run-error { color: #e5484d; font-weight: 400; font-size: .85rem; }
+.team-run-hint { color: var(--text-dim, #888); font-size: .85rem; }
+
+.team-steps { display: grid; gap: 8px; }
+.team-step { border: 1px solid var(--border, #e5e7eb); border-radius: 6px; padding: 8px 10px; background: var(--bg-soft, #fafafa); }
+.team-step--running { border-color: var(--accent, #4f46e5); }
+.team-step--failed { border-color: #e5484d; }
+.team-step__head { display: flex; align-items: center; gap: 8px; font-size: .85rem; }
+.team-step__agent { font-weight: 600; font-family: ui-monospace, monospace; }
+.team-step__type { color: var(--text-dim, #888); font-size: .75rem; }
+.team-step__status { margin-left: auto; font-size: .78rem; }
+.team-step__input { margin-top: 6px; font-size: .8rem; color: var(--text-dim, #888); }
+.team-step__lbl { color: var(--accent, #4f46e5); margin-right: 4px; }
+.team-step__output { margin-top: 6px; }
+.team-step__output pre {
+  margin: 0; white-space: pre-wrap; word-break: break-word;
+  font-size: .82rem; font-family: ui-monospace, monospace;
+  background: var(--bg, #fff); border: 1px solid var(--border, #eee);
+  border-radius: 4px; padding: 8px; max-height: 240px; overflow: auto;
+}
+.team-step__output--empty { color: var(--text-dim, #aaa); font-size: .8rem; }

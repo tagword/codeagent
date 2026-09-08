@@ -695,6 +695,24 @@
           <div id="mdFileStatus" class="status-line"></div>
         </fieldset>
 
+        <!-- Teams (multi-agent collaboration) -->
+        <fieldset class="section" id="fieldsetTeams">
+          <div class="section__header">
+            <h3 class="section__title">🤝 团队协作 (Teams)</h3>
+            <div class="row-actions" style="display:flex;gap:var(--sp-2);margin:0;">
+              <button type="button" class="btn btn--primary btn--sm" id="btnTeamNew">+ 新建团队</button>
+              <button type="button" class="btn btn--ghost btn--sm" id="btnTeamRefresh">刷新</button>
+            </div>
+          </div>
+          <p class="section__desc">
+            让多个成员协作完成任务：<strong>sequential</strong> 逐个接力、<strong>parallel</strong> 并行处理、
+            <strong>manager</strong> 由 PM 拆解后分派。运行会<strong>真实调用 LLM</strong>，可实时查看每个成员的步骤产出。
+          </p>
+          <div id="teamsList" style="margin-bottom:var(--sp-3);"></div>
+          <div id="teamRunDetail"></div>
+          <div id="teamsStatus" class="status-line"></div>
+        </fieldset>
+
       </div>
     </section>
 
