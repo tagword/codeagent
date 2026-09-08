@@ -342,10 +342,10 @@ def build_webui_api_app(project_root: Path) -> Starlette:
     from .webui_handlers_agents import build_agents_routes
     from .webui_handlers_auth import build_auth_routes
     from .webui_handlers_cronallow import build_cronallow_routes
-    from .webui_handlers_health import build_health_routes
     from .webui_handlers_envllm import build_envllm_routes
     from .webui_handlers_files import build_files_routes
     from .webui_handlers_git import build_git_routes
+    from .webui_handlers_health import build_health_routes
     from .webui_handlers_mcp import build_mcp_routes
     from .webui_handlers_projects import build_projects_routes
     from .webui_handlers_sessions import build_sessions_routes

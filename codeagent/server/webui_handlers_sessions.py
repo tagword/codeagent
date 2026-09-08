@@ -62,7 +62,7 @@ def build_sessions_routes(project_root: Path) -> list[Route]:
 
         # Annotate each row with whether it has any per-session model-stack override
         # so the sidebar can show a 📌 badge without re-fetching every session.
-        _MODEL_STACK_KEYS_B2 = (
+        _model_stack_keys = (
             "llm_id", "vision_llm_id", "image_gen_llm_id",
             "audio_llm_id", "music_llm_id", "video_gen_llm_id",
         )
@@ -79,7 +79,7 @@ def build_sessions_routes(project_root: Path) -> list[Route]:
                 # model_stack_overrides 需加载 session JSON
                 chat_sess = load_or_create_chat_session(sid.strip(), aid)
                 md = chat_sess.metadata if isinstance(chat_sess.metadata, dict) else {}
-                present = [k for k in _MODEL_STACK_KEYS_B2 if isinstance(md.get(k), str) and md.get(k).strip()]
+                present = [k for k in _model_stack_keys if isinstance(md.get(k), str) and md.get(k).strip()]
                 r["model_stack_overrides"] = {
                     "count": len(present),
                     "has_any": bool(present),
