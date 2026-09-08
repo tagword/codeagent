@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from codeagent.server import webui_api_app as w
+from codeagent.server import webui_handlers_agentmeta as w
 
 
 @pytest.fixture

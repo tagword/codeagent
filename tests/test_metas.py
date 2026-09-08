@@ -1,11 +1,11 @@
-"""codeagent.server.webui_api_app agent/team metas 扫描单元测试。
+"""codeagent.server agent/team metas 扫描单元测试。
 
 覆盖 _list_agent_metas / _list_team_metas。
 monkeypatch _agents_dir/_teams_dir 指向临时目录隔离。
 """
 import json
 
-import codeagent.server.webui_api_app as mod
+import codeagent.server.webui_handlers_agentmeta as mod
 
 
 def _mk_agent(tmp, aid, *, desc="", sys_prompt="", tools=None, corrupt_tools=False):
