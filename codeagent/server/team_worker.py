@@ -50,6 +50,20 @@ def _member_model(member) -> str:
     return ""
 
 
+def _extract_usage(meta) -> dict:
+    """从 generate 的 metadata 容错提取 token 用量（缺省 0）。"""
+    usage = (meta or {}).get("usage") or {}
+    if not isinstance(usage, dict):
+        usage = {}
+    return {
+        "prompt_tokens": int(usage.get("prompt_tokens") or 0),
+        "completion_tokens": int(usage.get("completion_tokens") or 0),
+        "total_tokens": int(usage.get("total_tokens")
+                             or (usage.get("prompt_tokens") or 0) + (usage.get("completion_tokens") or 0)),
+        "model": str((meta or {}).get("model") or ""),
+    }
+
+
 def run_member_step(
     *,
     agent_id: str,
@@ -64,6 +78,27 @@ def run_member_step(
     Uses a plain completion (``llm.generate``) with an optional role system
     prompt — lightweight, no tool loop / MCP, safe off the main event loop.
     """
+    content, _usage = run_member_step_meta(
+        agent_id=agent_id, task=task, role_prompt=role_prompt, llm_id=llm_id,
+        max_tokens=max_tokens, enable_thinking=enable_thinking,
+    )
+    return content
+
+
+def run_member_step_meta(
+    *,
+    agent_id: str,
+    task: str,
+    role_prompt: str = "",
+    llm_id: str = "",
+    max_tokens: int | None = None,
+    enable_thinking: bool | None = None,
+) -> tuple[str, dict]:
+    """同 :func:`run_member_step`，但额外返回 token 用量 dict（供成本统计）。
+
+    返回 ``(content, usage)``，usage 含 prompt_tokens/completion_tokens/
+    total_tokens/model。LLM 调用失败时抛异常（由 engine 记录为 step 失败）。
+    """
     from codeagent.core.vision_models import resolve_main_llm
 
     llm = resolve_main_llm(llm_id or None)
@@ -77,7 +112,7 @@ def run_member_step(
         {"role": "user", "content": task},
     ]
     try:
-        content, _meta = llm.generate(
+        content, meta = llm.generate(
             messages,
             max_turns=1,
             max_tokens=max_tokens,
@@ -86,4 +121,4 @@ def run_member_step(
     except Exception as exc:  # LLMError 等 —— 交给 engine 记录为该 step 失败
         logger.warning("team member step failed agent=%s: %s", agent_id, exc)
         raise
-    return str(content or "").strip()
+    return str(content or "").strip(), _extract_usage(meta)

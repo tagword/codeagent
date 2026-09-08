@@ -76,6 +76,15 @@ def list_runs(team_id: str | None = None, limit: int = 50) -> list[dict]:
 _SWEEP_INTERVAL = 30.0
 _last_sweep = [0.0]  # 模块级单例，避免每次 list 都全扫
 
+# 并行模式的最大并发成员数上限：防止成员很多时一次性开 N 个线程同时打 LLM，
+# 打爆 API 限流 / 内存 / 成本失控。超额成员排队执行。
+_PARALLEL_MAX_WORKERS = 6
+
+
+def _parallel_workers(n: int) -> int:
+    """并行线程数：至少 1，最多 _PARALLEL_MAX_WORKERS。"""
+    return max(1, min(n, _PARALLEL_MAX_WORKERS))
+
 # 一个 run 允许的"无进展"最大时长（秒）：超过视为后台线程卡死。
 # 团队级 timeout_seconds 目前只存不生效（见 _real_* 未用 timeout），这里作为
 # 兜底判定：running run 的 updated_at 超过该值未刷新即标记 timeout。
@@ -242,6 +251,11 @@ def run_team(team_id: str, user_input: str, simulate: bool = False) -> dict:
     team = json.loads(tf.read_text(encoding="utf-8"))
     team["id"] = team_id
 
+    # 校验成员配置（成员存在/去重/PM 归属），非法则 fail-fast，不创建 run。
+    # simulate 模式不调真实 LLM、无 token 成本，跳过存在性校验（测试/无 LLM 环境用假 agent id）
+    if not simulate:
+        validate_members(team.get("members", []), str(team.get("manager_id") or ""))
+
     # Create run
     run = create_run(team_id, user_input)
     run_id = run["id"]
@@ -291,6 +305,14 @@ def rerun_run(run_id: str, simulate: bool = False) -> dict | None:
         update_run(run_id, {"status": RUN_STATUS_FAILED, "error": f"Unknown mode: {mode}"})
         return get_run(run_id)
 
+    # 校验成员配置；非法则标记失败而非重跑。simulate 模式跳过存在性校验。
+    if not simulate:
+        try:
+            validate_members(team.get("members", []), str(team.get("manager_id") or ""))
+        except ValueError as exc:
+            update_run(run_id, {"status": RUN_STATUS_FAILED, "error": f"团队配置无效: {exc}"})
+            return get_run(run_id)
+
     # 清空旧步骤，重置为 running 后后台重跑
     update_run(run_id, {"status": RUN_STATUS_RUNNING, "error": None, "steps": []})
 
@@ -337,12 +359,49 @@ def _execute_real(run_id: str, team: dict, user_input: str, simulate: bool) -> N
         update_run(run_id, {"status": RUN_STATUS_FAILED, "error": str(exc)})
 
 
+def _agents_root() -> Path:
+    """Agents root directory (~/.codeagent/agents)."""
+    return codeagent_home() / "agents"
+
+
 def _member_agent_id(member) -> str:
     if isinstance(member, str):
         return member
     if isinstance(member, dict):
         return str(member.get("id") or member.get("agent_id") or member.get("role") or "")
     return ""
+
+
+def _agent_exists(agent_id: str) -> bool:
+    """True when an agent with a persona dir exists on disk."""
+    if not agent_id:
+        return False
+    return (_agents_root() / agent_id / "persona").is_dir()
+
+
+def validate_members(members: list, manager_id: str = "") -> None:
+    """校验团队成员配置，非法则抛 ValueError。
+
+    规则：
+    1. members 非空
+    2. 每个成员的 agent_id 非空且对应 agent 存在（persona 目录）
+    3. 成员 agent_id 无重复
+    4. manager_id（若有）必须是某个成员的 agent_id
+    """
+    if not members:
+        raise ValueError("团队至少需要 1 个成员")
+    ids: list[str] = []
+    for m in members:
+        aid = _member_agent_id(m)
+        if not aid:
+            raise ValueError("团队成员缺少有效的 agent id")
+        if not _agent_exists(aid):
+            raise ValueError(f"成员 agent '{aid}' 不存在")
+        if aid in ids:
+            raise ValueError(f"成员 agent '{aid}' 重复")
+        ids.append(aid)
+    if manager_id and manager_id not in ids:
+        raise ValueError(f"PM '{manager_id}' 不在团队成员中")
 
 
 def _member_role_prompt(member) -> str:
@@ -359,7 +418,7 @@ def _member_error_policy(error_policy: str) -> bool:
 
 def _real_sequential(run_id: str, members: list, user_input: str, error_policy: str, timeout: int) -> None:
     """Members run one after another; each sees the previous member's output."""
-    from codeagent.server.team_worker import run_member_step
+    from codeagent.server.team_worker import run_member_step_meta
 
     context = user_input
     for member in members:
@@ -372,10 +431,10 @@ def _real_sequential(run_id: str, members: list, user_input: str, error_policy: 
             return
         update_step(run_id, step["step_id"], {"status": STEP_STATUS_RUNNING, "input": context})
         try:
-            output = run_member_step(agent_id=agent_id, task=context, role_prompt=role)
+            output, usage = run_member_step_meta(agent_id=agent_id, task=context, role_prompt=role)
             if not output:
                 output = f"[成员 {agent_id} 无输出]"
-            update_step(run_id, step["step_id"], {"status": STEP_STATUS_DONE, "output": output})
+            update_step(run_id, step["step_id"], {"status": STEP_STATUS_DONE, "output": output, "usage": usage})
             context = output  # 前一步产出作为下一步输入
         except Exception as exc:
             update_step(run_id, step["step_id"], {"status": STEP_STATUS_FAILED, "output": f"错误: {exc}"})
@@ -387,7 +446,7 @@ def _real_parallel(run_id: str, members: list, user_input: str, error_policy: st
     """All members run concurrently on the same input."""
     import concurrent.futures
 
-    from codeagent.server.team_worker import run_member_step
+    from codeagent.server.team_worker import run_member_step_meta
 
     def _one(member) -> None:
         agent_id = _member_agent_id(member)
@@ -399,19 +458,19 @@ def _real_parallel(run_id: str, members: list, user_input: str, error_policy: st
             return
         update_step(run_id, step["step_id"], {"status": STEP_STATUS_RUNNING, "input": user_input})
         try:
-            output = run_member_step(agent_id=agent_id, task=user_input, role_prompt=role)
-            update_step(run_id, step["step_id"], {"status": STEP_STATUS_DONE, "output": output or f"[成员 {agent_id} 无输出]"})
+            output, usage = run_member_step_meta(agent_id=agent_id, task=user_input, role_prompt=role)
+            update_step(run_id, step["step_id"], {"status": STEP_STATUS_DONE, "output": output or f"[成员 {agent_id} 无输出]", "usage": usage})
         except Exception as exc:
             update_step(run_id, step["step_id"], {"status": STEP_STATUS_FAILED, "output": f"错误: {exc}"})
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, len(members))) as pool:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=_parallel_workers(len(members))) as pool:
         futures = [pool.submit(_one, m) for m in members]
         concurrent.futures.wait(futures)
 
 
 def _real_manager(run_id: str, members: list, user_input: str, error_policy: str, timeout: int, manager_id: str = "") -> None:
     """PM (manager_id or first member) splits the task; workers each execute a piece."""
-    from codeagent.server.team_worker import run_member_step
+    from codeagent.server.team_worker import run_member_step_meta
 
     if not members:
         return
@@ -428,7 +487,7 @@ def _real_manager(run_id: str, members: list, user_input: str, error_policy: str
         return
     update_step(run_id, pm_step["step_id"], {"status": STEP_STATUS_RUNNING, "input": user_input})
     try:
-        pm_output = run_member_step(
+        pm_output, pm_usage = run_member_step_meta(
             agent_id=pm_agent,
             task=(
                 f"你是团队负责人(PM)。请把下面的任务拆成 {max(len(workers), 1)} 个"
@@ -441,7 +500,7 @@ def _real_manager(run_id: str, members: list, user_input: str, error_policy: str
         if _member_error_policy(error_policy):
             raise
         return
-    update_step(run_id, pm_step["step_id"], {"status": STEP_STATUS_DONE, "output": pm_output})
+    update_step(run_id, pm_step["step_id"], {"status": STEP_STATUS_DONE, "output": pm_output, "usage": pm_usage})
 
     # 无 worker 可派发：PM 已完成分析，run 到此结束（正常 done）。
     if not workers:
@@ -461,8 +520,8 @@ def _real_manager(run_id: str, members: list, user_input: str, error_policy: str
             "input": sub,
         })
         try:
-            w_output = run_member_step(agent_id=wid, task=sub, role_prompt=wrole)
-            update_step(run_id, w_step["step_id"], {"status": STEP_STATUS_DONE, "output": w_output or f"[成员 {wid} 无输出]"})
+            w_output, w_usage = run_member_step_meta(agent_id=wid, task=sub, role_prompt=wrole)
+            update_step(run_id, w_step["step_id"], {"status": STEP_STATUS_DONE, "output": w_output or f"[成员 {wid} 无输出]", "usage": w_usage})
         except Exception as exc:
             update_step(run_id, w_step["step_id"], {"status": STEP_STATUS_FAILED, "output": f"错误: {exc}"})
             if _member_error_policy(error_policy):
@@ -525,7 +584,7 @@ def _sim_parallel(run_id: str, members: list, user_input: str) -> None:
         time.sleep(0.05)
         update_step(run_id, sid, {"status": STEP_STATUS_DONE, "output": f"[模拟] Agent '{agent_id}' 并行处理完成"})
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=len(members)) as pool:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=_parallel_workers(len(members))) as pool:
         futures = [pool.submit(_run_one, _member_agent_id(m)) for m in members]
         concurrent.futures.wait(futures)
 
@@ -587,7 +646,7 @@ def _run_parallel(run_id: str, members: list, user_input: str, error_policy: str
         update_step(run_id, sid, {"status": STEP_STATUS_DONE, "output": output})
         return agent_id, sid, output
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=len(members)) as pool:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=_parallel_workers(len(members))) as pool:
         futures = []
         for member in members:
             agent_id = member if isinstance(member, str) else member.get("id", "")

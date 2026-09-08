@@ -207,14 +207,14 @@ def test_member_role_prompt_helper():
 
 
 def test_real_sequential_passes_role_prompt(tmp_path, monkeypatch):
-    """dict member 的 system_prompt 应传入 run_member_step 的 role_prompt。"""
+    """dict member 的 system_prompt 应传入 run_member_step_meta 的 role_prompt。"""
     from codeagent.server import team_worker as tw
 
     captured = {}
     def fake_step(*, agent_id, task, role_prompt="", **kw):
         captured[agent_id] = {"task": task, "role_prompt": role_prompt}
-        return f"out-{agent_id}"
-    monkeypatch.setattr(tw, "run_member_step", fake_step)
+        return f"out-{agent_id}", {"total_tokens": 10}
+    monkeypatch.setattr(tw, "run_member_step_meta", fake_step)
 
     _patch_dirs(monkeypatch, tmp_path)
     run = eng.create_run("t1", "hi")
@@ -228,6 +228,9 @@ def test_real_sequential_passes_role_prompt(tmp_path, monkeypatch):
     assert captured["be"]["role_prompt"] == "你是后端工程师"
     # context 传递：be 的 task 是 fe 的 output
     assert "out-fe" in captured["be"]["task"]
+    # usage 应记录到 step
+    final = eng.get_run(rid)
+    assert final["steps"][0].get("usage", {}).get("total_tokens") == 10
 
 
 def test_real_manager_passes_worker_role_prompt(tmp_path, monkeypatch):
@@ -238,9 +241,9 @@ def test_real_manager_passes_worker_role_prompt(tmp_path, monkeypatch):
     def fake_step(*, agent_id, task, role_prompt="", **kw):
         captured[agent_id] = {"task": task, "role_prompt": role_prompt}
         if agent_id == "pm":
-            return "1. 子任务A\n2. 子任务B"
-        return f"out-{agent_id}"
-    monkeypatch.setattr(tw, "run_member_step", fake_step)
+            return "1. 子任务A\n2. 子任务B", {"total_tokens": 5}
+        return f"out-{agent_id}", {"total_tokens": 7}
+    monkeypatch.setattr(tw, "run_member_step_meta", fake_step)
 
     _patch_dirs(monkeypatch, tmp_path)
     run = eng.create_run("t1", "hi")
@@ -331,3 +334,51 @@ def test_cancel_run_stops_running(tmp_path, monkeypatch):
     assert eng.cancel_run(d["id"])["status"] == "done"
     # 不存在返回 None
     assert eng.cancel_run("nope") is None
+
+
+# ── 健壮性：成员校验 / 并发上限 / usage 提取 ─────────────────
+
+def test_validate_members_rules(tmp_path, monkeypatch):
+    """成员校验：空/缺失/重复/PM 不在成员中 都应拒绝。"""
+    _patch_dirs(monkeypatch, tmp_path)
+    # 隔离 agents 根目录（避免污染真实 ~/.codeagent/agents）
+    agents_root = tmp_path / "agents"
+    agents_root.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(eng, "_agents_root", lambda: agents_root)
+    (agents_root / "realagent" / "persona").mkdir(parents=True, exist_ok=True)
+
+    # 空成员
+    with pytest.raises(ValueError, match="至少需要 1 个成员"):
+        eng.validate_members([], "")
+    # 成员不存在
+    with pytest.raises(ValueError, match="不存在"):
+        eng.validate_members(["ghost"], "")
+    # 重复
+    with pytest.raises(ValueError, match="重复"):
+        eng.validate_members(["realagent", "realagent"], "")
+    # PM 不在成员中
+    with pytest.raises(ValueError, match="不在团队成员"):
+        eng.validate_members(["realagent"], "other")
+    # 合法通过
+    eng.validate_members(["realagent"], "realagent")
+    # dict 成员
+    eng.validate_members([{"id": "realagent", "role_prompt": "x"}], "realagent")
+
+
+def test_parallel_workers_cap():
+    """并行线程数应被 _PARALLEL_MAX_WORKERS 封顶。"""
+    assert eng._parallel_workers(0) == 1
+    assert eng._parallel_workers(1) == 1
+    assert eng._parallel_workers(3) == 3
+    assert eng._parallel_workers(100) == eng._PARALLEL_MAX_WORKERS
+    assert eng._parallel_workers(100) <= 6
+
+
+def test_extract_usage_robust():
+    """usage 提取应容错缺省字段。"""
+    from codeagent.server.team_worker import _extract_usage
+    assert _extract_usage({"usage": {"prompt_tokens": 10, "completion_tokens": 5}})["total_tokens"] == 15
+    assert _extract_usage({"usage": {"total_tokens": 99}})["total_tokens"] == 99
+    assert _extract_usage(None)["total_tokens"] == 0
+    assert _extract_usage({})["total_tokens"] == 0
+    assert _extract_usage({"usage": "bad"})["total_tokens"] == 0
