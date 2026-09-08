@@ -4,10 +4,10 @@
 """
 import pathlib
 
-from codeagent.server.webui_api_app import (
+from codeagent.server.webui_api_app import _resolve_project_id
+from codeagent.server.webui_handlers_git import (
     _git_cwd,
     _git_provider_host,
-    _resolve_project_id,
     _ssh_provider_target,
 )
 

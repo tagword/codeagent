@@ -4,11 +4,8 @@
 """
 import pytest
 
-from codeagent.server.webui_api_app import (
-    _git_host_from_url,
-    _parse_mcp_skill_slash_command,
-    _split_git_args,
-)
+from codeagent.server.webui_api_app import _parse_mcp_skill_slash_command
+from codeagent.server.webui_handlers_git import _git_host_from_url, _split_git_args
 
 
 # ---------- _split_git_args ----------
