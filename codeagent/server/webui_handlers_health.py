@@ -9,10 +9,10 @@ so they can live as plain module-level functions.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 from pathlib import Path
-from typing import Any
 
 from starlette.requests import Request
 from starlette.responses import JSONResponse
@@ -45,10 +45,8 @@ async def api_health_status(_: Request) -> JSONResponse:
         now = time.time()
         last_hb = 0.0
         if hb_file.is_file():
-            try:
+            with contextlib.suppress(ValueError, OSError):
                 last_hb = float(hb_file.read_text(encoding="utf-8").strip())
-            except (ValueError, OSError):
-                pass
         elapsed = now - last_hb if last_hb > 0 else -1
         status = "alive" if 0 < elapsed < 180 else ("stuck" if elapsed >= 180 else "unknown")
         return JSONResponse(
