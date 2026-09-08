@@ -124,7 +124,12 @@ def _resolve_env_value(keys: tuple[str, ...], file_vals: dict[str, str], default
     return default
 
 
-def _env_chat_view(root: Path) -> dict[str, str]:
+def _env_view_from_specs(root: Path, specs: list[tuple[tuple[str, ...], str]]) -> dict[str, str]:
+    """按 specs（env key→默认值）构造 env 配置视图。
+
+    读取 legacy 与当前 env 文件（后者优先），再按 _resolve_env_value
+    （os.environ 优先）解析每个 key。env_chat 与 env_mcp 共用。
+    """
     from seed.integrations.env_config import ENV_FILENAME, LEGACY_ENV_FILENAME
 
     p_seed = root / "config" / ENV_FILENAME
@@ -132,11 +137,15 @@ def _env_chat_view(root: Path) -> dict[str, str]:
     file_vals = dict(_parse_env_file(p_leg))
     file_vals.update(_parse_env_file(p_seed))
     out: dict[str, str] = {}
-    for keys, default in _env_chat_specs():
+    for keys, default in specs:
         val = _resolve_env_value(keys, file_vals, default)
         for k in keys:
             out[k] = val
     return out
+
+
+def _env_chat_view(root: Path) -> dict[str, str]:
+    return _env_view_from_specs(root, _env_chat_specs())
 
 
 def _safe_under(base: Path, rel: str) -> Path | None:
@@ -2052,18 +2061,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         ]
 
     def _env_mcp_view(root: Path) -> dict[str, str]:
-        from seed.integrations.env_config import ENV_FILENAME, LEGACY_ENV_FILENAME
-
-        p_seed = root / "config" / ENV_FILENAME
-        p_leg = root / "config" / LEGACY_ENV_FILENAME
-        file_vals = dict(_parse_env_file(p_leg))
-        file_vals.update(_parse_env_file(p_seed))
-        out: dict[str, str] = {}
-        for keys, default in _env_mcp_specs():
-            val = _resolve_env_value(keys, file_vals, default)
-            for k in keys:
-                out[k] = val
-        return out
+        return _env_view_from_specs(root, _env_mcp_specs())
 
     async def api_env_mcp_get(_: Request) -> JSONResponse:
         return JSONResponse(_env_mcp_view(project_root))
