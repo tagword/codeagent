@@ -15,7 +15,6 @@ import logging
 import time
 import uuid
 from pathlib import Path
-from typing import Any
 
 from codeagent.core.paths import codeagent_home
 

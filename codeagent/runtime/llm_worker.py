@@ -6,6 +6,8 @@ import asyncio
 from dataclasses import dataclass
 from typing import Any
 
+from codeagent.runtime.prompt_enrichment import build_skills_suffix, get_cached_system_prompt
+from codeagent.tools.agent_tools import get_tools_for_agent
 from seed.core.agent_context import set_active_llm_session
 from seed.core.agent_runtime import (
     build_api_projection_messages,
@@ -20,9 +22,6 @@ from seed.core.llm_exec import LLMError
 from seed.core.llm_presets import llm_executor_from_resolved, resolve_preset
 from seed.core.llm_sess import load_or_create_chat_session, merge_fresh_system, persist_chat_session
 from seed.core.mem_bridge import finalize_episodic_for_llm
-
-from codeagent.runtime.prompt_enrichment import build_skills_suffix, fresh_system_prompt, get_cached_system_prompt
-from codeagent.tools.agent_tools import get_tools_for_agent
 from seed.core.proj_reg import resolve_project_path
 
 

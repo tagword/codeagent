@@ -14,7 +14,7 @@ import subprocess
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 from urllib.parse import urlparse
 
 from starlette.applications import Starlette
@@ -594,12 +594,12 @@ def _session_history_json_for_session(
     sess: Any,
     before_block_index: int | None,
 ) -> dict[str, Any]:
+    from codeagent.core import env as ca_env
+
     from . import (
         _webui_history_partition_user_blocks,
         _webui_history_rows_from_session,
     )
-
-    from codeagent.core import env as ca_env
 
     max_chars = ca_env.pick_int(12000, ca_env.WEBUI_SESSION_HISTORY_MAX_CHARS)
     max_blocks = ca_env.pick_int(10, ca_env.WEBUI_SESSION_HISTORY_USER_BLOCKS)
@@ -790,6 +790,13 @@ def _write_agent_file(agent_id: str, content: str, *rel_parts: str) -> bool:
 def build_webui_api_app(project_root: Path) -> Starlette:
     project_root = project_root.resolve()
 
+    from codeagent.core.default_presets import (
+        SLOTS as DEFAULT_PRESET_SLOTS,
+    )
+    from codeagent.core.default_presets import (
+        get_default_preset_ids,
+        set_default_preset_id_for_slot,
+    )
     from codeagent.core.settings import plugins_public_view, save_plugins_from_ui
     from codeagent.web.auth_impl import (
         COOKIE_TTL_SEC,
@@ -808,11 +815,6 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         load_presets,
         save_presets,
         set_default_preset_id,
-    )
-    from codeagent.core.default_presets import (
-        SLOTS as DEFAULT_PRESET_SLOTS,
-        get_default_preset_ids,
-        set_default_preset_id_for_slot,
     )
     from seed.core.llm_sess import (
         archive_stored_llm_session,
@@ -2075,8 +2077,8 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         from codeagent.core.seed_bridge import bridge_codeagent_env_to_seed
 
         bridge_codeagent_env_to_seed()
-        from seed.integrations.mcp_client import reset_mcp_manager
         from codeagent.tools.agent_tools import reset_agent_tools_cache
+        from seed.integrations.mcp_client import reset_mcp_manager
 
         reset_mcp_manager()
         reset_agent_tools_cache()
@@ -2584,7 +2586,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         except Exception as e:
             logger.exception("pick_directory")
             return JSONResponse({"detail": str(e)}, status_code=500)
-        payload: Dict[str, Any] = {"path": path}
+        payload: dict[str, Any] = {"path": path}
         if skipped:
             payload["skipped"] = True
         if hint:
@@ -3055,7 +3057,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         last_event_id = (request.headers.get("last-event-id") or
                          request.query_params.get("lastEventId") or
                          request.query_params.get("last_id") or None)
-        from codeagent.server.hub import subscribe, sse_generator
+        from codeagent.server.hub import sse_generator, subscribe
         sid, q = subscribe()
         logger.info("hub SSE subscriber %s connected (last_id=%s)", sid, last_event_id)
         return StreamingResponse(
@@ -3207,6 +3209,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         """GET /api/health/status — return heartbeat + process status."""
         try:
             import time
+
             from codeagent.core.paths import codeagent_home
             hb_file = Path(codeagent_home()) / "heartbeat"
             now = time.time()

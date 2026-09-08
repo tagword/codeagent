@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from codeagent.core import env as ca_env
 
@@ -29,7 +29,7 @@ def preset_supports_audio_id(preset_id: str) -> bool:
     return False
 
 
-def resolve_audio_preset(preset_id: Optional[str] = None) -> dict[str, Any]:
+def resolve_audio_preset(preset_id: str | None = None) -> dict[str, Any]:
     from seed.core.llm_presets import load_presets
 
     pid = (preset_id or "").strip()

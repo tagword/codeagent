@@ -33,7 +33,6 @@ from seed.core.paths import (
     ensure_agent_dirs,
 )
 
-
 # ---------------------------------------------------------------------------
 # Project-level working directories (.codeagent/{agent_id}/)
 # ---------------------------------------------------------------------------

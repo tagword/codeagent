@@ -6,18 +6,14 @@ import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, Tuple
 
 import requests
 
-from seed.integrations.mcp_config import MINIMAX_MCP_SERVER_ID, get_server_config
-
 from codeagent.core.tts_voices import (
-    default_tts_model,
-    default_tts_voice_id,
     normalize_tts_model,
     normalize_tts_voice_id,
 )
+from seed.integrations.mcp_config import MINIMAX_MCP_SERVER_ID, get_server_config
 
 logger = logging.getLogger(__name__)
 
@@ -26,10 +22,10 @@ _QUOTA_STATUS_CODES = frozenset({1002, 1008, 2056})
 
 @dataclass(frozen=True)
 class TtsSynthOutcome:
-    audio: Optional[bytes] = None
+    audio: bytes | None = None
     mime: str = "audio/mpeg"
     error: str = ""
-    status_code: Optional[int] = None
+    status_code: int | None = None
 
     @property
     def ok(self) -> bool:
@@ -48,7 +44,7 @@ def _base_resp_status_code(base_resp: object) -> tuple[int, str]:
     return code, msg
 
 
-def _decode_t2a_audio(raw_audio: object, *, timeout: int) -> tuple[Optional[bytes], str]:
+def _decode_t2a_audio(raw_audio: object, *, timeout: int) -> tuple[bytes | None, str]:
     if raw_audio is None:
         return None, ""
     audio_str = str(raw_audio).strip()
@@ -75,10 +71,10 @@ def _decode_t2a_audio(raw_audio: object, *, timeout: int) -> tuple[Optional[byte
 
 def synthesize_minimax_speech_with_detail(
     text: str,
-    base: Optional[Path] = None,
+    base: Path | None = None,
     *,
-    voice_id: Optional[str] = None,
-    model: Optional[str] = None,
+    voice_id: str | None = None,
+    model: str | None = None,
 ) -> TtsSynthOutcome:
     """Return structured TTS result with MiniMax error details when synthesis fails."""
     key, host = get_minimax_tts_credentials(base)
@@ -178,11 +174,11 @@ def synthesize_minimax_speech_with_detail(
 
 def synthesize_minimax_speech(
     text: str,
-    base: Optional[Path] = None,
+    base: Path | None = None,
     *,
-    voice_id: Optional[str] = None,
-    model: Optional[str] = None,
-) -> Optional[Tuple[bytes, str]]:
+    voice_id: str | None = None,
+    model: str | None = None,
+) -> tuple[bytes, str] | None:
     """Return (mp3 bytes, mime) or None when MiniMax TTS is not configured."""
     out = synthesize_minimax_speech_with_detail(
         text,
@@ -219,7 +215,7 @@ def _tts_api_key_from_env() -> str:
     return ca_env.pick_nonempty("CODEAGENT_TTS_API_KEY")
 
 
-def _tts_api_key_from_mcp(base: Optional[Path] = None) -> tuple[str, str]:
+def _tts_api_key_from_mcp(base: Path | None = None) -> tuple[str, str]:
     cfg = get_server_config(MINIMAX_MCP_SERVER_ID, base)
     if not cfg:
         return "", ""
@@ -231,7 +227,7 @@ def _tts_api_key_from_mcp(base: Optional[Path] = None) -> tuple[str, str]:
     return key, host.strip().rstrip("/")
 
 
-def _humanize_tts_error(code: Optional[int], msg: str, *, key: str = "") -> str:
+def _humanize_tts_error(code: int | None, msg: str, *, key: str = "") -> str:
     base = (msg or "").strip() or (f"MiniMax TTS error (status_code={code})" if code else "MiniMax TTS failed")
     if code != 2056:
         return base
@@ -248,12 +244,12 @@ def _humanize_tts_error(code: Optional[int], msg: str, *, key: str = "") -> str:
     return base
 
 
-def minimax_tts_configured(base: Optional[Path] = None) -> bool:
+def minimax_tts_configured(base: Path | None = None) -> bool:
     key, _host = get_minimax_tts_credentials(base)
     return bool(key)
 
 
-def get_minimax_tts_credentials(base: Optional[Path] = None) -> Tuple[str, str]:
+def get_minimax_tts_credentials(base: Path | None = None) -> tuple[str, str]:
     """TTS credentials: dedicated pay-as-you-go key first, then MCP / LLM preset."""
     tts_key = _tts_api_key_from_env()
     if tts_key:
@@ -287,11 +283,12 @@ def _host_from_preset_base_url(base_url: str) -> str:
     return raw
 
 
-def _minimax_credentials_from_llm_presets(base: Optional[Path] = None) -> Tuple[str, str]:
+def _minimax_credentials_from_llm_presets(base: Path | None = None) -> tuple[str, str]:
     """Use MiniMax LLM preset api_key (e.g. MiniMax-M2.7 chat) for T2A — same platform key."""
     try:
-        from seed.core.llm_presets import get_default_preset_id, load_presets
         from seed_model_providers import resolve_provider_for_preset
+
+        from seed.core.llm_presets import get_default_preset_id, load_presets
     except Exception:
         return "", "https://api.minimaxi.com"
 
