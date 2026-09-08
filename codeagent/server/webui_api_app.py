@@ -871,6 +871,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
     from seed.integrations.env_config import ENV_FILENAME
 
     from . import SESSIONS, _memkey, _running_list
+    from .webui_handlers_health import build_health_routes
 
     ensure_default_config_files(project_root_fn())
 
@@ -3222,52 +3223,6 @@ def build_webui_api_app(project_root: Path) -> Starlette:
 
     # ── Health / Watchdog ──────────────────────────────────────
 
-    async def api_health_heartbeat(_: Request) -> JSONResponse:
-        """POST /api/health/heartbeat — update agent heartbeat."""
-        import time
-        ts = time.time()
-        from codeagent.core.paths import codeagent_home
-        hb_file = Path(codeagent_home()) / "heartbeat"
-        hb_file.parent.mkdir(parents=True, exist_ok=True)
-        hb_file.write_text(str(ts), encoding="utf-8")
-        return JSONResponse({"ts": ts})
-
-    async def api_health_status(_: Request) -> JSONResponse:
-        """GET /api/health/status — return heartbeat + process status."""
-        try:
-            import time
-
-            from codeagent.core.paths import codeagent_home
-            hb_file = Path(codeagent_home()) / "heartbeat"
-            now = time.time()
-            last_hb = 0.0
-            if hb_file.is_file():
-                try:
-                    last_hb = float(hb_file.read_text(encoding="utf-8").strip())
-                except (ValueError, OSError):
-                    pass
-            elapsed = now - last_hb if last_hb > 0 else -1
-            status = "alive" if 0 < elapsed < 180 else ("stuck" if elapsed >= 180 else "unknown")
-            return JSONResponse({
-                "status": status,
-                "last_heartbeat": last_hb,
-                "elapsed_seconds": round(elapsed, 1) if elapsed >= 0 else None,
-                "process_id": os.getpid(),
-            })
-        except Exception as e:
-            logger.exception("health/status error")
-            return JSONResponse({"error": str(e), "type": type(e).__name__}, status_code=500)
-
-    async def api_health_diagnose(_: Request) -> JSONResponse:
-        """GET /api/health/diagnose — run diagnostic checks."""
-        from codeagent.server.self_healing import diagnose
-        return JSONResponse(diagnose())
-
-    async def api_health_heal(_: Request) -> JSONResponse:
-        """POST /api/health/heal — attempt self-healing."""
-        from codeagent.server.self_healing import heal
-        return JSONResponse(heal())
-
     async def api_runs_recover(request: Request) -> JSONResponse:
         """POST /api/ui/runs/{run_id}/recover — mark a failed run for recovery."""
         run_id = request.path_params.get("run_id", "")
@@ -3370,10 +3325,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         Route("/hub/events", api_hub_events, methods=["GET"]),
         Route("/hub/messages", api_hub_messages, methods=["GET"]),
         # Health / Watchdog
-        Route("/health/heartbeat", api_health_heartbeat, methods=["POST"]),
-        Route("/health/status", api_health_status, methods=["GET"]),
-        Route("/health/diagnose", api_health_diagnose, methods=["GET"]),
-        Route("/health/heal", api_health_heal, methods=["POST"]),
+        *build_health_routes(),
         Route("/runs/{run_id}/recover", api_runs_recover, methods=["POST"]),
     ]
 
