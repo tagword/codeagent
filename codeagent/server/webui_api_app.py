@@ -823,15 +823,6 @@ def build_webui_api_app(project_root: Path) -> Starlette:
         set_default_preset_id_for_slot,
     )
     from codeagent.core.settings import plugins_public_view, save_plugins_from_ui
-    from codeagent.web.auth_impl import (
-        COOKIE_TTL_SEC,
-        LEGACY_COOKIE_NAME,
-        cookie_name_for,
-        cookie_secure,
-        get_webui_cookie_value,
-        get_webui_token,
-        make_webui_cookie_value,
-    )
     from seed.core.config_plane import CONFIG_FILENAMES, ensure_default_config_files
     from seed.core.config_plane import project_root as project_root_fn
     from seed.core.llm_presets import (
@@ -861,7 +852,6 @@ def build_webui_api_app(project_root: Path) -> Starlette:
     )
     from seed.core.proj_todos import delete_todo, list_todos, update_todo
     from seed.integrations.cron_sched import (
-        cron_status_for_ui,
         delete_cron_job,
         load_cron_config,
         reload_cron_scheduler,
@@ -871,70 +861,10 @@ def build_webui_api_app(project_root: Path) -> Starlette:
     from seed.integrations.env_config import ENV_FILENAME
 
     from . import SESSIONS, _memkey, _running_list
+    from .webui_handlers_auth import build_auth_routes
     from .webui_handlers_health import build_health_routes
 
     ensure_default_config_files(project_root_fn())
-
-    async def api_flags(request: Request) -> JSONResponse:
-        try:
-            cron = cron_status_for_ui()
-        except Exception as e:
-            logger.exception("cron_status_for_ui")
-            cron = {"error": str(e)}
-        return JSONResponse(
-            {
-                "sessions_ui": True,
-                "ws_enabled": True,
-                "cron": cron,
-            }
-        )
-
-    async def api_auth_status(request: Request) -> JSONResponse:
-        from codeagent.web.auth_impl import verify_webui_cookie
-
-        tok = get_webui_token(project_root)
-        if not tok:
-            return JSONResponse({"auth_required": False, "authenticated": True})
-        ok = bool(verify_webui_cookie(tok, get_webui_cookie_value(request.cookies, tok)))
-        return JSONResponse({"auth_required": True, "authenticated": ok})
-
-    async def api_auth_login(request: Request) -> JSONResponse:
-        try:
-            body = await request.json()
-        except Exception:
-            return JSONResponse({"detail": "invalid json"}, status_code=400)
-        tok = get_webui_token(project_root)
-        if not tok:
-            return JSONResponse({"detail": "webui token not configured"}, status_code=400)
-        if str(body.get("token") or "").strip() != tok:
-            return JSONResponse({"detail": "invalid token"}, status_code=401)
-        from codeagent.web.auth_impl import ws_query_token_bridge_enabled
-
-        payload: dict[str, Any] = {"ok": True}
-        if ws_query_token_bridge_enabled():
-            # Lets embedded / cookie-less WebSocket clients pass ?webui_token= on /ws (opt-in; see webui_auth).
-            payload["ws_query_token"] = tok
-
-        resp = JSONResponse(payload)
-        resp.set_cookie(
-            cookie_name_for(tok),
-            make_webui_cookie_value(tok),
-            max_age=COOKIE_TTL_SEC,
-            httponly=True,
-            samesite="lax",
-            secure=cookie_secure(),
-            path="/",
-        )
-        # 清理旧固定名残留：老用户升级后首个请求会带 ca_webui，登录成功后抹掉
-        resp.delete_cookie(LEGACY_COOKIE_NAME, path="/")
-        return resp
-
-    async def api_auth_logout(request: Request) -> JSONResponse:
-        resp = JSONResponse({"ok": True})
-        tok = get_webui_token(project_root)
-        resp.delete_cookie(cookie_name_for(tok) if tok else LEGACY_COOKIE_NAME, path="/")
-        resp.delete_cookie(LEGACY_COOKIE_NAME, path="/")
-        return resp
 
     async def api_plugins_get(_: Request) -> JSONResponse:
         return JSONResponse(plugins_public_view())
@@ -3238,10 +3168,7 @@ def build_webui_api_app(project_root: Path) -> Starlette:
     # ── Routes ─────────────────────────────────────────────────
 
     routes = [
-        Route("/flags", api_flags, methods=["GET"]),
-        Route("/auth/status", api_auth_status, methods=["GET"]),
-        Route("/auth", api_auth_login, methods=["POST"]),
-        Route("/auth/logout", api_auth_logout, methods=["POST"]),
+        *build_auth_routes(project_root),
         Route("/plugins", api_plugins_get, methods=["GET"]),
         Route("/plugins", api_plugins_post, methods=["POST"]),
         Route("/mcp", api_mcp_get, methods=["GET"]),
