@@ -47,8 +47,12 @@ def _mk_team(monkeypatch, tmp_path, team_id="t1", **overrides):
     return data
 
 
-def _wait_done(run_id, timeout=10.0):
-    """Poll run until it leaves 'running' (or timeout)."""
+def _wait_done(run_id, timeout=30.0):
+    """Poll run until it leaves 'running' (or timeout).
+
+    Background daemon threads can be starved under full-suite CPU load, so use a
+    generous timeout to avoid flakes.
+    """
     deadline = time.time() + timeout
     while time.time() < deadline:
         run = eng.get_run(run_id)
@@ -190,3 +194,64 @@ def test_add_and_update_step(tmp_path, monkeypatch):
     final = eng.get_run(run["id"])
     assert final["steps"][0]["status"] == "done"
     assert final["steps"][0]["output"] == "out"
+
+
+# ── role_prompt 真实化（A 形态角色扮演打通） ─────────────────────
+
+def test_member_role_prompt_helper():
+    assert eng._member_role_prompt("plain") == ""          # str 无 role
+    assert eng._member_role_prompt({"id": "a1"}) == ""     # dict 无 role
+    assert eng._member_role_prompt({"id": "a1", "role": "PM"}) == ""  # role 字段不用作 prompt
+    assert eng._member_role_prompt({"id": "a1", "system_prompt": "你是前端"}) == "你是前端"
+    assert eng._member_role_prompt({"id": "a1", "role_prompt": "你是后端"}) == "你是后端"
+
+
+def test_real_sequential_passes_role_prompt(tmp_path, monkeypatch):
+    """dict member 的 system_prompt 应传入 run_member_step 的 role_prompt。"""
+    from codeagent.server import team_worker as tw
+
+    captured = {}
+    def fake_step(*, agent_id, task, role_prompt="", **kw):
+        captured[agent_id] = {"task": task, "role_prompt": role_prompt}
+        return f"out-{agent_id}"
+    monkeypatch.setattr(tw, "run_member_step", fake_step)
+
+    _patch_dirs(monkeypatch, tmp_path)
+    run = eng.create_run("t1", "hi")
+    rid = run["id"]
+    members = [
+        {"id": "fe", "system_prompt": "你是前端工程师"},
+        {"id": "be", "role_prompt": "你是后端工程师"},
+    ]
+    eng._real_sequential(rid, members, "做个功能", "stop", 60)
+    assert captured["fe"]["role_prompt"] == "你是前端工程师"
+    assert captured["be"]["role_prompt"] == "你是后端工程师"
+    # context 传递：be 的 task 是 fe 的 output
+    assert "out-fe" in captured["be"]["task"]
+
+
+def test_real_manager_passes_worker_role_prompt(tmp_path, monkeypatch):
+    """manager 模式 worker 的 role_prompt 应传入。"""
+    from codeagent.server import team_worker as tw
+
+    captured = {}
+    def fake_step(*, agent_id, task, role_prompt="", **kw):
+        captured[agent_id] = {"task": task, "role_prompt": role_prompt}
+        if agent_id == "pm":
+            return "1. 子任务A\n2. 子任务B"
+        return f"out-{agent_id}"
+    monkeypatch.setattr(tw, "run_member_step", fake_step)
+
+    _patch_dirs(monkeypatch, tmp_path)
+    run = eng.create_run("t1", "hi")
+    rid = run["id"]
+    members = [
+        {"id": "pm", "system_prompt": "你是技术负责人"},
+        {"id": "w1", "role_prompt": "你是测试"},
+        {"id": "w2", "role_prompt": "你是文档"},
+    ]
+    eng._real_manager(rid, members, "做个项目", "stop", 60, manager_id="pm")
+    assert captured["pm"]["role_prompt"] == "你是技术负责人"
+    assert captured["w1"]["role_prompt"] == "你是测试"
+    assert captured["w2"]["role_prompt"] == "你是文档"
+    assert "子任务A" in captured["w1"]["task"]

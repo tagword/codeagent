@@ -48,7 +48,6 @@
 .team-form__row > label { min-width: 110px; font-size: .85rem; color: var(--text-dim, #888); }
 .team-form__row .input { flex: 1; }
 .team-form__members { display: flex; gap: 8px; flex-wrap: wrap; flex: 1; }
-.team-member-check { font-size: .85rem; }
 .team-form__actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; }
 
 /* 运行 */
@@ -81,3 +80,18 @@
   border-radius: 4px; padding: 8px; max-height: 240px; overflow: auto;
 }
 .team-step__output--empty { color: var(--text-dim, #aaa); font-size: .8rem; }
+
+/* 成员 + 角色（新建/编辑表单） */
+.team-form__members-hint { width: 100%; color: var(--text-dim, #888); font-size: .78rem; margin-bottom: 4px; }
+.team-member-row { display: flex; align-items: center; gap: 8px; width: 100%; }
+.team-member-check { display: flex; align-items: center; gap: 6px; min-width: 140px; }
+.team-member-check__id { font-family: ui-monospace, monospace; font-size: .82rem; }
+.team-member-role { flex: 1; font-size: .82rem; padding: 4px 8px; }
+.team-member-role:disabled { opacity: .45; }
+
+/* 列表里成员角色徽章 */
+.team-member-role-badge {
+  display: inline-block; margin-left: 6px; padding: 0 6px;
+  background: var(--accent-soft, #eef2ff); color: var(--accent, #4f46e5);
+  border-radius: 999px; font-size: .7rem; font-family: inherit; font-weight: 500;
+}

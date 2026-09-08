@@ -52,7 +52,9 @@ function _renderTeamsList() {
     var mode = t.mode || 'sequential';
     var members = (t.members || []).map(function(m){
       var id = typeof m === 'string' ? m : (m && (m.id || m.agent_id || m.role)) || '';
-      return '<span class="team-member-tag">' + escHtml(id) + '</span>';
+      var role = (typeof m === 'object' && m) ? (m.role_prompt || m.system_prompt || '') : '';
+      var roleBadge = role ? '<span class="team-member-role-badge" title="' + escAttr(role) + '">' + escHtml(role.slice(0, 18) + (role.length > 18 ? '…' : '')) + '</span>' : '';
+      return '<span class="team-member-tag">' + escHtml(id) + roleBadge + '</span>';
     }).join('');
     var pm = t.manager_id ? '<span class="teams__pm">PM: ' + escHtml(t.manager_id) + '</span>' : '';
     return '<div class="team-card" data-team-id="' + escAttr(t.id) + '">'
@@ -60,6 +62,7 @@ function _renderTeamsList() {
       + '<div class="team-card__title">' + _MODE_ICON[mode] + ' ' + escHtml(t.name || t.id) + '</div>'
       + '<div class="team-card__actions">'
       + '<button class="btn btn--primary btn--sm" onclick="openTeamRun(\'' + escAttr(t.id) + '\')">▶ 运行</button>'
+      + '<button class="btn btn--ghost btn--sm" onclick="openTeamEdit(\'' + escAttr(t.id) + '\')">编辑</button>'
       + '<button class="btn btn--ghost btn--sm" onclick="toggleTeamDetail(\'' + escAttr(t.id) + '\')">详情</button>'
       + '<button class="btn btn--ghost btn--sm team-del-btn" onclick="deleteTeam(\'' + escAttr(t.id) + '\')">🗑</button>'
       + '</div></div>'
@@ -104,57 +107,114 @@ function setTeamsStatus(msg, kind) {
   if (el) { el.textContent = msg; el.className = 'status-line ' + (kind === 'err' ? 'status-line--err' : (kind === 'ok' ? 'status-line--ok' : '')); }
 }
 
-// ── 新建 ────────────────────────────────────────────────
+// ── 新建 / 编辑 ─────────────────────────────────────────
 function openTeamNew() {
+  _renderTeamForm(null);
+}
+
+function openTeamEdit(teamId) {
+  var t = _teamsCache.find(function(x){ return x.id === teamId; });
+  if (!t) return;
+  _renderTeamForm(t);
+}
+
+function _memberRoleOf(m) {
+  if (typeof m === 'object' && m) return (m.role_prompt || m.system_prompt || '').trim();
+  return '';
+}
+
+function _renderTeamForm(team) {
   var listEl = document.getElementById('teamsList');
   if (!listEl) return;
   var agents = _agentsCache;
   var agentOpts = agents.length
     ? agents.map(function(a){ return '<option value="' + escAttr(a.id) + '">' + escHtml(a.id) + '</option>'; }).join('')
     : '<option value="default">default</option>';
+  var isEdit = !!team;
+  var existing = (team && team.members) || [];
+  // 已选成员 id -> role 映射（编辑时预填）
+  var selRoles = {};
+  existing.forEach(function(m){
+    var id = typeof m === 'string' ? m : (m && (m.id || m.agent_id || m.role)) || '';
+    selRoles[id] = _memberRoleOf(m);
+  });
+  var memberRows = agents.map(function(a){
+    var checked = selRoles[a.id] !== undefined ? ' checked' : '';
+    var roleVal = selRoles[a.id] !== undefined ? selRoles[a.id] : '';
+    var disabled = selRoles[a.id] !== undefined ? '' : ' disabled';
+    return '<div class="team-member-row">'
+      + '<label class="team-member-check"><input type="checkbox" class="tfMember" value="' + escAttr(a.id) + '"' + checked + ' onchange="toggleMemberRole(this)" /> '
+      + '<span class="team-member-check__id">' + escHtml(a.id) + '</span></label>'
+      + '<input type="text" class="input team-member-role" id="tfRole-' + escAttr(a.id) + '" value="' + escAttr(roleVal) + '" placeholder="角色提示词（可选）"' + disabled + ' />'
+      + '</div>';
+  }).join('');
+
   listEl.innerHTML = '<div class="team-form" id="teamForm">'
-    + '<div class="team-form__title">新建团队</div>'
-    + '<div class="team-form__row"><label>团队 ID</label><input class="input" id="tfId" placeholder="如 dev-team" /></div>'
-    + '<div class="team-form__row"><label>名称</label><input class="input" id="tfName" placeholder="如 开发团队" /></div>'
+    + '<div class="team-form__title">' + (isEdit ? '编辑团队「' + escHtml(team.id) + '」' : '新建团队') + '</div>'
+    + (isEdit ? '' : '<div class="team-form__row"><label>团队 ID</label><input class="input" id="tfId" placeholder="如 dev-team" /></div>')
+    + '<div class="team-form__row"><label>名称</label><input class="input" id="tfName" value="' + (isEdit ? escAttr(team.name || '') : '') + '" placeholder="如 开发团队" /></div>'
     + '<div class="team-form__row"><label>模式</label>'
     + '<select class="input" id="tfMode">'
-    + '<option value="sequential">顺序逐个（前一步产出传给下一步）</option>'
-    + '<option value="parallel">并行处理（所有成员同输入）</option>'
-    + '<option value="manager">PM 拆解分派（首个成员当 PM）</option>'
+    + '<option value="sequential"' + (isEdit && team.mode === 'sequential' ? ' selected' : '') + '>顺序逐个（前一步产出传给下一步）</option>'
+    + '<option value="parallel"' + (isEdit && team.mode === 'parallel' ? ' selected' : '') + '>并行处理（所有成员同输入）</option>'
+    + '<option value="manager"' + (isEdit && team.mode === 'manager' ? ' selected' : '') + '>PM 拆解分派（首个成员当 PM）</option>'
     + '</select></div>'
-    + '<div class="team-form__row"><label>成员（多选）</label><div class="team-form__members">'
-    + agents.map(function(a){
-        return '<label class="team-member-check"><input type="checkbox" class="tfMember" value="' + escAttr(a.id) + '" /> ' + escHtml(a.id) + '</label>';
-      }).join('')
+    + '<div class="team-form__row" style="align-items:flex-start;"><label>成员 + 角色</label>'
+    + '<div class="team-form__members">'
+    + '<div class="team-form__members-hint">勾选成员并填写其角色提示词（如"你是前端工程师"），决定该成员以何种身份工作。留空则用默认身份。</div>'
+    + memberRows
     + '</div></div>'
     + '<div class="team-form__row"><label>PM（manager 模式）</label>'
-    + '<select class="input" id="tfManager"><option value="">(第一个成员)</option>' + agentOpts + '</select></div>'
+    + '<select class="input" id="tfManager"><option value="">(第一个成员)</option>'
+    + agents.map(function(a){
+        var sel = (isEdit && team.manager_id === a.id) ? ' selected' : '';
+        return '<option value="' + escAttr(a.id) + '"' + sel + '>' + escHtml(a.id) + '</option>';
+      }).join('')
+    + '</select></div>'
     + '<div class="team-form__row"><label>错误策略</label>'
-    + '<select class="input" id="tfErr"><option value="stop">stop（成员失败即中止）</option><option value="continue">continue（跳过继续）</option></select></div>'
-    + '<div class="team-form__row"><label>描述</label><input class="input" id="tfDesc" placeholder="可选" /></div>'
+    + '<select class="input" id="tfErr">'
+    + '<option value="stop"' + (isEdit && team.error_policy === 'continue' ? '' : ' selected') + '>stop（成员失败即中止）</option>'
+    + '<option value="continue"' + (isEdit && team.error_policy === 'continue' ? ' selected' : '') + '>continue（跳过继续）</option>'
+    + '</select></div>'
+    + '<div class="team-form__row"><label>描述</label><input class="input" id="tfDesc" value="' + (isEdit ? escAttr(team.description || '') : '') + '" placeholder="可选" /></div>'
     + '<div class="team-form__actions">'
-    + '<button class="btn btn--primary btn--sm" onclick="submitTeamNew()">创建</button>'
+    + (isEdit
+        ? '<button class="btn btn--primary btn--sm" onclick="submitTeamEdit(\'' + escAttr(team.id) + '\')">保存修改</button>'
+        : '<button class="btn btn--primary btn--sm" onclick="submitTeamNew()">创建</button>')
     + '<button class="btn btn--ghost btn--sm" onclick="loadTeamsPanel()">取消</button>'
     + '</div></div>';
+}
+
+function _collectTeamForm() {
+  var members = Array.prototype.slice.call(document.querySelectorAll('.tfMember:checked'))
+    .map(function(cb){
+      var roleEl = document.getElementById('tfRole-' + cb.value);
+      var role = roleEl ? (roleEl.value || '').trim() : '';
+      return role ? { id: cb.value, role_prompt: role } : cb.value;
+    });
+  return {
+    name: (document.getElementById('tfName').value || '').trim(),
+    description: (document.getElementById('tfDesc').value || '').trim(),
+    members: members,
+    mode: document.getElementById('tfMode').value,
+    manager_id: document.getElementById('tfManager').value,
+    error_policy: document.getElementById('tfErr').value,
+    timeout_seconds: 300
+  };
+}
+
+function toggleMemberRole(cb) {
+  var role = document.getElementById('tfRole-' + cb.value);
+  if (role) role.disabled = !cb.checked;
 }
 
 function submitTeamNew() {
   var id = (document.getElementById('tfId').value || '').trim();
   if (!id) { setTeamsStatus('团队 ID 必填', 'err'); return; }
-  var members = Array.prototype.slice.call(document.querySelectorAll('.tfMember:checked'))
-    .map(function(cb){ return cb.value; });
-  if (members.length === 0) { setTeamsStatus('至少选 1 个成员', 'err'); return; }
-  var mode = document.getElementById('tfMode').value;
-  var body = {
-    id: id,
-    name: (document.getElementById('tfName').value || '').trim() || id,
-    description: (document.getElementById('tfDesc').value || '').trim(),
-    members: members,
-    mode: mode,
-    manager_id: document.getElementById('tfManager').value,
-    error_policy: document.getElementById('tfErr').value,
-    timeout_seconds: 300
-  };
+  var f = _collectTeamForm();
+  if (f.members.length === 0) { setTeamsStatus('至少选 1 个成员', 'err'); return; }
+  var body = { id: id, name: f.name || id };
+  Object.keys(f).forEach(function(k){ if (k !== 'name') body[k] = f[k]; });
   _teamsApi('/api/ui/teams', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -163,6 +223,19 @@ function submitTeamNew() {
     setTeamsStatus('团队「' + id + '」已创建', 'ok');
     loadTeamsPanel();
   }).catch(function(err){ setTeamsStatus('创建失败: ' + err.message, 'err'); });
+}
+
+function submitTeamEdit(teamId) {
+  var f = _collectTeamForm();
+  if (f.members.length === 0) { setTeamsStatus('至少选 1 个成员', 'err'); return; }
+  _teamsApi('/api/ui/teams/' + encodeURIComponent(teamId), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(f)
+  }).then(function(){
+    setTeamsStatus('团队「' + teamId + '」已更新', 'ok');
+    loadTeamsPanel();
+  }).catch(function(err){ setTeamsStatus('更新失败: ' + err.message, 'err'); });
 }
 
 // ── 运行 + 实时轮询 ─────────────────────────────────────

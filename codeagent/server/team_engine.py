@@ -228,6 +228,13 @@ def _member_agent_id(member) -> str:
     return ""
 
 
+def _member_role_prompt(member) -> str:
+    """Role/system prompt for a member (A role-play form), or '' if none."""
+    if isinstance(member, dict):
+        return str(member.get("system_prompt") or member.get("role_prompt") or "")
+    return ""
+
+
 def _member_error_policy(error_policy: str) -> bool:
     """True when a member failure should abort the whole run."""
     return error_policy == "stop"
@@ -242,12 +249,13 @@ def _real_sequential(run_id: str, members: list, user_input: str, error_policy: 
         agent_id = _member_agent_id(member)
         if not agent_id:
             continue
+        role = _member_role_prompt(member)
         step = add_step(run_id, agent_id, "sequential")
         if step is None:
             return
         update_step(run_id, step["step_id"], {"status": STEP_STATUS_RUNNING, "input": context})
         try:
-            output = run_member_step(agent_id=agent_id, task=context)
+            output = run_member_step(agent_id=agent_id, task=context, role_prompt=role)
             if not output:
                 output = f"[成员 {agent_id} 无输出]"
             update_step(run_id, step["step_id"], {"status": STEP_STATUS_DONE, "output": output})
@@ -268,12 +276,13 @@ def _real_parallel(run_id: str, members: list, user_input: str, error_policy: st
         agent_id = _member_agent_id(member)
         if not agent_id:
             return
+        role = _member_role_prompt(member)
         step = add_step(run_id, agent_id, "parallel")
         if step is None:
             return
         update_step(run_id, step["step_id"], {"status": STEP_STATUS_RUNNING, "input": user_input})
         try:
-            output = run_member_step(agent_id=agent_id, task=user_input)
+            output = run_member_step(agent_id=agent_id, task=user_input, role_prompt=role)
             update_step(run_id, step["step_id"], {"status": STEP_STATUS_DONE, "output": output or f"[成员 {agent_id} 无输出]"})
         except Exception as exc:
             update_step(run_id, step["step_id"], {"status": STEP_STATUS_FAILED, "output": f"错误: {exc}"})
@@ -289,8 +298,11 @@ def _real_manager(run_id: str, members: list, user_input: str, error_policy: str
 
     if not members:
         return
-    member_ids = [_member_agent_id(m) for m in members]
-    pm_agent = manager_id if manager_id and manager_id in member_ids else _member_agent_id(members[0])
+    pm_member = next((m for m in members if _member_agent_id(m) == manager_id), None) if manager_id else None
+    pm_agent = _member_agent_id(pm_member) if pm_member else (_member_agent_id(members[0]) if members else "")
+    if not pm_member:
+        pm_member = members[0] if members else None
+    pm_role = _member_role_prompt(pm_member)
     workers = [m for m in members if _member_agent_id(m) != pm_agent]
 
     # PM step：分析并拆分子任务（真实产出子任务清单）
@@ -305,6 +317,7 @@ def _real_manager(run_id: str, members: list, user_input: str, error_policy: str
                 f"你是团队负责人(PM)。请把下面的任务拆成 {max(len(workers), 1)} 个"
                 f"明确、独立的子任务，每行一个，直接输出子任务清单，不要多余解释。\n\n任务: {user_input}"
             ),
+            role_prompt=pm_role,
         )
     except Exception as exc:
         update_step(run_id, pm_step["step_id"], {"status": STEP_STATUS_FAILED, "output": f"错误: {exc}"})
@@ -321,6 +334,7 @@ def _real_manager(run_id: str, members: list, user_input: str, error_policy: str
     subtasks = _split_subtasks(pm_output, len(workers))
     for i, worker in enumerate(workers):
         wid = _member_agent_id(worker)
+        wrole = _member_role_prompt(worker)
         sub = subtasks[i] if i < len(subtasks) else f"子任务 {i+1}（承接 PM 拆解）"
         w_step = add_step(run_id, wid, "manager-worker")
         if w_step is None:
@@ -330,7 +344,7 @@ def _real_manager(run_id: str, members: list, user_input: str, error_policy: str
             "input": sub,
         })
         try:
-            w_output = run_member_step(agent_id=wid, task=sub)
+            w_output = run_member_step(agent_id=wid, task=sub, role_prompt=wrole)
             update_step(run_id, w_step["step_id"], {"status": STEP_STATUS_DONE, "output": w_output or f"[成员 {wid} 无输出]"})
         except Exception as exc:
             update_step(run_id, w_step["step_id"], {"status": STEP_STATUS_FAILED, "output": f"错误: {exc}"})
