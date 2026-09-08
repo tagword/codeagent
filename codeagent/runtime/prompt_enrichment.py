@@ -127,7 +127,7 @@ def _runtime_info_block() -> str:
         f"- **当前时间**: {now.strftime('%Y-%m-%d %H:%M:%S %Z')}",
         f"- **操作系统**: {os_name} {os_release}",
         f"- **主机名**: {platform.node()}",
-        f"- **Shell**: {os.environ.get('SHELL', '') or os.environ.get('ComSpec', '')}",
+        f"- **Shell**: {os.environ.get('SHELL', '') or os.environ.get('COMSPEC', '')}",
         f"- **工作目录**: {Path.cwd().resolve()}",
     ]
     if os_name == "Windows":

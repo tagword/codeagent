@@ -16,9 +16,7 @@ def list_vision_presets() -> list[dict[str, Any]]:
 def preset_supports_vision(preset: dict[str, Any] | None) -> bool:
     if not isinstance(preset, dict):
         return False
-    if preset.get("supports_vision") is True:
-        return True
-    return False
+    return preset.get("supports_vision") is True
 
 
 def preset_supports_vision_id(preset_id: str) -> bool:
