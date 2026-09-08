@@ -282,7 +282,7 @@ class WebUIAuthMiddleware:
 
         async def send_with_cookie(message):
             if message["type"] == "http.response.start":
-                headers = [h for h in (message.get("headers") or []) if not (h[0].lower() == b"set-cookie")]
+                headers = [h for h in (message.get("headers") or []) if h[0].lower() != b"set-cookie"]
                 headers.append((b"set-cookie", set_cookie_hdr))
                 message["headers"] = headers
             await send(message)

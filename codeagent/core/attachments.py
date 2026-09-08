@@ -290,10 +290,7 @@ def _parse_globs(pattern: str | None) -> tuple[str, ...]:
 
 def _matches_globs(name: str, globs: tuple[str, ...]) -> bool:
     low = name.lower()
-    for g in globs:
-        if fnmatch.fnmatch(low, g.lower()):
-            return True
-    return False
+    return any(fnmatch.fnmatch(low, g.lower()) for g in globs)
 
 
 def message_has_image_attachments(msg: dict[str, Any]) -> bool:
