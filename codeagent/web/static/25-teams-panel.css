@@ -110,3 +110,4 @@
 .team-history__meta { font-size: .78rem; color: var(--text-dim, #888); margin-top: 2px; }
 .team-history__row-actions { display: flex; gap: 6px; flex-shrink: 0; }
 .team-history__recover { color: #b45309; }
+.team-history__cancel { color: #b91c1c; }

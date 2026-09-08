@@ -378,6 +378,9 @@ function _renderTeamHistory(runs) {
     var recoverBtn = (r.status === 'failed' || r.status === 'timeout')
       ? '<button class="btn btn--ghost btn--sm team-history__recover" onclick="recoverTeamRun(\'' + escAttr(r.id) + '\')">恢复重跑</button>'
       : '';
+    var cancelBtn = (r.status === 'running')
+      ? '<button class="btn btn--ghost btn--sm team-history__cancel" onclick="cancelTeamRun(\'' + escAttr(r.id) + '\')">停止</button>'
+      : '';
     return '<div class="team-history__row">'
       + '<div class="team-history__row-main">'
       + '<div class="team-history__row-top">'
@@ -389,6 +392,7 @@ function _renderTeamHistory(runs) {
       + '</div>'
       + '<div class="team-history__row-actions">'
       + '<button class="btn btn--ghost btn--sm" onclick="viewTeamRun(\'' + escAttr(r.id) + '\')">查看</button>'
+      + cancelBtn
       + recoverBtn
       + '</div>'
       + '</div>';
@@ -427,6 +431,17 @@ function recoverTeamRun(runId) {
       viewTeamRun(runId);
     })
     .catch(function(err){ setTeamsStatus('恢复失败: ' + err.message, 'err'); });
+}
+
+function cancelTeamRun(runId) {
+  if (!window.confirm('确定停止运行 ' + runId + ' 吗？后台线程若卡死无法打断，将标记为超时。')) return;
+  _teamsApi('/api/ui/runs/' + encodeURIComponent(runId) + '/cancel', { method: 'POST' })
+    .then(function(){
+      setTeamsStatus('运行 ' + runId + ' 已停止', 'ok');
+      _stopTeamPoll(runId);
+      viewTeamRun(runId);
+    })
+    .catch(function(err){ setTeamsStatus('停止失败: ' + err.message, 'err'); });
 }
 
 // ── 初始化（随 Agent 页加载） ────────────────────────────

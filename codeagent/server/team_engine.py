@@ -52,6 +52,7 @@ def _teams_dir() -> Path:
 
 def list_runs(team_id: str | None = None, limit: int = 50) -> list[dict]:
     """List runs, optionally filtered by team_id."""
+    _maybe_sweep_stale()  # 惰性清理卡死的 running run
     rd = _runs_dir()
     runs = []
     for f in sorted(rd.glob("*.json"), reverse=True):
@@ -66,6 +67,82 @@ def list_runs(team_id: str | None = None, limit: int = 50) -> list[dict]:
         except (json.JSONDecodeError, OSError):
             pass
     return runs
+
+
+# ── 卡死 run 清理（watchdog 惰性扫描） ──────────────────────────
+# 后台执行线程若中途崩溃 / 进程重启 / LLM 调用挂死，run 会永久停在 running。
+# 没有常驻 watchdog 线程（避免又引入需管理的后台进程），改为在 list_runs 时
+# 惰性扫描：带时间门控，最多每 _SWEEP_INTERVAL 秒全扫一次。
+_SWEEP_INTERVAL = 30.0
+_last_sweep = [0.0]  # 模块级单例，避免每次 list 都全扫
+
+# 一个 run 允许的"无进展"最大时长（秒）：超过视为后台线程卡死。
+# 团队级 timeout_seconds 目前只存不生效（见 _real_* 未用 timeout），这里作为
+# 兜底判定：running run 的 updated_at 超过该值未刷新即标记 timeout。
+# 下限 60s：健康 run 每步都会刷新 updated_at，只有线程真挂死才会超时。
+_STALE_MIN_FLOOR = 60.0
+
+
+def sweep_stale_runs() -> int:
+    """把超过时限仍 running 的 run 标记为 timeout，返回清理条数。
+
+    判定：run.status == running 且 now - run.updated_at > 该 run 的 team
+    timeout（缺省 300s，下限 _STALE_MIN_FLOOR 防误杀长生成）。
+    """
+    import time as _t
+    rd = _runs_dir()
+    cleared = 0
+    now = _t.time()
+    for f in rd.glob("*.json"):
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+        if data.get("status") != RUN_STATUS_RUNNING:
+            continue
+        updated = float(data.get("updated_at") or data.get("created_at") or 0)
+        # 团队 timeout 配置可能缺失/过小，取下限 _STALE_MIN_FLOOR 防误杀
+        team_timeout = 300.0
+        team_id = data.get("team_id") or ""
+        if team_id:
+            tf = _teams_dir() / f"{team_id}.json"
+            if tf.is_file():
+                try:
+                    team_timeout = float(json.loads(tf.read_text(encoding="utf-8")).get("timeout_seconds") or 300.0)
+                except (json.JSONDecodeError, OSError, ValueError):
+                    team_timeout = 300.0
+        max_age = max(team_timeout, _STALE_MIN_FLOOR)
+        if now - updated > max_age:
+            run_id = f.stem
+            with _RUN_LOCK:
+                update_run(run_id, {"status": RUN_STATUS_TIMEOUT, "error": "运行超过时限被标记为超时（后台线程可能已挂起）"})
+            cleared += 1
+    return cleared
+
+
+def _maybe_sweep_stale() -> None:
+    """带时间门控的惰性清理：最多每 _SWEEP_INTERVAL 秒全扫一次。"""
+    now = time.time()
+    if now - _last_sweep[0] >= _SWEEP_INTERVAL:
+        try:
+            sweep_stale_runs()
+        except Exception:  # noqa: BLE001 — 清理失败不应影响列表读取
+            logger.warning("sweep_stale_runs failed", exc_info=True)
+        _last_sweep[0] = time.time()
+
+
+def cancel_run(run_id: str) -> dict | None:
+    """手动强制结束一个 running run（标记为 timeout）。
+
+    后台线程若真卡死无法打断（LLM 同步调用），这里只做状态兜底：把 run 标成
+    timeout，让 UI 能识别并允许后续"恢复重跑"（开新线程）。返回更新后的 run。
+    """
+    run = get_run(run_id)
+    if run is None:
+        return None
+    if run.get("status") == RUN_STATUS_RUNNING:
+        update_run(run_id, {"status": RUN_STATUS_TIMEOUT, "error": "已被手动停止"})
+    return get_run(run_id)
 
 
 def create_run(team_id: str, user_input: str) -> dict:

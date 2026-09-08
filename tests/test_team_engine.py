@@ -279,3 +279,55 @@ def test_rerun_run_reexecutes_and_clears_steps(tmp_path, monkeypatch):
     done = _wait_done(rid)
     assert done["status"] == "done"
     assert len(done["steps"]) == 2  # 两个成员各一步（simulate）
+
+
+# ── sweep_stale_runs（卡死 run 惰性清理） ────────────────────
+
+def test_sweep_stale_runs_marks_old_running_as_timeout(tmp_path, monkeypatch):
+    """running 且长时间无进展的 run 应被标记 timeout；新 running 不动。"""
+    _patch_dirs(monkeypatch, tmp_path)
+    # 建团队（timeout 默认 300）
+    td = eng._teams_dir()
+    td.mkdir(parents=True, exist_ok=True)
+    (td / "t1.json").write_text(json.dumps({"name": "t1", "members": ["a1"], "mode": "sequential"}), encoding="utf-8")
+
+    # 一条 running 但 updated_at 很旧（模拟线程挂死）
+    stale = eng.create_run("t1", "in")
+    eng.update_run(stale["id"], {"status": "running"})
+    # 直接把 updated_at 拨回 1 小时前
+    import time as _t
+    eng.update_run(stale["id"], {"status": "running"})
+    f = eng._runs_dir() / (stale["id"] + ".json")
+    data = json.loads(f.read_text(encoding="utf-8"))
+    data["updated_at"] = _t.time() - 3600
+    f.write_text(json.dumps(data), encoding="utf-8")
+
+    # 一条 running 但刚更新（健康）
+    fresh = eng.create_run("t1", "in2")
+    eng.update_run(fresh["id"], {"status": "running"})
+
+    cleared = eng.sweep_stale_runs()
+    assert cleared == 1
+    assert eng.get_run(stale["id"])["status"] == "timeout"
+    assert eng.get_run(fresh["id"])["status"] == "running"
+
+
+# ── cancel_run（手动停止 running run） ─────────────────────
+
+def test_cancel_run_stops_running(tmp_path, monkeypatch):
+    """cancel_run 把 running run 标 timeout；done/failed 不受影响。"""
+    _patch_dirs(monkeypatch, tmp_path)
+    td = eng._teams_dir()
+    td.mkdir(parents=True, exist_ok=True)
+    (td / "t1.json").write_text(json.dumps({"name": "t1", "members": ["a1"], "mode": "sequential"}), encoding="utf-8")
+    run = eng.create_run("t1", "in")
+    eng.update_run(run["id"], {"status": "running"})
+    stopped = eng.cancel_run(run["id"])
+    assert stopped["status"] == "timeout"
+    assert "手动" in stopped.get("error", "")
+    # done run 不应被取消
+    d = eng.create_run("t1", "in2")
+    eng.update_run(d["id"], {"status": "done"})
+    assert eng.cancel_run(d["id"])["status"] == "done"
+    # 不存在返回 None
+    assert eng.cancel_run("nope") is None

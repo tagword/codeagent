@@ -179,6 +179,15 @@ def build_teams_routes(project_root: Path) -> list[Route]:
             return JSONResponse({"detail": "run not found"}, status_code=404)
         return JSONResponse({"run": run})
 
+    async def api_runs_cancel(request: Request) -> JSONResponse:
+        """POST /api/ui/runs/{run_id}/cancel — force-stop a running run."""
+        run_id = request.path_params.get("run_id", "")
+        from codeagent.server.team_engine import cancel_run
+        updated = cancel_run(run_id)
+        if updated is None:
+            return JSONResponse({"detail": "run not found"}, status_code=404)
+        return JSONResponse({"detail": f"run {run_id} stopped", "run": updated})
+
     # ── Health / Watchdog ──────────────────────────────────────
 
     async def api_runs_recover(request: Request) -> JSONResponse:
@@ -208,6 +217,7 @@ def build_teams_routes(project_root: Path) -> list[Route]:
         Route("/runs", api_runs_list, methods=["GET"]),
         Route("/runs/{run_id}", api_runs_get, methods=["GET"]),
         Route("/runs/{run_id}/recover", api_runs_recover, methods=["POST"]),
+        Route("/runs/{run_id}/cancel", api_runs_cancel, methods=["POST"]),
         Route("/hub/send", api_hub_send, methods=["POST"]),
         Route("/hub/events", api_hub_events, methods=["GET"]),
         Route("/hub/messages", api_hub_messages, methods=["GET"]),
