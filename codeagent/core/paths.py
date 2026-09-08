@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import re
 from pathlib import Path
 
 from codeagent.core.env import product_home
@@ -39,6 +40,25 @@ from seed.core.paths import (
 
 _PROJECT_SUBDIRS = ("docs", "plans", "scripts", "sessions", "skills", "cache", "tmp")
 
+# 允许的 agent_id 字符：字母数字、连字符、下划线、点。拒绝路径分隔符/穿越。
+_SAFE_AGENT_ID_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+
+
+def _sanitize_agent_id(agent_id: str) -> str:
+    """Return a path-safe agent_id, or '' if it contains path traversal/separators.
+
+    agent_id 常来自用户可控输入（WebUI query / chat 参数），直接拼进路径会导致
+    路径穿越（如 ``../`` 写到 .codeagent 之外）。这里做纵深防御：只接受安全字符，
+    非法则返回空串，调用方回退到默认。
+    """
+    aid = (agent_id or "").strip()
+    if not aid:
+        return ""
+    if _SAFE_AGENT_ID_RE.match(aid):
+        return aid
+    logger.warning("Rejecting unsafe agent_id %r (path traversal guard)", agent_id)
+    return ""
+
 
 def _codeagent_dir(root: Path | None = None) -> Path:
     """Return the ``.codeagent/`` directory under the given root (default: cwd)."""
@@ -47,8 +67,14 @@ def _codeagent_dir(root: Path | None = None) -> Path:
 
 
 def _agent_work_dir(agent_id: str, root: Path | None = None) -> Path:
-    """Return the agent work directory ``.codeagent/{agent_id}/``."""
-    return _codeagent_dir(root) / agent_id
+    """Return the agent work directory ``.codeagent/{agent_id}/``.
+
+    agent_id 会先净化，非法（含路径分隔符/穿越）回退到默认，避免路径穿越。
+    """
+    from seed.core.paths import agent_id_default
+
+    aid = _sanitize_agent_id(agent_id) or agent_id_default()
+    return _codeagent_dir(root) / aid
 
 
 def ensure_project_dirs(
@@ -69,7 +95,8 @@ def ensure_project_dirs(
     from seed.core.paths import agent_id_default
 
     base = Path(root).resolve() if root is not None else Path.cwd().resolve()
-    aid = (agent_id or "").strip() or agent_id_default()
+    raw_aid = (agent_id or "").strip() or agent_id_default()
+    aid = _sanitize_agent_id(raw_aid) or agent_id_default()
 
     ca_root = _codeagent_dir(base)
     ca_root.mkdir(parents=True, exist_ok=True)
