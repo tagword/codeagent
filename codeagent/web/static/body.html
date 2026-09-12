@@ -656,85 +656,93 @@
     </section>
 
     <section id="page-agent" class="page page--scroll">
-      <div class="content-max">
+      <div class="content-max agent-page">
 
-        <!-- Agent 列表：多 Agent 管理（选择 / 新建 / 删除） -->
-        <fieldset class="section" id="fieldsetAgentList">
-          <div class="section__header">
-            <h3 class="section__title">Agent 管理 <span class="agent-list__count" id="agentListCount"></span></h3>
-            <div class="row-actions" style="display:flex;gap:var(--sp-2);margin:0;align-items:center;">
+        <!-- 左栏：Agent 列表（主选择器） -->
+        <aside class="agent-page__sidebar">
+          <div class="agent-page__sidebar-head">
+            <h3 class="agent-page__sidebar-title">Agent <span class="agent-list__count" id="agentListCount"></span></h3>
+            <div class="agent-page__sidebar-actions">
               <button class="btn btn--ghost btn--sm" onclick="refreshAgentList()" title="刷新列表">⟳</button>
-              <button class="btn btn--primary btn--sm" onclick="createAgentFromList()">＋ 新建</button>
+              <button class="btn btn--primary btn--sm" onclick="createAgentFromList()" title="新建 Agent">＋</button>
             </div>
           </div>
-          <div class="agent-list">
-            <div class="agent-list__toolbar">
-              <input class="agent-list__search" id="agentListSearch" type="text"
-                     placeholder="搜索 Agent（ID / 名称 / 描述）…"
-                     oninput="filterAgentList(this.value)">
-            </div>
-            <div class="agent-list__items" id="agentListItems">
-              <div class="agent-list__loading">加载中…</div>
-            </div>
+          <input class="agent-list__search" id="agentListSearch" type="text"
+                 placeholder="搜索 Agent…"
+                 oninput="filterAgentList(this.value)">
+          <div class="agent-list__items" id="agentListItems">
+            <div class="agent-list__loading">加载中…</div>
           </div>
-        </fieldset>
+        </aside>
 
-        <!-- Current agent detail (always visible, single-agent mode) -->
-        <fieldset class="section" id="fieldsetAgentDetail">
-          <div class="section__header">
-            <h3 class="section__title" id="agentDetailTitle">Agent 配置</h3>
-          </div>
-          <div id="agentDetailContent"></div>
+        <!-- 右栏：选中 Agent 的完整配置 -->
+        <div class="agent-page__main">
           <div id="agentStatus" class="status-line"></div>
-        </fieldset>
 
-        <!-- Skills section -->
-        <fieldset class="section" id="fieldsetAgentSkills">
-          <div class="section__header">
-            <h3 class="section__title"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-3px;margin-right:4px;"><path d="M8 1l2 5.5h5.5l-4.5 3L12 15 8 11.5 4 15l1-5.5-4.5-3H6z"/></svg> 知识 / 技能</h3>
-            <div class="row-actions" style="display:flex;gap:var(--sp-2);margin:0;">
-              <button type="button" class="btn btn--primary btn--sm" id="btnSkillAdd">+ 新增</button>
-              <button type="button" class="btn btn--ghost btn--sm" id="btnSkillRefresh">刷新</button>
+          <!-- 概览 + 工具 -->
+          <fieldset class="section" id="fieldsetAgentDetail">
+            <div class="section__header">
+              <h3 class="section__title" id="agentDetailTitle">Agent 配置</h3>
+              <div class="row-actions" style="display:flex;gap:var(--sp-2);margin:0;">
+                <button class="btn btn--danger btn--sm" id="btnAgentDelete" onclick="deleteCurrentAgent()" title="删除当前 Agent">删除</button>
+              </div>
             </div>
-          </div>
-          <p class="section__desc">
-            技能文件是 Markdown 文档，教导 Agent 如何完成特定任务。仅对当前 Agent 生效，可独立启用/停用。
-          </p>
-          <div id="skillList" class="skill-list" style="margin-bottom:var(--sp-3);"></div>
-          <div id="skillStatus" class="status-line"></div>
-        </fieldset>
+            <div id="agentDetailContent"></div>
+          </fieldset>
 
-        <!-- System Prompt MD files -->
-        <fieldset class="section" id="fieldsetSysPromptMd">
-          <div class="section__header">
-            <h3 class="section__title">📄 身份配置文件</h3>
-          </div>
-          <p class="section__desc">
-            编辑当前 Agent 的身份/行为配置文件（Markdown）。所有文档默认参与<strong>系统提示</strong>，保存后<strong>下一轮对话</strong>生效。
-          </p>
-          <div id="mdFileList"></div>
-          <div id="mdFileStatus" class="status-line"></div>
-        </fieldset>
-
-        <!-- Teams (multi-agent collaboration) -->
-        <fieldset class="section" id="fieldsetTeams">
-          <div class="section__header">
-            <h3 class="section__title">🤝 团队协作 (Teams)</h3>
-            <div class="row-actions" style="display:flex;gap:var(--sp-2);margin:0;">
-              <button type="button" class="btn btn--ghost btn--sm" id="btnTeamHistory">🕘 运行历史</button>
-              <button type="button" class="btn btn--primary btn--sm" id="btnTeamNew">+ 新建团队</button>
-              <button type="button" class="btn btn--ghost btn--sm" id="btnTeamRefresh">刷新</button>
+          <!-- 身份配置文件 -->
+          <fieldset class="section" id="fieldsetSysPromptMd">
+            <div class="section__header">
+              <h3 class="section__title">📄 身份配置文件</h3>
             </div>
-          </div>
-          <p class="section__desc">
-            让多个成员协作完成任务：<strong>sequential</strong> 逐个接力、<strong>parallel</strong> 并行处理、
-            <strong>manager</strong> 由 PM 拆解后分派。运行会<strong>真实调用 LLM</strong>，可实时查看每个成员的步骤产出。
-          </p>
-          <div id="teamsList" style="margin-bottom:var(--sp-3);"></div>
-          <div id="teamRunDetail"></div>
-          <div id="teamHistoryPanel" style="display:none;"></div>
-          <div id="teamsStatus" class="status-line"></div>
-        </fieldset>
+            <p class="section__desc">
+              编辑当前 Agent 的身份/行为配置文件（Markdown）。所有文档默认参与<strong>系统提示</strong>，保存后<strong>下一轮对话</strong>生效。
+            </p>
+            <div id="mdFileList"></div>
+            <div id="mdFileStatus" class="status-line"></div>
+          </fieldset>
+
+          <!-- 技能 -->
+          <fieldset class="section" id="fieldsetAgentSkills">
+            <div class="section__header">
+              <h3 class="section__title">⭐ 知识 / 技能</h3>
+              <div class="row-actions" style="display:flex;gap:var(--sp-2);margin:0;">
+                <button type="button" class="btn btn--primary btn--sm" id="btnSkillAdd">+ 新增</button>
+                <button type="button" class="btn btn--ghost btn--sm" id="btnSkillRefresh">刷新</button>
+              </div>
+            </div>
+            <p class="section__desc">
+              技能文件是 Markdown 文档，教导 Agent 如何完成特定任务。仅对当前 Agent 生效，可独立启用/停用。
+            </p>
+            <div id="skillList" class="skill-list" style="margin-bottom:var(--sp-3);"></div>
+            <div id="skillStatus" class="status-line"></div>
+          </fieldset>
+
+          <!-- 团队协作（可折叠，默认收起） -->
+          <fieldset class="section section--collapsible" id="fieldsetTeams">
+            <div class="section__header section__header--clickable" onclick="toggleTeamsSection()">
+              <h3 class="section__title">
+                <span class="section__caret" id="teamsCaret">▸</span>
+                🤝 团队协作 (Teams)
+              </h3>
+              <div class="row-actions" style="display:flex;gap:var(--sp-2);margin:0;">
+                <button type="button" class="btn btn--ghost btn--sm" id="btnTeamHistory">🕘 历史</button>
+                <button type="button" class="btn btn--primary btn--sm" id="btnTeamNew">+ 新建</button>
+                <button type="button" class="btn btn--ghost btn--sm" id="btnTeamRefresh">⟳</button>
+              </div>
+            </div>
+            <div class="section__body" id="teamsSectionBody" style="display:none;">
+              <p class="section__desc">
+                让多个成员协作完成任务：<strong>sequential</strong> 逐个接力、<strong>parallel</strong> 并行处理、
+                <strong>manager</strong> 由 PM 拆解后分派。运行会<strong>真实调用 LLM</strong>，可实时查看每个成员的步骤产出。
+              </p>
+              <div id="teamsList" style="margin-bottom:var(--sp-3);"></div>
+              <div id="teamRunDetail"></div>
+              <div id="teamHistoryPanel" style="display:none;"></div>
+              <div id="teamsStatus" class="status-line"></div>
+            </div>
+          </fieldset>
+        </div>
 
       </div>
     </section>

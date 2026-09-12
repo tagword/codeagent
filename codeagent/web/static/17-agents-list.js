@@ -64,16 +64,30 @@ function _renderAgentList() {
     var toolCount = (a.tools && a.tools.acquired && a.tools.acquired.allow)
       ? a.tools.acquired.allow.length : 0;
     var toolLabel = a.tools_configured ? (toolCount + ' 工具') : '全部工具';
+    // 空壳判定：无描述 + 无工具配置 + 名称就是自动生成的 id（ag_xxx）
+    // 这类 agent 通常是程序创建后未配置，应弱化展示并给出提示，避免与真实 Agent 混淆。
+    var isShell = !desc && toolCount === 0 && /^ag_[0-9a-f]{8,}$/i.test(a.id);
+    var kind = isShell ? 'shell' : (a.tools_configured ? 'configured' : 'builtin');
 
+    // 名称与 ID 分层：名称是主标题；ID 仅在"名称 != ID"时作为副标题展示，
+    // 避免 default 这种 id==name 的情况出现两行重复。
+    var idLine = (name !== a.id) ? '<div class="agent-list__sub">' + escHtml(a.id) + '</div>' : '';
+    // 状态标签：空壳（未配置）/ 已配置工具，让用户一眼区分
+    var kindTag = isShell
+      ? '<span class="agent-list__tag agent-list__tag--shell">未配置</span>'
+      : (toolCount > 0 ? '<span class="agent-list__tag">' + escHtml(toolLabel) + '</span>'
+                       : '<span class="agent-list__tag agent-list__tag--builtin">全部工具</span>');
     return ''
-      + '<div class="agent-list__item' + (isActive ? ' agent-list__item--active' : '') + '"'
+      + '<div class="agent-list__item' + (isActive ? ' agent-list__item--active' : '')
+      + (isShell ? ' agent-list__item--shell' : '') + '"'
       + ' data-agent-id="' + escAttr(a.id) + '"'
       + ' onclick="selectAgentFromList(\'' + escAttr(a.id) + '\')">'
       + '<div class="agent-card__avatar agent-card__avatar--' + color + '">' + escHtml(firstChar) + '</div>'
       + '<div class="agent-list__meta">'
       + '<div class="agent-list__name">' + escHtml(name)
       + (isActive ? ' <span class="agent-list__badge">当前</span>' : '') + '</div>'
-      + '<div class="agent-list__sub">' + escHtml(a.id) + ' · ' + escHtml(toolLabel) + '</div>'
+      + idLine
+      + '<div class="agent-list__sub agent-list__sub--meta">' + kindTag + '</div>'
       + (desc ? '<div class="agent-list__desc">' + escHtml(desc) + '</div>' : '')
       + '</div>'
       + '<button class="agent-list__del" title="删除该 Agent"'
@@ -155,6 +169,28 @@ function deleteAgentFromList(aid) {
     .catch(function (e) {
       if (typeof _setStatus === 'function') _setStatus('err', '删除失败：' + e);
     });
+}
+
+/** 折叠/展开 Teams 区块（默认收起，避免喧宾夺主）。 */
+function toggleTeamsSection() {
+  var body = document.getElementById('teamsSectionBody');
+  var caret = document.getElementById('teamsCaret');
+  if (!body) return;
+  var open = body.style.display !== 'none';
+  body.style.display = open ? 'none' : 'block';
+  if (caret) caret.classList.toggle('section__caret--open', !open);
+  // 首次展开时按需加载团队列表
+  if (!open && !_teamsLoaded && typeof refreshTeams === 'function') {
+    _teamsLoaded = true;
+    refreshTeams();
+  }
+}
+var _teamsLoaded = false;
+
+/** 删除当前选中的 Agent（右栏入口，与列表 ✕ 等价）。 */
+function deleteCurrentAgent() {
+  var aid = (typeof agentId !== 'undefined' ? agentId : 'default');
+  deleteAgentFromList(aid);
 }
 
 /** 初始化：页面切到 agent 时刷新列表。 */
