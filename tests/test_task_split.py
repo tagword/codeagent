@@ -3,7 +3,6 @@
 覆盖 auto_split_enabled 与 split_user_tasks 的启发式拆分规则：
 --- 分隔 / 编号列表(≥2) / 单任务 / 空 / 不误拆。
 """
-import pytest
 
 from codeagent.core import env as ca_env
 from codeagent.runtime import task_split as ts

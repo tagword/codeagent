@@ -2,7 +2,6 @@
 
 覆盖 cookie 名派生、scope method 解析、query 参数解析、token 常量时间比较。
 """
-import pytest
 
 from codeagent.web import auth_impl as ai
 

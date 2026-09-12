@@ -5,7 +5,6 @@ _summarize_user_input_with_fallback 的超长输入 head+tail 截断。
 """
 import pathlib
 
-import codeagent.server as server
 from codeagent.server import _persist_long_user_input
 
 
@@ -58,7 +57,6 @@ class _FakeLLM:
 
 def _call_summarize(monkeypatch, raw, max_in=60000):
     captured = {}
-    from seed.core.llm_exec import get_llm_executor
     monkeypatch.setattr("seed.core.llm_exec.get_llm_executor", lambda **k: _FakeLLM(captured))
     monkeypatch.setenv("CODEAGENT_USER_INPUT_SUMMARY_BASEURL", "")
     monkeypatch.setenv("CODEAGENT_USER_INPUT_SUMMARY_MODEL", "")

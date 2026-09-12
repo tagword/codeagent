@@ -29,7 +29,7 @@ def test_parse_body_json_non_dict():
 
 
 def test_parse_body_json_unicode():
-    assert _parse_body_json('{"msg": "你好"}'.encode("utf-8")) == {"msg": "你好"}
+    assert _parse_body_json('{"msg": "你好"}'.encode()) == {"msg": "你好"}
 
 
 # ---------- _format_sse ----------

@@ -6,7 +6,6 @@
 3. _max_tts_chars：TTS 字符上限（含环境变量边界）
 4. _humanize_tts_error：错误人性化（含 2056 Token Plan 特判）
 """
-import os
 
 from codeagent.core.speech_synth import (
     _base_resp_status_code,

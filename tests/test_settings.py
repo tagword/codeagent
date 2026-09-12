@@ -9,8 +9,6 @@
 """
 import json
 
-import pytest
-
 from codeagent.core import settings as st
 
 
@@ -47,7 +45,6 @@ def test_load_non_dict_returns_defaults(tmp_path):
 
 
 def test_load_filters_invalid_filenames(tmp_path):
-    from seed.core.config_plane import CONFIG_FILENAMES
     _write_plugins(tmp_path, {"config_md_enabled": ["agent.md", "evil.md", "..", 123]})
     d = st.load_plugins(tmp_path)
     # 只有合法且存在的文件名被保留
@@ -93,7 +90,7 @@ def test_get_filenames_only_invalid_falls_back_to_all(tmp_path):
 # ---------- plugins_public_view ----------
 def test_public_view_marks_enabled(tmp_path):
     _write_plugins(tmp_path, {"config_md_enabled": ["agent.md"]})
-    view = st.plugins_public_view.__wrapped__ if hasattr(st.plugins_public_view, "__wrapped__") else st.plugins_public_view
+    st.plugins_public_view.__wrapped__ if hasattr(st.plugins_public_view, "__wrapped__") else st.plugins_public_view
     # plugins_public_view 无 base 参数，改用 monkeypatch 验证（跳过 IO）
     # 这里直接验证逻辑：enabled 标记
     from seed.core.config_plane import CONFIG_FILENAMES

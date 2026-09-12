@@ -2,7 +2,6 @@
 
 覆盖 _reply_append_tool_summary（deepseek 特判/开关/空处理）与 _env_truthy。
 """
-import codeagent.server as server
 from codeagent.server import _env_truthy, _reply_append_tool_summary
 
 

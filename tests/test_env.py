@@ -2,7 +2,6 @@
 
 覆盖 pick_default / pick_nonempty / pick_int / env_truthy / env_falsy / default_agent_id 的边界。
 """
-import os
 
 import pytest
 

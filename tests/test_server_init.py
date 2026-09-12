@@ -5,8 +5,6 @@
 """
 import hashlib
 import hmac
-import os
-import threading
 
 import pytest
 

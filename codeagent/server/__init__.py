@@ -36,7 +36,7 @@ HTTP + WebSocket + webhook (Starlette). Available by default with pip install co
 logger = logging.getLogger(__name__)
 
 # Shared with ``seed`` cron / runtime — re-export for ``app_factory`` / ``webui_api_app`` ``from . import``.
-from seed.core._session_cache import (  # noqa: E402
+from seed.core._session_cache import (  # noqa: E402,F401 — 故意 re-export 供 app_factory/webui_api_app 使用
     ACTIVE_CHAT_CANCELS,
     PENDING_INJECTIONS,
     SESSIONS,

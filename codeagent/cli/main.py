@@ -695,19 +695,16 @@ def _cmd_chat_llm(args):
         )
         from codeagent.core.image_understanding import image_attachment_allowed, video_attachment_allowed
 
-        if message_has_image_attachments(user_msg) or pending_dir_tag:
-            if not image_attachment_allowed(vision_preset_id or ""):
+        if (message_has_image_attachments(user_msg) or pending_dir_tag) and not image_attachment_allowed(vision_preset_id or ""):
                 print(
                     '[error] 发送图片需要 --vision-llm（supports_vision）'
                     ' 或已配置 MiniMax MCP（understand_image）'
                 )
                 continue
-        if message_has_video_attachments(user_msg):
-            if not video_attachment_allowed(vision_preset_id or ""):
+        if message_has_video_attachments(user_msg) and not video_attachment_allowed(vision_preset_id or ""):
                 print('[error] 发送视频需要有效的 --vision-llm 或 CODEAGENT_VISION_PRESET_ID')
                 continue
-        if message_has_audio_attachments(user_msg):
-            if not audio_preset_id or not preset_supports_audio_id(audio_preset_id):
+        if message_has_audio_attachments(user_msg) and (not audio_preset_id or not preset_supports_audio_id(audio_preset_id)):
                 print('[error] 发送音频需要有效的 --audio-llm 或 CODEAGENT_AUDIO_PRESET_ID')
                 continue
 

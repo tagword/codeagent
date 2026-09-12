@@ -8,7 +8,6 @@
 
 这些函数是核心安全/配置逻辑，测试价值高。
 """
-import os
 import pathlib
 
 from codeagent.server.webui_api_app import (
@@ -115,7 +114,7 @@ def test_safe_under_empty_rel():
 
 def test_safe_under_allows_base_itself():
     base = pathlib.Path("/tmp")
-    r = _safe_under(base, "")
+    _safe_under(base, "")
     # 空 rel 返回 None（见上面），但 base 自身通过相对子路径可达
     r2 = _safe_under(base, ".")
     assert r2 is None or r2 == base.resolve()

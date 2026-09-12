@@ -146,9 +146,7 @@ def is_setup_bootstrap_route(path: str, method: str) -> bool:
         return True
     if path == "/api/ui/llm/presets/default" and m in ("POST", "OPTIONS"):
         return True
-    if path == "/api/ui/env/chat" and m in ("POST", "OPTIONS"):
-        return True
-    return False
+    return path == "/api/ui/env/chat" and m in ("POST", "OPTIONS")
 
 
 def is_public_webui_route(path: str, method: str) -> bool:

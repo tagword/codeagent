@@ -8,7 +8,6 @@
 4. legacy shim：get/set_default_preset_id 走 chat slot
 """
 import json
-import pathlib
 
 import pytest
 

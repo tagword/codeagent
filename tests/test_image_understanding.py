@@ -3,7 +3,6 @@
 覆盖 image_attachment_allowed / video_attachment_allowed 的分支逻辑：
 MCP sentinel、空 vision id、vision preset 支持判断。外部依赖 monkeypatch 隔离。
 """
-import pytest
 
 from codeagent.core import image_understanding as iu
 

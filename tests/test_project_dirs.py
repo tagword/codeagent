@@ -33,7 +33,7 @@ def test_creates_agent_subdirs(tmp_path):
 
 def test_unsafe_agent_id_sanitized(tmp_path, monkeypatch):
     monkeypatch.setattr("seed.core.paths.agent_id_default", lambda: "defagent")
-    ca = _mk(tmp_path, "../evil")
+    _mk(tmp_path, "../evil")
     # 净化失败 → 回退默认 agent，不创建穿越目录
     assert (tmp_path / ".codeagent" / "defagent").is_dir()
     assert not (tmp_path.parent / "evil").exists()

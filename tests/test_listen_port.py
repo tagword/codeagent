@@ -2,7 +2,6 @@
 
 覆盖端口解析：URL port / Host header（含 IPv6）/ env fallback。
 """
-import codeagent.server as server
 from codeagent.server import _request_listen_port
 
 

@@ -82,8 +82,9 @@ def test_probe_accepts_http_base_url():
 
 
 def test_probe_failed_probe_returns_502():
-    import codeagent.server.webui_api_app as mod
     import unittest.mock as mock
+
+    import codeagent.server.webui_api_app as mod
 
     async def fake_to_thread(fn):
         return False, "connect refused"

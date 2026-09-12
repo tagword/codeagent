@@ -3,7 +3,6 @@
 覆盖 normalize_tts_voice_id / normalize_tts_model 的边界。
 依赖外部 catalog 的函数用 monkeypatch 隔离。
 """
-import pytest
 
 from codeagent.core import tts_voices as tv
 

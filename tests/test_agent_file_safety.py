@@ -3,8 +3,6 @@
 _read_agent_file / _write_agent_file 的 agent_id 用户可控（WebUI path param），
 必须拒绝含路径分隔符/穿越的 agent_id，避免写到 agents 目录之外。
 """
-import tempfile
-from pathlib import Path
 
 import pytest
 

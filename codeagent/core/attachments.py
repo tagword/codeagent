@@ -299,9 +299,7 @@ def message_has_image_attachments(msg: dict[str, Any]) -> bool:
         for a in atts:
             if isinstance(a, dict) and a.get("kind") == "image":
                 return True
-    if IMAGE_DIR_TAG_RE.search(str(msg.get("content") or "")):
-        return True
-    return False
+    return bool(IMAGE_DIR_TAG_RE.search(str(msg.get("content") or "")))
 
 
 def message_has_video_attachments(msg: dict[str, Any]) -> bool:

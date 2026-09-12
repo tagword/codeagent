@@ -198,10 +198,7 @@ async def run_chat_turn(
             max_rounds = pick_int(24, *MAX_TOOL_ROUNDS)
 
         llm = resolve_main_llm(llm_id or None)
-        if enable_thinking is None:
-            chat_enable_thinking = None
-        else:
-            chat_enable_thinking = bool(enable_thinking)
+        chat_enable_thinking = None if enable_thinking is None else bool(enable_thinking)
         chat_reasoning_effort = reasoning_effort.strip().lower() if (reasoning_effort or "").strip() else None
         reg, exe = tools_for_agent(agent_id)
         from seed.core.agent_context import (
@@ -726,7 +723,7 @@ async def run_chat_turn(
                         project_id=project_id or None,
                     )
                 except Exception:
-                    pass
+                    logger.debug("record_chat_turn_diary failed", exc_info=True)
             try:
                 if refresh_title:
                     # auto-continue 注入的 nudge 消息不应参与标题生成

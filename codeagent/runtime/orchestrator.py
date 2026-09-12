@@ -39,10 +39,11 @@ class Orchestrator:
 
         meta = dict(metadata or {})
         subtasks = meta.get("subtasks")
-        if isinstance(subtasks, list):
-            tasks = [str(t).strip() for t in subtasks if str(t).strip()]
-        else:
-            tasks = []
+        tasks = (
+            [str(t).strip() for t in subtasks if str(t).strip()]
+            if isinstance(subtasks, list)
+            else []
+        )
 
         if not tasks and auto_split_enabled(meta.get("auto_split")):
             tasks = split_user_tasks(user_text)

@@ -2,7 +2,6 @@
 
 覆盖 _git_provider_host / _ssh_provider_target / _git_cwd / _resolve_project_id。
 """
-import pathlib
 
 from codeagent.server.webui_api_app import _resolve_project_id
 from codeagent.server.webui_handlers_git import (

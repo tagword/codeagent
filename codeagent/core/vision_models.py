@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 from typing import Any
 
 from codeagent.core import env as ca_env
@@ -81,9 +82,7 @@ def resolve_main_llm(llm_id: str | None = None):
     if not mt_override:
         mt_override = _ea.pick_nonempty(*_ea.LLM_MAX_TOKENS)
     if mt_override:
-        try:
+        with contextlib.suppress(ValueError, TypeError):
             cfg["max_tokens"] = int(mt_override)
-        except (ValueError, TypeError):
-            pass
 
     return llm_executor_from_resolved(cfg)

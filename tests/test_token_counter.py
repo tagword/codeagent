@@ -50,7 +50,6 @@ def test_attachment_tag_stripped_from_text():
     msgs = [{"role": "user", "content": text}]
     r = count_messages(msgs)
     # 剥离 tag 后计数
-    import re
     from codeagent.core.attachments import ATTACHMENT_TAG_RE
     stripped = ATTACHMENT_TAG_RE.sub("", text)
     assert r["total_tokens"] == _tok(stripped) + 4
@@ -60,7 +59,6 @@ def test_image_dir_tag_stripped_from_text():
     text = "分析这目录 [image_dir:photos max=5]"
     msgs = [{"role": "user", "content": text}]
     r = count_messages(msgs)
-    import re
     from codeagent.core.attachments import IMAGE_DIR_TAG_RE
     stripped = IMAGE_DIR_TAG_RE.sub("", text)
     assert r["total_tokens"] == _tok(stripped) + 4
