@@ -136,11 +136,13 @@ def test_register_disk_agents_skips_blank_ids():
 
 
 def test_register_disk_agents_discovers_from_disk(tmp_path):
-    """Discovery path: only dirs with persona/ qualify; testagent is skipped."""
+    """Discovery path: only dirs with a non-empty persona/ qualify; testagent skipped."""
     import codeagent.server.webui_handlers_agentmeta as meta
 
     agents_root = tmp_path / "agents"
-    (agents_root / "good" / "persona").mkdir(parents=True)
+    good_persona = agents_root / "good" / "persona"
+    good_persona.mkdir(parents=True)
+    (good_persona / "identity.md").write_text("# Identity\n", encoding="utf-8")
     (agents_root / "nopersona").mkdir(parents=True)
     (agents_root / "testagent" / "persona").mkdir(parents=True)
 

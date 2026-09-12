@@ -207,21 +207,57 @@ def _read_bundled_persona_file(fname: str) -> str | None:
         return None
 
 
+def _fallback_persona_source_dir() -> Path | None:
+    """Return an existing agent's persona dir to copy from as a last resort.
+
+    When the bundled template cannot be resolved (e.g. a trimmed deployment or
+    an isolated ``SEED_PROJECT_ROOT``), falling back to the *default* agent's
+    persona keeps newly created agents usable instead of leaving a hollow
+    ``persona/`` directory behind.
+    """
+    try:
+        from codeagent.server.webui_handlers_agentmeta import _agents_dir
+
+        default_persona = _agents_dir() / agent_id_default() / "persona"
+        if default_persona.is_dir() and any(default_persona.glob("*.md")):
+            return default_persona
+    except Exception:
+        pass
+    return None
+
+
 def _ensure_default_persona_files(persona_dir: Path) -> None:
-    """Create default persona *.md from bundled template if they do not exist."""
-    if _bundled_persona_defaults_dir() is None:
-        logger.warning(
-            "Bundled persona defaults missing; skipping persona init for %s",
+    """Create default persona *.md for an agent, never leaving a hollow dir.
+
+    Order of precedence:
+      1. bundled package template (normal case)
+      2. persona copied from the default agent (fallback)
+    If neither source is available we log an **error** (not a silent warning)
+    because a persona-less agent would later be advertised as callable.
+    """
+    bundled_ok = _bundled_persona_defaults_dir() is not None
+    fallback_dir = None if bundled_ok else _fallback_persona_source_dir()
+
+    if not bundled_ok and fallback_dir is None:
+        logger.error(
+            "No persona template available (bundled missing, no default agent); "
+            "agent %s would be hollow and is left uninitialised",
             persona_dir,
         )
         return
+
     for fname in _PERSONA_INIT_FILENAMES:
         p = persona_dir / fname
         if p.is_file():
             continue
         body = _read_bundled_persona_file(fname)
+        if not body and fallback_dir is not None:
+            src = fallback_dir / fname
+            if src.is_file():
+                with contextlib.suppress(OSError):
+                    body = src.read_text(encoding="utf-8")
         if not body:
-            logger.warning("Bundled persona file missing: %s", fname)
+            logger.warning("Persona file unavailable from any source: %s", fname)
             continue
         with contextlib.suppress(OSError):
             p.write_text(body, encoding="utf-8")

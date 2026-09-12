@@ -44,11 +44,13 @@ def test_does_not_overwrite_existing(tmp_path, monkeypatch):
     assert (persona / "identity.md").is_file()
 
 
-def test_no_bundled_skips(tmp_path, monkeypatch):
+def test_no_bundled_falls_back_to_default_agent(tmp_path, monkeypatch):
+    """bundled 缺失时不再留空壳：回退 default persona；无 default 则记 error。"""
     monkeypatch.setattr(p, "_bundled_persona_defaults_dir", lambda: None)
+    monkeypatch.setattr(p, "_fallback_persona_source_dir", lambda: None)
     persona = _mk_persona_dir(tmp_path)
     p._ensure_default_persona_files(persona)
-    # bundled 缺失 → 不创建任何文件
+    # 两源都缺 → 不创建文件（但已在 test_persona_fallback 断言会记 error）
     assert not list(persona.iterdir())
 
 

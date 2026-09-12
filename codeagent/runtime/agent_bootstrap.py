@@ -15,6 +15,7 @@ Design notes
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -23,8 +24,33 @@ logger = logging.getLogger(__name__)
 _SKIP_IDS = frozenset({"testagent"})
 
 
+def _has_persona_files(agent_dir: Path) -> bool:
+    """True when ``persona/`` holds at least one **non-empty** ``*.md`` file.
+
+    Neither a bare ``persona/`` directory nor a 0-byte placeholder counts: an
+    agent whose persona was never materialised behaves like a blank default and
+    must not be advertised to the LLM via ``list_agents`` (it would be "visible
+    but not callable").
+    """
+    pdir = agent_dir / "persona"
+    if not pdir.is_dir():
+        return False
+    try:
+        for p in pdir.glob("*.md"):
+            if p.is_file() and p.stat().st_size > 0:
+                return True
+    except OSError:
+        return False
+    return False
+
+
 def _discover_agent_ids() -> list[str]:
-    """Return agent ids that have a ``persona/`` directory on disk."""
+    """Return agent ids that are genuinely usable on disk.
+
+    Qualification requires a ``persona/`` directory **containing at least one
+    ``*.md`` file** — hollow agents (empty persona dir) are excluded so that
+    ``list_agents`` never advertises an agent the LLM cannot meaningfully call.
+    """
     from codeagent.server.webui_handlers_agentmeta import _agents_dir
 
     ad = _agents_dir()
@@ -34,9 +60,9 @@ def _discover_agent_ids() -> list[str]:
     for entry in sorted(ad.iterdir()):
         if not entry.is_dir():
             continue
-        if not (entry / "persona").is_dir():
-            continue
         if entry.name in _SKIP_IDS:
+            continue
+        if not _has_persona_files(entry):
             continue
         ids.append(entry.name)
     return ids
