@@ -658,6 +658,27 @@
     <section id="page-agent" class="page page--scroll">
       <div class="content-max">
 
+        <!-- Agent 列表：多 Agent 管理（选择 / 新建 / 删除） -->
+        <fieldset class="section" id="fieldsetAgentList">
+          <div class="section__header">
+            <h3 class="section__title">Agent 管理 <span class="agent-list__count" id="agentListCount"></span></h3>
+            <div class="row-actions" style="display:flex;gap:var(--sp-2);margin:0;align-items:center;">
+              <button class="btn btn--ghost btn--sm" onclick="refreshAgentList()" title="刷新列表">⟳</button>
+              <button class="btn btn--primary btn--sm" onclick="createAgentFromList()">＋ 新建</button>
+            </div>
+          </div>
+          <div class="agent-list">
+            <div class="agent-list__toolbar">
+              <input class="agent-list__search" id="agentListSearch" type="text"
+                     placeholder="搜索 Agent（ID / 名称 / 描述）…"
+                     oninput="filterAgentList(this.value)">
+            </div>
+            <div class="agent-list__items" id="agentListItems">
+              <div class="agent-list__loading">加载中…</div>
+            </div>
+          </div>
+        </fieldset>
+
         <!-- Current agent detail (always visible, single-agent mode) -->
         <fieldset class="section" id="fieldsetAgentDetail">
           <div class="section__header">
