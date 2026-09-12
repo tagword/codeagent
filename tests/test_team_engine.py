@@ -8,11 +8,26 @@ exercises the pure helper functions directly.
 from __future__ import annotations
 
 import json
-import time
 
 import pytest
 
 import codeagent.server.team_engine as eng
+
+
+@pytest.fixture(autouse=True)
+def _join_run_threads():
+    """Ensure no background run thread outlives a test.
+
+    Critical for isolation: monkeypatch removes the tmp runs/teams dirs at
+    teardown; a still-running daemon thread would then write to the real
+    ~/.codeagent. Joining here makes teardown deterministic.
+    """
+    yield
+    with eng._RUN_THREADS_LOCK:
+        threads = list(eng._RUN_THREADS.values())
+    for t in threads:
+        t.join(timeout=10.0)
+    eng.reset_run_threads()
 
 
 def _patch_dirs(monkeypatch, tmp_path):
@@ -48,17 +63,14 @@ def _mk_team(monkeypatch, tmp_path, team_id="t1", **overrides):
 
 
 def _wait_done(run_id, timeout=30.0):
-    """Poll run until it leaves 'running' (or timeout).
+    """Wait for a run's background thread to finish, then return the final run.
 
-    Background daemon threads can be starved under full-suite CPU load, so use a
-    generous timeout to avoid flakes.
+    Joins the actual worker thread (race-free) instead of polling, so the run
+    file is guaranteed final when this returns — this eliminates the flake where
+    monkeypatch teardown removed the tmp dir while a daemon thread was still
+    writing to it.
     """
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        run = eng.get_run(run_id)
-        if run and run.get("status") != "running":
-            return run
-        time.sleep(0.05)
+    eng.wait_for_run(run_id, timeout=timeout)
     return eng.get_run(run_id)
 
 
@@ -277,7 +289,9 @@ def test_rerun_run_reexecutes_and_clears_steps(tmp_path, monkeypatch):
     updated = eng.rerun_run(rid, simulate=True)
     assert updated["status"] == "running"
     assert not updated.get("error")
-    assert updated["steps"] == []  # 旧步骤已清
+    # 旧步骤已清。注意：后台线程可能已抢先写入新步骤，所以不能断言 steps==[]；
+    # 只能断言「旧的 step_id='old' 不再存在」——这才是 rerun 的语义契约。
+    assert all(s.get("step_id") != "old" for s in updated["steps"])
     # 等待后台线程跑完
     done = _wait_done(rid)
     assert done["status"] == "done"

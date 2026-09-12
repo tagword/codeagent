@@ -154,8 +154,7 @@ def create_app():
                 {"detail": "发送视频需要选择支持多模态的模型 (vision_llm_id)"},
                 status_code=400,
             )
-        if has_audio:
-            if not audio_llm_id or not preset_supports_audio_id(audio_llm_id):
+        if has_audio and (not audio_llm_id or not preset_supports_audio_id(audio_llm_id)):
                 return JSONResponse(
                     {"detail": "需要选择支持音频转写的模型 (audio_llm_id)"},
                     status_code=400,
@@ -244,7 +243,7 @@ def create_app():
     # Stored keys on Session.metadata:
     #   llm_id, vision_llm_id, image_gen_llm_id,
     #   audio_llm_id, music_llm_id, video_gen_llm_id
-    _MODEL_STACK_KEYS = (
+    _model_stack_keys = (
         "llm_id",
         "vision_llm_id",
         "image_gen_llm_id",
@@ -257,7 +256,7 @@ def create_app():
         if not isinstance(metadata, dict):
             return {}
         out = {}
-        for k in _MODEL_STACK_KEYS:
+        for k in _model_stack_keys:
             v = metadata.get(k)
             if isinstance(v, str) and v.strip():
                 out[k] = v.strip()
@@ -319,7 +318,7 @@ def create_app():
         chat_sess = load_or_create_chat_session(session_id, agent_id)
         if not isinstance(chat_sess.metadata, dict):
             chat_sess.metadata = {}
-        for k in _MODEL_STACK_KEYS:
+        for k in _model_stack_keys:
             if k not in overrides_in:
                 continue
             v = overrides_in.get(k)
@@ -352,7 +351,7 @@ def create_app():
         chat_sess = load_or_create_chat_session(session_id, agent_id)
         if not isinstance(chat_sess.metadata, dict):
             chat_sess.metadata = {}
-        for k in _MODEL_STACK_KEYS:
+        for k in _model_stack_keys:
             chat_sess.metadata.pop(k, None)
         persist_chat_session(chat_sess, agent_id)
         return JSONResponse({"ok": True, "session_id": session_id, "agent_id": agent_id, "overrides": {}})
@@ -436,13 +435,11 @@ def create_app():
         persist_chat_session(chat_sess, agent_id)
 
         # Broadcast rollback event via websocket
-        try:
+        with contextlib.suppress(Exception):
             await _broadcast_session_event(agent_id, session_id, {
                 "type": "rollback",
                 "message_idx": message_idx,
             })
-        except Exception:
-            pass
 
         # Return messages from rollback point for UI refresh
         messages_since = chat_sess.messages[message_idx:]
@@ -551,6 +548,21 @@ def create_app():
     # ── Cron：Starlette 1.x 用 lifespan（on_startup 已移除）；且 AsyncIOScheduler 需要已有运行中的 loop ──
     @asynccontextmanager
     async def _lifespan(_app: Starlette):
+        # ── 注册磁盘 agents 到 AgentRegistry：让 chat 团队工具（call_agent/
+        # dispatch/parallel）真正可用。此前 registry 恒空，工具永远报
+        # "not found in registry"。仅注册轻量 handle，不触发 LLM 调用。──
+        try:
+            from codeagent.runtime.agent_bootstrap import register_disk_agents
+
+            _reg = register_disk_agents()
+            if _reg.get("registered"):
+                logger.info(
+                    "agent bootstrap: registered %d agent(s) for chat team tools",
+                    _reg["total"],
+                )
+        except Exception as exc:
+            logger.warning("agent bootstrap failed (chat team tools may be limited): %s", exc)
+
         # 兼容旧版 seed：register_main_loop 是 v1.0.8+ 才有的线程安全 reload 前置；
         # 缺失时降级（reload 走自身线程的 loop，仍可用），但绝不因 ImportError 吞掉整个调度器。
         try:

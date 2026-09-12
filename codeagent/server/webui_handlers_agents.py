@@ -145,6 +145,13 @@ def build_agents_routes(project_root: Path) -> list[Route]:
         if tools is not None:
             tools_file = ad / agent_id / "tools.json"
             tools_file.write_text(json.dumps(tools, indent=2, ensure_ascii=False), encoding="utf-8")
+        # 让新 agent 立即可被 chat 团队工具调用（call_agent/dispatch/parallel）
+        try:
+            from codeagent.runtime.agent_bootstrap import register_disk_agents
+
+            register_disk_agents(agent_ids=[agent_id], overwrite=True)
+        except Exception:
+            logger.warning("failed to register new agent '%s' in AgentRegistry", agent_id, exc_info=True)
         return JSONResponse({"agent": {"id": agent_id, "name": agent_id}}, status_code=201)
 
     async def api_agents_get(request: Request) -> JSONResponse:

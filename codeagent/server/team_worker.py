@@ -64,6 +64,23 @@ def _extract_usage(meta) -> dict:
     }
 
 
+def _member_use_agent_loop(member) -> bool:
+    """Whether a member should run the *full agent tool-loop* instead of a plain completion.
+
+    A-form (default) members are lightweight text roles → plain ``llm.generate``.
+    B-form members opt in to the full agent loop (tools / memory / MCP) by
+    setting ``use_agent_loop: true`` (or ``"mode": "agent"``) on the member dict.
+    When enabled we reuse the same ``LLMWorkerHandle`` that backs chat team
+    tools, so team runs and chat delegation share one execution path.
+    """
+    if isinstance(member, dict):
+        if member.get("use_agent_loop") is True:
+            return True
+        if str(member.get("mode") or "").strip().lower() == "agent":
+            return True
+    return False
+
+
 def run_member_step(
     *,
     agent_id: str,
@@ -72,17 +89,44 @@ def run_member_step(
     llm_id: str = "",
     max_tokens: int | None = None,
     enable_thinking: bool | None = None,
+    use_agent_loop: bool = False,
 ) -> str:
     """Run one real LLM turn for a team member, returning the reply text.
 
-    Uses a plain completion (``llm.generate``) with an optional role system
-    prompt — lightweight, no tool loop / MCP, safe off the main event loop.
+    Two execution modes:
+    - **plain** (default): a single completion (``llm.generate``) with an
+      optional role system prompt — lightweight, no tool loop / MCP, safe off
+      the main event loop.
+    - **agent loop** (``use_agent_loop=True``): the member runs as a full agent
+      via ``LLMWorkerHandle`` (tools / memory / MCP), sharing the exact path
+      used by chat ``call_agent`` / ``dispatch``.
     """
+    if use_agent_loop:
+        return _run_member_agent_loop(
+            agent_id=agent_id, task=task, role_prompt=role_prompt,
+        )
     content, _usage = run_member_step_meta(
         agent_id=agent_id, task=task, role_prompt=role_prompt, llm_id=llm_id,
         max_tokens=max_tokens, enable_thinking=enable_thinking,
     )
     return content
+
+
+def _run_member_agent_loop(*, agent_id: str, task: str, role_prompt: str = "") -> str:
+    """Run a member through the full agent tool-loop (shared with chat delegation).
+
+    Reuses ``LLMWorkerHandle`` so team members and chat ``call_agent`` targets
+    execute identically. ``role_prompt`` is prepended to the task as a role
+    directive (the worker uses the agent's own persona system prompt).
+    """
+    from codeagent.runtime.agent_handle import LLMWorkerHandle
+
+    prompt = f"[你的角色] {role_prompt}\n\n[任务] {task}" if role_prompt else task
+    handle = LLMWorkerHandle(agent_id=agent_id or "default")
+    out = handle.run_task(prompt)
+    if not out.get("success"):
+        raise RuntimeError(out.get("error") or "agent-loop member step failed")
+    return str(out.get("content") or "").strip()
 
 
 def run_member_step_meta(

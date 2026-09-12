@@ -13,6 +13,7 @@ from __future__ import annotations
 import contextlib
 import json
 import logging
+import os
 import threading
 import time
 import uuid
@@ -36,6 +37,45 @@ STEP_STATUS_PENDING = "pending"
 STEP_STATUS_RUNNING = "running"
 STEP_STATUS_DONE = "done"
 STEP_STATUS_FAILED = "failed"
+
+
+# 后台执行线程注册表：run_id -> Thread。
+# 作用：① 让调用方（测试/关停流程）能确定性等待 run 结束，而不是 sleep 轮询；
+# ② 避免「测试已撤销临时目录、后台线程仍在写」的竞态（线程可在 teardown 前 join）。
+_RUN_THREADS: dict[str, threading.Thread] = {}
+_RUN_THREADS_LOCK = threading.Lock()
+
+
+def _spawn_run_thread(run_id: str, target) -> threading.Thread:
+    """Start a daemon thread for ``run_id`` and record it for later joining."""
+    t = threading.Thread(target=target, name=f"team-run-{run_id}", daemon=True)
+    with _RUN_THREADS_LOCK:
+        _RUN_THREADS[run_id] = t
+    t.start()
+    return t
+
+
+def wait_for_run(run_id: str, timeout: float = 30.0) -> bool:
+    """Block until the background thread for ``run_id`` finishes.
+
+    Returns ``True`` if the thread completed within ``timeout``, ``False``
+    otherwise. Unlike polling ``get_run``, this is race-free: it joins the
+    actual worker thread, so once it returns the run file is final and no
+    further writes will happen.
+    """
+    with _RUN_THREADS_LOCK:
+        t = _RUN_THREADS.get(run_id)
+    if t is None:
+        return True
+    t.join(timeout)
+    return not t.is_alive()
+
+
+def reset_run_threads() -> None:
+    """Drop finished thread records (test isolation / shutdown hygiene)."""
+    with _RUN_THREADS_LOCK:
+        for rid in [rid for rid, t in _RUN_THREADS.items() if not t.is_alive()]:
+            _RUN_THREADS.pop(rid, None)
 
 
 def _runs_dir() -> Path:
@@ -167,7 +207,7 @@ def create_run(team_id: str, user_input: str) -> dict:
     }
     with _RUN_LOCK:
         f = _runs_dir() / f"{run_id}.json"
-        f.write_text(json.dumps(run, indent=2, ensure_ascii=False), encoding="utf-8")
+        _atomic_write_json(f, run)
     run["id"] = run_id
     return run
 
@@ -185,6 +225,18 @@ def get_run(run_id: str) -> dict | None:
         return None
 
 
+def _atomic_write_json(path: Path, data: dict) -> None:
+    """Write JSON atomically: temp file in the same dir + ``os.replace``.
+
+    Non-atomic ``write_text`` lets a concurrent reader observe a half-written
+    file (→ ``JSONDecodeError`` → run appears to vanish). ``os.replace`` is
+    atomic on POSIX and Windows, so readers only ever see the old or new file.
+    """
+    tmp = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    os.replace(tmp, path)
+
+
 def update_run(run_id: str, updates: dict) -> dict | None:
     """Update run fields."""
     f = _runs_dir() / f"{run_id}.json"
@@ -196,7 +248,7 @@ def update_run(run_id: str, updates: dict) -> dict | None:
             return None
         data.update(updates)
         data["updated_at"] = time.time()
-        f.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+        _atomic_write_json(f, data)
     return data
 
 
@@ -276,7 +328,7 @@ def run_team(team_id: str, user_input: str, simulate: bool = False) -> dict:
             with contextlib.suppress(Exception):
                 update_run(run_id, {"status": RUN_STATUS_FAILED, "error": str(exc)})
 
-    threading.Thread(target=_background, name=f"team-run-{run_id}", daemon=True).start()
+    _spawn_run_thread(run_id, _background)
     return get_run(run_id) or run
 
 
@@ -324,7 +376,7 @@ def rerun_run(run_id: str, simulate: bool = False) -> dict | None:
             with contextlib.suppress(Exception):
                 update_run(run_id, {"status": RUN_STATUS_FAILED, "error": str(exc)})
 
-    threading.Thread(target=_background, name=f"team-rerun-{run_id}", daemon=True).start()
+    _spawn_run_thread(run_id, _background)
     return get_run(run_id)
 
 
@@ -411,6 +463,37 @@ def _member_role_prompt(member) -> str:
     return ""
 
 
+def _member_use_agent_loop(member) -> bool:
+    """True when a member should run the full agent tool-loop (B form).
+
+    Mirrors ``team_worker._member_use_agent_loop`` — kept local so the engine
+    can branch without importing the worker at module load.
+    """
+    if isinstance(member, dict):
+        if member.get("use_agent_loop") is True:
+            return True
+        if str(member.get("mode") or "").strip().lower() == "agent":
+            return True
+    return False
+
+
+def _run_member(member, *, task: str) -> tuple[str, dict]:
+    """Execute one member step, dispatching plain vs full-agent-loop mode.
+
+    Returns ``(output, usage)``. Both paths share the same worker contract, so
+    the engine stays agnostic to which execution form a member chose.
+    """
+    from codeagent.server.team_worker import run_member_step, run_member_step_meta
+
+    agent_id = _member_agent_id(member)
+    role = _member_role_prompt(member)
+    if _member_use_agent_loop(member):
+        return run_member_step(
+            agent_id=agent_id, task=task, role_prompt=role, use_agent_loop=True,
+        ), {}
+    return run_member_step_meta(agent_id=agent_id, task=task, role_prompt=role)
+
+
 def _member_error_policy(error_policy: str) -> bool:
     """True when a member failure should abort the whole run."""
     return error_policy == "stop"
@@ -418,20 +501,17 @@ def _member_error_policy(error_policy: str) -> bool:
 
 def _real_sequential(run_id: str, members: list, user_input: str, error_policy: str, timeout: int) -> None:
     """Members run one after another; each sees the previous member's output."""
-    from codeagent.server.team_worker import run_member_step_meta
-
     context = user_input
     for member in members:
         agent_id = _member_agent_id(member)
         if not agent_id:
             continue
-        role = _member_role_prompt(member)
         step = add_step(run_id, agent_id, "sequential")
         if step is None:
             return
         update_step(run_id, step["step_id"], {"status": STEP_STATUS_RUNNING, "input": context})
         try:
-            output, usage = run_member_step_meta(agent_id=agent_id, task=context, role_prompt=role)
+            output, usage = _run_member(member, task=context)
             if not output:
                 output = f"[成员 {agent_id} 无输出]"
             update_step(run_id, step["step_id"], {"status": STEP_STATUS_DONE, "output": output, "usage": usage})
@@ -446,19 +526,16 @@ def _real_parallel(run_id: str, members: list, user_input: str, error_policy: st
     """All members run concurrently on the same input."""
     import concurrent.futures
 
-    from codeagent.server.team_worker import run_member_step_meta
-
     def _one(member) -> None:
         agent_id = _member_agent_id(member)
         if not agent_id:
             return
-        role = _member_role_prompt(member)
         step = add_step(run_id, agent_id, "parallel")
         if step is None:
             return
         update_step(run_id, step["step_id"], {"status": STEP_STATUS_RUNNING, "input": user_input})
         try:
-            output, usage = run_member_step_meta(agent_id=agent_id, task=user_input, role_prompt=role)
+            output, usage = _run_member(member, task=user_input)
             update_step(run_id, step["step_id"], {"status": STEP_STATUS_DONE, "output": output or f"[成员 {agent_id} 无输出]", "usage": usage})
         except Exception as exc:
             update_step(run_id, step["step_id"], {"status": STEP_STATUS_FAILED, "output": f"错误: {exc}"})
@@ -470,8 +547,6 @@ def _real_parallel(run_id: str, members: list, user_input: str, error_policy: st
 
 def _real_manager(run_id: str, members: list, user_input: str, error_policy: str, timeout: int, manager_id: str = "") -> None:
     """PM (manager_id or first member) splits the task; workers each execute a piece."""
-    from codeagent.server.team_worker import run_member_step_meta
-
     if not members:
         return
     pm_member = next((m for m in members if _member_agent_id(m) == manager_id), None) if manager_id else None
@@ -487,13 +562,13 @@ def _real_manager(run_id: str, members: list, user_input: str, error_policy: str
         return
     update_step(run_id, pm_step["step_id"], {"status": STEP_STATUS_RUNNING, "input": user_input})
     try:
-        pm_output, pm_usage = run_member_step_meta(
-            agent_id=pm_agent,
+        pm_member = pm_member if pm_member is not None else {"id": pm_agent, "role_prompt": pm_role}
+        pm_output, pm_usage = _run_member(
+            pm_member,
             task=(
                 f"你是团队负责人(PM)。请把下面的任务拆成 {max(len(workers), 1)} 个"
                 f"明确、独立的子任务，每行一个，直接输出子任务清单，不要多余解释。\n\n任务: {user_input}"
             ),
-            role_prompt=pm_role,
         )
     except Exception as exc:
         update_step(run_id, pm_step["step_id"], {"status": STEP_STATUS_FAILED, "output": f"错误: {exc}"})
@@ -510,7 +585,6 @@ def _real_manager(run_id: str, members: list, user_input: str, error_policy: str
     subtasks = _split_subtasks(pm_output, len(workers))
     for i, worker in enumerate(workers):
         wid = _member_agent_id(worker)
-        wrole = _member_role_prompt(worker)
         sub = subtasks[i] if i < len(subtasks) else f"子任务 {i+1}（承接 PM 拆解）"
         w_step = add_step(run_id, wid, "manager-worker")
         if w_step is None:
@@ -520,7 +594,7 @@ def _real_manager(run_id: str, members: list, user_input: str, error_policy: str
             "input": sub,
         })
         try:
-            w_output, w_usage = run_member_step_meta(agent_id=wid, task=sub, role_prompt=wrole)
+            w_output, w_usage = _run_member(worker, task=sub)
             update_step(run_id, w_step["step_id"], {"status": STEP_STATUS_DONE, "output": w_output or f"[成员 {wid} 无输出]", "usage": w_usage})
         except Exception as exc:
             update_step(run_id, w_step["step_id"], {"status": STEP_STATUS_FAILED, "output": f"错误: {exc}"})
