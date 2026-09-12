@@ -47,6 +47,7 @@
 | bootstrap 接入 | `server/app_factory.py` lifespan | 服务启动时自动注册 |
 | 新建即注册 | `server/webui_handlers_agents.py` | 新建 agent 后立即注册 |
 | `use_agent_loop` | `server/team_worker.py` | 团队成员可选走完整 agent 循环（B 形态） |
+| `list_agents` | `seed_tools/team.py` | 让 LLM 可发现有哪些 agent 可调（可发现性） |
 | `_run_member` | `server/team_engine.py` | 三种模式统一分发 plain / agent-loop |
 
 ## 三、两种成员形态
