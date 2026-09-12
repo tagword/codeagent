@@ -303,7 +303,82 @@ function _stopTeamPoll(runId) {
 function _renderTeamRun(run) {
   var el = document.getElementById('trLive');
   if (!el) return;
-  el.innerHTML = _runHeadHtml(run) + '<div class="team-steps">' + _stepsHtml(run) + '</div>';
+  _lastRenderedRun = run;
+  el.innerHTML = _runHeadHtml(run)
+    + '<div class="team-run-actions">'
+    + '<button class="btn btn--ghost btn--sm" onclick="copyTeamRunResult()">📋 复制结果</button>'
+    + '<button class="btn btn--ghost btn--sm" onclick="downloadTeamRunResult()">⬇ 导出 Markdown</button>'
+    + '</div>'
+    + '<div class="team-steps">' + _stepsHtml(run) + '</div>';
+}
+
+var _lastRenderedRun = null;
+
+/** 把当前 run 的产出拼成 Markdown 文本。 */
+function _teamRunToMarkdown(run) {
+  if (!run) return '';
+  var lines = [];
+  lines.push('# 团队运行结果');
+  lines.push('');
+  lines.push('- 状态：' + (run.status || '?'));
+  if (run.team_id) lines.push('- 团队：' + run.team_id);
+  if (run.user_input) lines.push('- 任务：' + run.user_input);
+  if (run.error) lines.push('- 错误：' + run.error);
+  lines.push('');
+  (run.steps || []).forEach(function (s, i) {
+    lines.push('## ' + (i + 1) + '. ' + (s.agent_id || '?') + ' [' + (s.status || '') + ']');
+    if (s.input) lines.push('> 输入：' + String(s.input).slice(0, 300));
+    lines.push('');
+    lines.push(s.output || '（无输出）');
+    lines.push('');
+  });
+  return lines.join('\n');
+}
+
+/** 复制结果到剪贴板（带降级）。 */
+function copyTeamRunResult() {
+  var md = _teamRunToMarkdown(_lastRenderedRun);
+  if (!md) { setTeamsStatus('没有可复制的结果', 'err'); return; }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(md)
+      .then(function () { setTeamsStatus('结果已复制到剪贴板', 'ok'); })
+      .catch(function () { _fallbackCopy(md); });
+  } else {
+    _fallbackCopy(md);
+  }
+}
+
+function _fallbackCopy(text) {
+  var ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  try {
+    document.execCommand('copy');
+    setTeamsStatus('结果已复制到剪贴板', 'ok');
+  } catch (e) {
+    setTeamsStatus('复制失败，请手动选择文本', 'err');
+  }
+  document.body.removeChild(ta);
+}
+
+/** 导出结果为 .md 文件。 */
+function downloadTeamRunResult() {
+  var md = _teamRunToMarkdown(_lastRenderedRun);
+  if (!md) { setTeamsStatus('没有可导出的结果', 'err'); return; }
+  var blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  var stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  a.href = url;
+  a.download = 'team-run-' + ((_lastRenderedRun && _lastRenderedRun.team_id) || 'result') + '-' + stamp + '.md';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  setTeamsStatus('已导出 Markdown 文件', 'ok');
 }
 
 function _runHeadHtml(run) {

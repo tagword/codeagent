@@ -111,3 +111,11 @@
 .team-history__row-actions { display: flex; gap: 6px; flex-shrink: 0; }
 .team-history__recover { color: #b45309; }
 .team-history__cancel { color: #b91c1c; }
+
+/* ── 运行结果操作（复制 / 导出） ── */
+.team-run-actions {
+  display: flex;
+  gap: var(--sp-2);
+  margin: var(--sp-2) 0 var(--sp-3);
+  flex-wrap: wrap;
+}
