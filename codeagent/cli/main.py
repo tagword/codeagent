@@ -307,6 +307,15 @@ def main():
         metavar='PRESET_ID',
         help='Video generation preset for video_generate (or CODEAGENT_VIDEO_GEN_PRESET_ID)',
     )
+    chat_parser.add_argument(
+        '--project-id',
+        default=None,
+        help=(
+            'Project id this chat belongs to. When set, the session is registered '
+            'under that project in the Web UI (instead of 未分类), so dispatched '
+            'tasks stay grouped with their project.'
+        ),
+    )
 
     serve_parser = subparsers.add_parser(
         'serve',
@@ -620,7 +629,12 @@ def _cmd_chat_llm(args):
     audio_preset_id = _cli_audio_preset_id(args)
     music_preset_id = _cli_music_preset_id(args)
     video_gen_preset_id = _cli_video_gen_preset_id(args)
-    chat_sess = load_or_create_chat_session(name, agent_id)
+    # 项目归属：显式 --project-id 优先，其次沿用会话已存的 project_id。
+    # 这让 CLI 派发的任务能归入 Web UI 的项目视图（而非"未分类"）。
+    chat_project_id = (getattr(args, 'project_id', None) or '').strip()
+    chat_sess = load_or_create_chat_session(name, agent_id, project_id=chat_project_id or None)
+    if not chat_project_id and isinstance(chat_sess.metadata, dict):
+        chat_project_id = str(chat_sess.metadata.get("project_id") or "").strip()
     fresh_sys = get_cached_system_prompt(chat_sess, agent_id=agent_id)
     chat_sess.messages[:] = merge_fresh_system(chat_sess.messages, fresh_sys)
 
@@ -730,7 +744,7 @@ def _cmd_chat_llm(args):
             chat_sess.metadata,
             agent_id=agent_id,
             session_id=name,
-            project_id=None,
+            project_id=chat_project_id or None,
             compact_happened=compact_result is not None,
         )
         set_active_llm_session(f'{agent_id}::{name}')
