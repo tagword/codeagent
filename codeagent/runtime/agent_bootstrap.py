@@ -44,16 +44,19 @@ def _has_persona_files(agent_dir: Path) -> bool:
     return False
 
 
-def _discover_agent_ids() -> list[str]:
+def _discover_agent_ids(project_root: Path | None = None) -> list[str]:
     """Return agent ids that are genuinely usable on disk.
 
     Qualification requires a ``persona/`` directory **containing at least one
     ``*.md`` file** — hollow agents (empty persona dir) are excluded so that
     ``list_agents`` never advertises an agent the LLM cannot meaningfully call.
+
+    ``project_root`` must match the root used by agent *creation* so that a
+    freshly created agent is discoverable (see ``_agents_dir``).
     """
     from codeagent.server.webui_handlers_agentmeta import _agents_dir
 
-    ad = _agents_dir()
+    ad = _agents_dir(project_root)
     if not ad.is_dir():
         return []
     ids: list[str] = []
@@ -73,6 +76,7 @@ def register_disk_agents(
     agent_ids: list[str] | None = None,
     project_id: str = "",
     overwrite: bool = False,
+    project_root: Path | None = None,
 ) -> dict[str, Any]:
     """Populate ``AgentRegistry`` with handles for on-disk agents.
 
@@ -82,6 +86,8 @@ def register_disk_agents(
         project_id: Optional project scope forwarded to each worker.
         overwrite: When ``False`` (default) existing registrations are kept,
             making repeated calls idempotent.
+        project_root: Data root to scan. Must match the agent creation root so
+            newly created agents are discovered (defaults to ``~/.codeagent``).
 
     Returns:
         ``{"registered": [...], "skipped": [...], "total": int}``
@@ -89,7 +95,7 @@ def register_disk_agents(
     from codeagent.runtime.agent_handle import LLMWorkerHandle
     from seed.core.agent_registry import AgentHandle, AgentRegistry
 
-    ids = agent_ids if agent_ids is not None else _discover_agent_ids()
+    ids = agent_ids if agent_ids is not None else _discover_agent_ids(project_root)
     registered: list[str] = []
     skipped: list[str] = []
 

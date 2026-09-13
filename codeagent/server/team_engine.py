@@ -19,8 +19,6 @@ import time
 import uuid
 from pathlib import Path
 
-from codeagent.core.paths import codeagent_home
-
 logger = logging.getLogger(__name__)
 
 # 持久化读写锁：run 文件是「读-改-写」共享状态，真实执行在后台线程/并行
@@ -78,14 +76,27 @@ def reset_run_threads() -> None:
             _RUN_THREADS.pop(rid, None)
 
 
+def _data_root() -> Path:
+    """Kernel data root — the single source of truth for on-disk agent data.
+
+    Uses ``seed.core.config_plane.project_root()`` (``SEED_PROJECT_ROOT``) so
+    that teams/runs/agents resolve to the *same* tree the agent creation path
+    (``ensure_agent_scaffold``) writes to. Falling back to ``codeagent_home()``
+    here caused created agents to be invisible whenever the two roots diverged.
+    """
+    from seed.core.config_plane import project_root as _kernel_project_root
+
+    return Path(_kernel_project_root())
+
+
 def _runs_dir() -> Path:
-    p = codeagent_home() / "runs"
+    p = _data_root() / "runs"
     p.mkdir(parents=True, exist_ok=True)
     return p
 
 
 def _teams_dir() -> Path:
-    p = codeagent_home() / "teams"
+    p = _data_root() / "teams"
     p.mkdir(parents=True, exist_ok=True)
     return p
 
@@ -412,8 +423,8 @@ def _execute_real(run_id: str, team: dict, user_input: str, simulate: bool) -> N
 
 
 def _agents_root() -> Path:
-    """Agents root directory (~/.codeagent/agents)."""
-    return codeagent_home() / "agents"
+    """Agents root directory (kernel data root ``/agents``)."""
+    return _data_root() / "agents"
 
 
 def _member_agent_id(member) -> str:

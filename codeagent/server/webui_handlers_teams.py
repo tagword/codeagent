@@ -71,7 +71,7 @@ def build_teams_routes(project_root: Path) -> list[Route]:
     # ── Team CRUD ───────────────────────────────────────────────
 
     async def api_teams_list(_: Request) -> JSONResponse:
-        teams = _list_team_metas()
+        teams = _list_team_metas(project_root)
         return JSONResponse({"teams": teams})
 
     async def api_teams_create(request: Request) -> JSONResponse:
@@ -82,7 +82,7 @@ def build_teams_routes(project_root: Path) -> list[Route]:
         team_id = (body.get("id") or "").strip()
         if not team_id:
             return JSONResponse({"detail": "team id is required"}, status_code=400)
-        td = _teams_dir()
+        td = _teams_dir(project_root)
         team_file = td / f"{team_id}.json"
         if team_file.exists():
             return JSONResponse({"detail": f"team '{team_id}' already exists"}, status_code=409)
@@ -102,7 +102,7 @@ def build_teams_routes(project_root: Path) -> list[Route]:
 
     async def api_teams_get(request: Request) -> JSONResponse:
         team_id = request.path_params.get("team_id", "")
-        team_file = _teams_dir() / f"{team_id}.json"
+        team_file = _teams_dir(project_root) / f"{team_id}.json"
         if not team_file.is_file():
             return JSONResponse({"detail": "team not found"}, status_code=404)
         try:
@@ -114,7 +114,7 @@ def build_teams_routes(project_root: Path) -> list[Route]:
 
     async def api_teams_update(request: Request) -> JSONResponse:
         team_id = request.path_params.get("team_id", "")
-        team_file = _teams_dir() / f"{team_id}.json"
+        team_file = _teams_dir(project_root) / f"{team_id}.json"
         if not team_file.is_file():
             return JSONResponse({"detail": "team not found"}, status_code=404)
         try:
@@ -134,7 +134,7 @@ def build_teams_routes(project_root: Path) -> list[Route]:
 
     async def api_teams_delete(request: Request) -> JSONResponse:
         team_id = request.path_params.get("team_id", "")
-        team_file = _teams_dir() / f"{team_id}.json"
+        team_file = _teams_dir(project_root) / f"{team_id}.json"
         if not team_file.is_file():
             return JSONResponse({"detail": "team not found"}, status_code=404)
         team_file.unlink()
@@ -145,7 +145,7 @@ def build_teams_routes(project_root: Path) -> list[Route]:
     async def api_teams_run(request: Request) -> JSONResponse:
         """Execute a team workflow asynchronously."""
         team_id = request.path_params.get("team_id", "")
-        tf = _teams_dir() / f"{team_id}.json"
+        tf = _teams_dir(project_root) / f"{team_id}.json"
         if not tf.is_file():
             return JSONResponse({"detail": "team not found"}, status_code=404)
         try:

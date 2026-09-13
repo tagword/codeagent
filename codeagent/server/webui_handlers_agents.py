@@ -79,7 +79,7 @@ def build_agents_routes(project_root: Path) -> list[Route]:
         return JSONResponse({"presets": presets})
 
     async def api_agents_list(request: Request) -> JSONResponse:
-        agents = _list_agent_metas()
+        agents = _list_agent_metas(project_root)
         return JSONResponse({"agents": agents})
 
     async def api_tools_available(_: Request) -> JSONResponse:
@@ -126,12 +126,12 @@ def build_agents_routes(project_root: Path) -> list[Route]:
             return JSONResponse({"detail": "invalid agent id"}, status_code=400)
         agent_id = safe_id
         # Check for conflict
-        ad = _agents_dir()
+        ad = _agents_dir(project_root)
         if (ad / agent_id).exists():
             return JSONResponse({"detail": f"agent '{agent_id}' already exists"}, status_code=409)
         # Create agent scaffolding
         from codeagent.core.paths import ensure_agent_scaffold
-        ensure_agent_scaffold(agent_id)
+        ensure_agent_scaffold(agent_id, base=project_root)
         # Write description if provided
         desc = (body.get("description") or "").strip()
         if desc:
@@ -139,7 +139,7 @@ def build_agents_routes(project_root: Path) -> list[Route]:
         # Write system prompt if provided
         sp = (body.get("system_prompt") or "").strip()
         if sp:
-            _write_agent_file(agent_id, sp, "persona", "system.md")
+            _write_agent_file(agent_id, sp, "persona", "system.md", project_root=project_root)
         # Write tools if provided
         tools = body.get("tools")
         if tools is not None:
@@ -149,20 +149,22 @@ def build_agents_routes(project_root: Path) -> list[Route]:
         try:
             from codeagent.runtime.agent_bootstrap import register_disk_agents
 
-            register_disk_agents(agent_ids=[agent_id], overwrite=True)
+            register_disk_agents(
+                agent_ids=[agent_id], overwrite=True, project_root=project_root
+            )
         except Exception:
             logger.warning("failed to register new agent '%s' in AgentRegistry", agent_id, exc_info=True)
         return JSONResponse({"agent": {"id": agent_id, "name": agent_id}}, status_code=201)
 
     async def api_agents_get(request: Request) -> JSONResponse:
         agent_id = request.path_params.get("agent_id", "")
-        ad = _agents_dir() / agent_id
+        ad = _agents_dir(project_root) / agent_id
         if not ad.is_dir() or not (ad / "persona").is_dir():
             return JSONResponse({"detail": "agent not found"}, status_code=404)
         desc_file = ad / "description.txt"
         description = desc_file.read_text(encoding="utf-8").strip() if desc_file.is_file() else ""
-        system_prompt = _read_agent_file(agent_id, "persona", "system.md") or ""
-        tools_raw = _read_agent_file(agent_id, "tools.json")
+        system_prompt = _read_agent_file(agent_id, "persona", "system.md", project_root=project_root) or ""
+        tools_raw = _read_agent_file(agent_id, "tools.json", project_root=project_root)
         tools = {}
         tools_configured = False
         if tools_raw:
@@ -188,7 +190,7 @@ def build_agents_routes(project_root: Path) -> list[Route]:
         safe_id = _sanitize_agent_id(agent_id)
         if not safe_id:
             return JSONResponse({"detail": "agent not found"}, status_code=404)
-        ad = _agents_dir() / safe_id
+        ad = _agents_dir(project_root) / safe_id
         if not ad.is_dir() or not (ad / "persona").is_dir():
             return JSONResponse({"detail": "agent not found"}, status_code=404)
         try:
@@ -198,7 +200,7 @@ def build_agents_routes(project_root: Path) -> list[Route]:
         # Update system prompt
         if "system_prompt" in body:
             sp = (body["system_prompt"] or "").strip()
-            _write_agent_file(safe_id, sp, "persona", "system.md")
+            _write_agent_file(safe_id, sp, "persona", "system.md", project_root=project_root)
         # Update description
         if "description" in body:
             desc = (body["description"] or "").strip()
@@ -223,7 +225,7 @@ def build_agents_routes(project_root: Path) -> list[Route]:
         safe_id = _sanitize_agent_id(agent_id)
         if not safe_id:
             return JSONResponse({"detail": "agent not found"}, status_code=404)
-        ad = _agents_dir() / safe_id
+        ad = _agents_dir(project_root) / safe_id
         if not ad.is_dir():
             return JSONResponse({"detail": "agent not found"}, status_code=404)
         # Cannot delete default agent
@@ -237,7 +239,7 @@ def build_agents_routes(project_root: Path) -> list[Route]:
     async def api_agents_sessions(request: Request) -> JSONResponse:
         """Return sessions for a specific agent."""
         agent_id = request.path_params.get("agent_id", "")
-        ad = _agents_dir() / agent_id
+        ad = _agents_dir(project_root) / agent_id
         if not ad.is_dir() or not (ad / "persona").is_dir():
             return JSONResponse({"detail": "agent not found"}, status_code=404)
         try:
@@ -256,11 +258,11 @@ def build_agents_routes(project_root: Path) -> list[Route]:
         target = (body.get("agent_id") or "").strip()
         if not target:
             return JSONResponse({"detail": "agent_id is required"}, status_code=400)
-        ad = _agents_dir() / target
+        ad = _agents_dir(project_root) / target
         if not ad.is_dir() or not (ad / "persona").is_dir():
             return JSONResponse({"detail": f"agent '{target}' not found"}, status_code=404)
-        system_prompt = _read_agent_file(target, "persona", "system.md") or ""
-        tools_raw = _read_agent_file(target, "tools.json")
+        system_prompt = _read_agent_file(target, "persona", "system.md", project_root=project_root) or ""
+        tools_raw = _read_agent_file(target, "tools.json", project_root=project_root)
         tools = {}
         if tools_raw:
             try:

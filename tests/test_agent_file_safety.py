@@ -11,8 +11,12 @@ from codeagent.server import webui_handlers_agentmeta as w
 
 @pytest.fixture
 def agents_dir(tmp_path, monkeypatch):
-    """把 _agents_dir 指向临时目录，隔离文件 IO。"""
-    monkeypatch.setattr(w, "_agents_dir", lambda: tmp_path)
+    """把 _agents_dir 指向临时目录，隔离文件 IO。
+
+    mock 接受可选 project_root 参数：生产代码会把注入的 project_root 透传进来，
+    测试里统一忽略并固定到 tmp_path。
+    """
+    monkeypatch.setattr(w, "_agents_dir", lambda *a, **kw: tmp_path)
     return tmp_path
 
 

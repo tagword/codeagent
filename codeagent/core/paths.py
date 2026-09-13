@@ -218,7 +218,9 @@ def _fallback_persona_source_dir() -> Path | None:
     try:
         from codeagent.server.webui_handlers_agentmeta import _agents_dir
 
-        default_persona = _agents_dir() / agent_id_default() / "persona"
+        # Follow the kernel data root (same tree the scaffold writes into), not
+        # the product home, so the fallback source is actually present.
+        default_persona = _agents_dir(_kernel_project_root()) / agent_id_default() / "persona"
         if default_persona.is_dir() and any(default_persona.glob("*.md")):
             return default_persona
     except Exception:

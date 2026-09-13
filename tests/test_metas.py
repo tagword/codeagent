@@ -24,7 +24,7 @@ def _mk_agent(tmp, aid, *, desc="", sys_prompt="", tools=None, corrupt_tools=Fal
 
 
 def _patch_agents_dir(monkeypatch, tmp):
-    monkeypatch.setattr(mod, "_agents_dir", lambda: tmp / "agents")
+    monkeypatch.setattr(mod, "_agents_dir", lambda *a, **kw: tmp / "agents")
 
 
 # ---------- _list_agent_metas ----------
@@ -86,7 +86,7 @@ def test_agents_sorted(tmp_path, monkeypatch):
 
 # ---------- _list_team_metas ----------
 def test_teams_empty(tmp_path, monkeypatch):
-    monkeypatch.setattr(mod, "_teams_dir", lambda: tmp_path / "teams")
+    monkeypatch.setattr(mod, "_teams_dir", lambda *a, **kw: tmp_path / "teams")
     assert mod._list_team_metas() == []
 
 
@@ -96,7 +96,7 @@ def test_teams_scan(tmp_path, monkeypatch):
     (td / "team1.json").write_text(json.dumps({"name": "T1"}), encoding="utf-8")
     # 非 json 文件跳过
     (td / "notes.txt").write_text("x", encoding="utf-8")
-    monkeypatch.setattr(mod, "_teams_dir", lambda: td)
+    monkeypatch.setattr(mod, "_teams_dir", lambda *a, **kw: td)
     teams = mod._list_team_metas()
     assert len(teams) == 1
     assert teams[0]["name"] == "T1"
@@ -107,5 +107,5 @@ def test_teams_corrupt_json_skipped(tmp_path, monkeypatch):
     td = tmp_path / "teams"
     td.mkdir(parents=True)
     (td / "bad.json").write_text("not-json", encoding="utf-8")
-    monkeypatch.setattr(mod, "_teams_dir", lambda: td)
+    monkeypatch.setattr(mod, "_teams_dir", lambda *a, **kw: td)
     assert mod._list_team_metas() == []

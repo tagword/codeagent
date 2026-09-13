@@ -11,15 +11,32 @@ import json
 from pathlib import Path
 
 
-def _agents_dir() -> Path:
-    """Return the agents root directory (~/.codeagent/agents)."""
+def _agents_dir(project_root: Path | None = None) -> Path:
+    """Return the agents root directory.
+
+    Resolution order:
+
+    1. ``project_root`` when given — this is the kernel data root injected by
+       ``build_*_routes(project_root)`` (i.e. ``SEED_PROJECT_ROOT``). Agent
+       *creation* (``ensure_agent_scaffold``) writes under this same root, so
+       readers must use it too or newly created agents become invisible.
+    2. ``codeagent_home()`` (``~/.codeagent``) as a fallback for callers that
+       have no injected root.
+
+    Historically this helper only used ``codeagent_home()``, which silently
+    diverged from the write path whenever ``SEED_PROJECT_ROOT`` was set to a
+    non-default location (e.g. an isolated RSI copy) — agents were created
+    under ``$SEED_PROJECT_ROOT/agents`` yet listed from ``~/.codeagent/agents``.
+    """
+    if project_root is not None:
+        return Path(project_root) / "agents"
     from codeagent.core.paths import codeagent_home
     return codeagent_home() / "agents"
 
 
-def _list_agent_metas() -> list[dict]:
+def _list_agent_metas(project_root: Path | None = None) -> list[dict]:
     """Scan all agents on the filesystem and return metadata list."""
-    ad = _agents_dir()
+    ad = _agents_dir(project_root)
     if not ad.is_dir():
         return []
     agents: list[dict] = []
@@ -57,15 +74,20 @@ def _list_agent_metas() -> list[dict]:
     return agents
 
 
-def _teams_dir() -> Path:
-    """Return the teams root directory (~/.codeagent/teams)."""
+def _teams_dir(project_root: Path | None = None) -> Path:
+    """Return the teams root directory (``<root>/teams``).
+
+    See ``_agents_dir`` for why the injected ``project_root`` takes precedence.
+    """
+    if project_root is not None:
+        return Path(project_root) / "teams"
     from codeagent.core.paths import codeagent_home
     return codeagent_home() / "teams"
 
 
-def _list_team_metas() -> list[dict]:
+def _list_team_metas(project_root: Path | None = None) -> list[dict]:
     """Scan all teams and return metadata list."""
-    td = _teams_dir()
+    td = _teams_dir(project_root)
     if not td.is_dir():
         return []
     teams: list[dict] = []
@@ -81,17 +103,20 @@ def _list_team_metas() -> list[dict]:
     return teams
 
 
-def _read_agent_file(agent_id: str, *rel_parts: str) -> str | None:
+def _read_agent_file(
+    agent_id: str, *rel_parts: str, project_root: Path | None = None
+) -> str | None:
     """Read a file inside an agent's directory if it exists.
 
     agent_id 用户可控，先净化防路径穿越（含 ../ 或 / 则拒绝）。
+    ``project_root`` 与写入端保持一致，避免读到与写入不同的目录。
     """
     from codeagent.core.paths import _sanitize_agent_id
 
     safe_id = _sanitize_agent_id(agent_id)
     if not safe_id:
         return None
-    p = _agents_dir() / safe_id
+    p = _agents_dir(project_root) / safe_id
     for part in rel_parts:
         p = p / part
     try:
@@ -102,17 +127,20 @@ def _read_agent_file(agent_id: str, *rel_parts: str) -> str | None:
     return None
 
 
-def _write_agent_file(agent_id: str, content: str, *rel_parts: str) -> bool:
+def _write_agent_file(
+    agent_id: str, content: str, *rel_parts: str, project_root: Path | None = None
+) -> bool:
     """Write a file inside an agent's directory. Returns True on success.
 
     agent_id 用户可控，先净化防路径穿越（含 ../ 或 / 则拒绝）。
+    ``project_root`` 与读取端保持一致，避免写到列表看不到的目录。
     """
     from codeagent.core.paths import _sanitize_agent_id
 
     safe_id = _sanitize_agent_id(agent_id)
     if not safe_id:
         return False
-    p = _agents_dir() / safe_id
+    p = _agents_dir(project_root) / safe_id
     for part in rel_parts:
         p = p / part
     try:
