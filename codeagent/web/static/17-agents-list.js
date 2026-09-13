@@ -90,8 +90,9 @@ function _renderAgentList() {
       + '<div class="agent-list__sub agent-list__sub--meta">' + kindTag + '</div>'
       + (desc ? '<div class="agent-list__desc">' + escHtml(desc) + '</div>' : '')
       + '</div>'
-      + '<button class="agent-list__del" title="删除该 Agent"'
-      + ' onclick="event.stopPropagation();deleteAgentFromList(\'' + escAttr(a.id) + '\')">✕</button>'
+      + '<button class="agent-list__del" title="删除该 Agent" aria-label="删除该 Agent"'
+      + ' onclick="event.stopPropagation();deleteAgentFromList(\'' + escAttr(a.id) + '\')">'
+      + '<span class="agent-list__del-icon" aria-hidden="true">🗑</span></button>'
       + '</div>';
   }).join('');
 }
@@ -147,14 +148,24 @@ function createAgentFromList() {
     });
 }
 
-/** 删除 agent（二次确认）。 */
+/** 删除 agent（强确认：须输入 agent id，不可撤销）。 */
 function deleteAgentFromList(aid) {
   if (!aid) return;
   if (aid === (typeof agentId !== 'undefined' ? agentId : 'default')) {
     if (typeof _setStatus === 'function') _setStatus('err', '不能删除当前活跃 Agent');
     return;
   }
-  if (!window.confirm('确定删除 Agent「' + aid + '」？此操作不可撤销。')) return;
+  // 强确认：物理删除不可撤销，要求输入 agent id 才放行（防误触/防手滑）
+  var typed = window.prompt(
+    '删除 Agent「' + aid + '」？\n\n' +
+    '此操作不可撤销：该 Agent 的 persona、skills、会话记录将被永久删除。\n' +
+    '如确认，请输入该 Agent 的 ID：'
+  );
+  if (typed === null) return;                       // 取消
+  if (typed.trim() !== aid) {
+    if (typeof _setStatus === 'function') _setStatus('err', 'ID 不匹配，已取消删除');
+    return;
+  }
 
   fetch(apiUrl('/api/ui/agents/' + encodeURIComponent(aid)), { method: 'DELETE' })
     .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
