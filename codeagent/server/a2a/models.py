@@ -10,7 +10,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any
 
 # ── Task 状态（A2A 规范状态机子集）──────────────────────────────
 STATE_SUBMITTED = "submitted"
@@ -38,12 +38,12 @@ class Part:
 
     kind: str = "text"
     text: str = ""
-    data: Optional[dict[str, Any]] = None
+    data: dict[str, Any] | None = None
     url: str = ""
     media_type: str = "text/plain"
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "Part":
+    def from_dict(cls, d: dict[str, Any]) -> Part:
         # 兼容两种写法：{"kind":"text","text":...} 与 {"text":...}
         kind = str(d.get("kind") or ("text" if "text" in d else "data"))
         return cls(
@@ -77,7 +77,7 @@ class Message:
     task_id: str = ""
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "Message":
+    def from_dict(cls, d: dict[str, Any]) -> Message:
         return cls(
             role=str(d.get("role") or "user"),
             parts=[Part.from_dict(p) for p in (d.get("parts") or [])],

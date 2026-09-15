@@ -42,7 +42,7 @@ def build_agent_card() -> dict[str, Any]:
             "url": base,
         },
         "capabilities": {
-            "streaming": False,
+            "streaming": True,
             "pushNotifications": False,
             "stateTransitionHistory": False,
         },

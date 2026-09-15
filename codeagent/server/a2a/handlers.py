@@ -46,8 +46,11 @@ async def a2a_agent_card(_: Request) -> JSONResponse:
 
 
 # ── JSON-RPC 入口 ──────────────────────────────────────────────
-async def a2a_jsonrpc(request: Request) -> JSONResponse:
-    """POST /a2a — A2A JSON-RPC 2.0 入口。"""
+async def a2a_jsonrpc(request: Request):
+    """POST /a2a — A2A JSON-RPC 2.0 入口。
+
+    ``message/stream`` 返回 SSE 流（StreamingResponse），其余返回 JSON。
+    """
     try:
         body = await request.json()
     except Exception:
@@ -61,6 +64,12 @@ async def a2a_jsonrpc(request: Request) -> JSONResponse:
     params = body.get("params") or {}
     if not isinstance(params, dict):
         return _rpc_error(req_id, ERR_INVALID_PARAMS, "Invalid params: must be object")
+
+    # 流式方法单独处理（返回 SSE，不走 JSON-RPC 包装）
+    if method == "message/stream":
+        from .streaming import stream_response
+
+        return await stream_response(params)
 
     try:
         if method == "message/send":

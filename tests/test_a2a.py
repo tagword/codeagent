@@ -9,7 +9,6 @@
 
 run_chat_turn 被 monkeypatch 成假实现，测试不触网。
 """
-import json
 
 import pytest
 from starlette.applications import Starlette
@@ -18,7 +17,6 @@ from starlette.testclient import TestClient
 
 from codeagent.server.a2a import a2a_agent_card, a2a_jsonrpc
 from codeagent.server.a2a.agent_card import build_agent_card
-from codeagent.server.a2a import handlers as a2a_handlers
 from codeagent.web import auth_impl as ai
 
 

@@ -11,10 +11,18 @@
 模块：
 - ``models``      A2A 数据模型（Message / Part / Task / TaskStatus）
 - ``agent_card``  Agent Card 构建（发现端点）
-- ``handlers``    JSON-RPC 处理器（message/send、tasks/get 等）
+- ``handlers``    JSON-RPC 处理器（message/send、message/stream、tasks/get）
+- ``streaming``   SSE 流式支持（message/stream）
 """
 
 from .agent_card import build_agent_card
 from .handlers import a2a_agent_card, a2a_jsonrpc
+from .streaming import stream_message, stream_response
 
-__all__ = ["build_agent_card", "a2a_agent_card", "a2a_jsonrpc"]
+__all__ = [
+    "build_agent_card",
+    "a2a_agent_card",
+    "a2a_jsonrpc",
+    "stream_message",
+    "stream_response",
+]
