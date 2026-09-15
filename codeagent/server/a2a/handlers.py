@@ -153,16 +153,20 @@ async def _handle_message_send(params: dict[str, Any]) -> dict[str, Any]:
 
 # ── tasks/get ──────────────────────────────────────────────────
 async def _handle_tasks_get(params: dict[str, Any]) -> dict[str, Any]:
-    """查询 Task：从 A2A session 历史重建（无独立 Task 存储，保持零侵入）。"""
+    """查询 Task：从磁盘 session 历史重建（无独立 Task 存储，保持零侵入）。
+
+    注意：不能只查内存 SESSIONS —— 服务重启后内存缓存清空，
+    必须从磁盘加载会话（load_or_create_chat_session）。
+    """
     context_id = str(params.get("contextId") or "").strip()
     task_id = str(params.get("id") or "").strip()
     if not context_id:
         raise _A2AError(ERR_INVALID_PARAMS, "params.contextId is required")
 
     session_id = f"a2a-{context_id}"
-    from codeagent.server.chat_turn import SESSIONS
+    from seed.core.llm_sess import load_chat_session_from_disk
 
-    sess = SESSIONS.get(session_id)
+    sess = load_chat_session_from_disk(session_id, agent_id="default")
     if sess is None:
         raise _A2AError(ERR_INVALID_PARAMS, f"context not found: {context_id}")
 

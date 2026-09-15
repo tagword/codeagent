@@ -168,6 +168,45 @@ def test_max_tool_rounds_passthrough(client, fake_chat_turn):
     assert fake_chat_turn[0]["project_id"] == "proj-1"
 
 
+# ---------- tasks/get ----------
+def test_tasks_get_missing_context(client):
+    r = client.post("/a2a", json={
+        "jsonrpc": "2.0", "id": "g1", "method": "tasks/get", "params": {},
+    })
+    assert r.json()["error"]["code"] == -32602
+
+
+def test_tasks_get_context_not_found(client):
+    r = client.post("/a2a", json={
+        "jsonrpc": "2.0", "id": "g2", "method": "tasks/get",
+        "params": {"contextId": "ctx-does-not-exist-xyz"},
+    })
+    assert r.json()["error"]["code"] == -32602
+    assert "not found" in r.json()["error"]["message"]
+
+
+def test_tasks_get_from_disk(client, monkeypatch):
+    """tasks/get 从磁盘加载 session（服务重启后内存清空也能查到）。"""
+    class _FakeSess:
+        messages = [
+            {"role": "user", "content": "hi"},
+            {"role": "assistant", "content": "hello from disk"},
+        ]
+
+    import seed.core.llm_sess as ls
+    monkeypatch.setattr(ls, "load_chat_session_from_disk",
+                        lambda *a, **k: _FakeSess())
+
+    r = client.post("/a2a", json={
+        "jsonrpc": "2.0", "id": "g3", "method": "tasks/get",
+        "params": {"contextId": "ctx-any"},
+    })
+    result = r.json()["result"]
+    assert result["status"]["state"] == "completed"
+    assert result["artifacts"][0]["parts"][0]["text"] == "hello from disk"
+    assert result["metadata"]["messageCount"] == 2
+
+
 # ---------- 认证白名单 ----------
 def test_a2a_routes_public():
     assert ai.is_public_webui_route("/.well-known/agent-card.json", "GET")
