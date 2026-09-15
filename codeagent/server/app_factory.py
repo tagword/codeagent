@@ -49,6 +49,7 @@ def create_app():
     from seed.core.config_plane import project_root as project_root_fn
 
     from . import _memkey, get_app_html, get_setup_html
+    from .a2a import a2a_agent_card, a2a_jsonrpc
 
     project_root = project_root_fn()
 
@@ -667,6 +668,9 @@ def create_app():
         Route("/api/chat/stop", api_chat_stop, methods=["POST"]),
         Route("/api/chat/rollback", api_chat_rollback, methods=["POST"]),
         Route("/api/tts", api_tts, methods=["POST"]),
+        # ── A2A 协议端点（agent 间通信标准；见 codeagent/server/a2a/）──
+        Route("/.well-known/agent-card.json", a2a_agent_card, methods=["GET"]),
+        Route("/a2a", a2a_jsonrpc, methods=["POST"]),
         WebSocketRoute("/ws", websocket_chat),
         WebSocketRoute("/ws/{path:path}", websocket_chat),
     ]

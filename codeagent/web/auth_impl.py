@@ -170,6 +170,12 @@ def is_public_webui_route(path: str, method: str) -> bool:
     # File-serve for local images (path validation in handler)
     if path == "/api/file-serve" and method == "GET":
         return True
+    # A2A 协议端点：Agent Card 是公开发现端点；/a2a 用 Bearer token 独立校验
+    # （不走 cookie，见 codeagent/server/a2a/handlers.py）
+    if path == "/.well-known/agent-card.json" and method == "GET":
+        return True
+    if path == "/a2a" and method == "POST":
+        return True
     return bool(method == "GET" and path in ("/icon.png", "/favicon.ico", "/favicon.svg", "/health", "/api/health"))
 
 
