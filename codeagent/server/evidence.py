@@ -245,16 +245,28 @@ def collect_evidence(tool_trace: list[dict[str, Any]] | None) -> EvidenceBundle:
         ):
             continue
 
+        # 去重（同一验证结论重复出现只留一条，如多次 code_check 都通过）
+        if ev.kind == "verify" and any(
+            i.kind == "verify" and i.summary == ev.summary for i in bundle.items
+        ):
+            continue
+
         bundle.items.append(ev)
 
         # 汇总
+        # 注意：测试计数**取最完整的批次**而非累加——
+        # Agent 常重复跑测试（先跑全量、再跑单文件），累加会得出
+        # "158 通过"这种虚高数字，误导用户。
+        # 策略：以"通过+失败总数最大"的那一批为准（同一批次内部一致），
+        #       避免把不同批次的数字混在一起。
         if ev.kind == "test":
             m_pass = _RE_PASS_N.search(result)
             m_fail = _RE_FAIL_N.search(result)
-            if m_pass and m_pass.group(1):
-                bundle.tests_passed += int(m_pass.group(1))
-            if m_fail and m_fail.group(1):
-                bundle.tests_failed += int(m_fail.group(1))
+            n_pass = int(m_pass.group(1)) if (m_pass and m_pass.group(1)) else 0
+            n_fail = int(m_fail.group(1)) if (m_fail and m_fail.group(1)) else 0
+            if (n_pass + n_fail) > (bundle.tests_passed + bundle.tests_failed):
+                bundle.tests_passed = n_pass
+                bundle.tests_failed = n_fail
         elif ev.kind == "git":
             m = _RE_COMMIT.search(result)
             if m:
@@ -265,7 +277,9 @@ def collect_evidence(tool_trace: list[dict[str, Any]] | None) -> EvidenceBundle:
                 bundle.files_touched.append(fname)
 
         if ev.ok is False:
-            bundle.failures.append(f"{ev.tool}: {ev.summary}")
+            _f = f"{ev.tool}: {ev.summary}"
+            if _f not in bundle.failures:
+                bundle.failures.append(_f)
 
     return bundle
 

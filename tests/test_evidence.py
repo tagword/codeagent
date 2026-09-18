@@ -272,3 +272,67 @@ def test_mixed_session_clean_evidence():
     txt = ev.format_evidence_block(b)
     assert "8 通过" in txt
     assert "未通过项" not in txt
+
+
+# ---------- 回归：重复调用不累加（端到端实测发现） ----------
+def test_repeated_pytest_not_accumulated():
+    """回归：Agent 重复跑测试时，计数不能累加。
+
+    真实场景：先跑全量（74 passed），再跑单文件（8 passed）
+    → 应显示 74，而非 82。
+    """
+    b = ev.collect_evidence(_trace(
+        ("bash", "pytest", "8 passed in 0.01s"),
+        ("bash", "pytest tests/", "74 passed in 1.2s"),
+    ))
+    assert b.tests_passed == 74, f"累加了：{b.tests_passed}"
+
+
+def test_repeated_pytest_with_failures_not_accumulated():
+    """回归：失败批次也取最完整批次，不累加。"""
+    b = ev.collect_evidence(_trace(
+        ("bash", "pytest test_x.py", "21 passed, 4 failed"),
+        ("bash", "pytest", "87 passed, 1 failed"),
+    ))
+    # 第二批 88 项 > 第一批 25 项 → 取第二批
+    assert b.tests_passed == 87
+    assert b.tests_failed == 1
+
+
+def test_verify_dedup():
+    """回归：重复的 code_check 通过只显示一次。"""
+    b = ev.collect_evidence(_trace(
+        ("code_check", "filepath=/a.py", "All checks passed!"),
+        ("code_check", "filepath=/b.py", "All checks passed!"),
+        ("code_check", "filepath=/c.py", "All checks passed!"),
+        ("code_check", "filepath=/d.py", "All checks passed!"),
+    ))
+    verifies = [i for i in b.items if i.kind == "verify"]
+    assert len(verifies) == 1, f"未去重：{len(verifies)}"
+
+
+def test_failures_dedup():
+    """回归：相同失败不重复列出。"""
+    b = ev.collect_evidence(_trace(
+        ("bash", "pytest", "1 failed, 5 passed"),
+        ("bash", "pytest", "1 failed, 5 passed"),
+    ))
+    assert len(b.failures) == 1
+
+
+def test_real_scenario_v3():
+    """端到端 V3 场景：多批测试 + 重复 lint。"""
+    b = ev.collect_evidence(_trace(
+        ("file_write", "filepath=/a/queue_util.py", "ok"),
+        ("file_write", "filepath=/a/test_queue_util.py", "ok"),
+        ("code_check", "filepath=/a/queue_util.py", "All checks passed!"),
+        ("code_check", "filepath=/a/test_queue_util.py", "All checks passed!"),
+        ("bash", "pytest test_queue_util.py", "21 passed, 4 failed"),
+        ("bash", "pytest", "87 passed, 1 failed"),
+    ))
+    assert b.tests_passed == 87, f"应为 87，实际 {b.tests_passed}"
+    assert b.tests_failed == 1
+    txt = ev.format_evidence_block(b)
+    assert "87 通过" in txt
+    assert "1 失败" in txt
+    assert txt.count("代码检查通过") == 1, "lint 未去重"
