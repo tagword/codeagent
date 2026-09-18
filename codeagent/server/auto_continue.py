@@ -21,13 +21,21 @@
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
 # 视为"未完成"的状态
 PENDING_STATUSES = frozenset({"pending", "in_progress", "todo", "doing"})
+
+# task.md 里的复选框（`- [ ]` 未完成 / `- [x]` 已完成）
+_RE_TASK_UNCHECKED = re.compile(r"^\s*[-*]\s*\[\s*\]\s*(.+?)\s*$", re.M)
+_RE_TASK_CHECKED = re.compile(r"^\s*[-*]\s*\[[xX]\]\s*(.+?)\s*$", re.M)
+# Wave 标题（`## Wave 2: ...`）——用于给出更有指向性的续跑提示
+_RE_WAVE_HEADING = re.compile(r"^#{2,4}\s*(Wave\s*\d+[^\n]*)$", re.M | re.I)
 
 
 @dataclass
@@ -119,6 +127,85 @@ def get_pending_todos(
         return PendingSummary(error=str(e))
 
 
+def get_pending_plan(
+    agent_id: str,
+    project_id: str,
+) -> PendingSummary:
+    """从项目 ``$DOCS/task.md`` 读未完成的 Wave / 任务项。
+
+    为什么需要（数据依据）
+    ----------------------
+    对 76 条「继续」类消息的上下文分析显示：
+    - 7.9% 的 Agent 回复结尾是"要不要继续 / 确认后继续"
+    - 5.3% 列出下一步等指示
+    - 典型样例：「**进入 Wave 2 — 首页开发**？...**确认后继续** 🚀」
+
+    即：**Agent 做完一个 Wave 就停下来问**，用户必须说「继续」。
+    而 todo 方案覆盖不到这种场景——用户说"开发一个网站"时，
+    Agent 并不会主动建 todo。
+
+    ``task.md`` 是项目全流程的**强制产出**（见 skills.md Phase 3），
+    格式固定（``- [ ]`` / ``- [x]``），因此是比 todo 更可靠的信号源。
+
+    Returns:
+        PendingSummary（永不抛异常）
+    """
+    if not project_id:
+        return PendingSummary()
+    try:
+        from seed.core.proj_reg import resolve_project_path
+
+        pid = resolve_project_id(agent_id, project_id)
+        root = resolve_project_path(agent_id, pid) or ""
+        if not root:
+            return PendingSummary()
+        task_md = Path(root) / ".codeagent" / "default" / "docs" / "task.md"
+        if not task_md.is_file():
+            return PendingSummary()
+        text = task_md.read_text(encoding="utf-8", errors="replace")
+
+        unchecked = [m.strip() for m in _RE_TASK_UNCHECKED.findall(text)]
+        if not unchecked:
+            return PendingSummary()
+
+        # 找出这些未完成项所属的 Wave（就近向上找最近标题）
+        items: list[dict[str, Any]] = []
+        for line in unchecked[:20]:
+            items.append({"content": line, "status": "pending", "source": "task.md"})
+        return PendingSummary(count=len(unchecked), items=items)
+    except Exception as e:  # noqa: BLE001
+        logger.debug("get_pending_plan failed (conservative empty): %s", e)
+        return PendingSummary(error=str(e))
+
+
+def get_pending_all(
+    agent_id: str,
+    project_id: str,
+    session_id: str = "",
+) -> PendingSummary:
+    """合并 todo 与 task.md 两个信号源（去重后返回）。
+
+    设计：todo 反映"Agent 自己记的待办"，task.md 反映"项目计划"。
+    两者都为空才算真正完成。
+    """
+    a = get_pending_todos(agent_id, project_id, session_id)
+    b = get_pending_plan(agent_id, project_id)
+    if a.error and b.error:
+        return PendingSummary(error=a.error)
+    if not a.has_pending and not b.has_pending:
+        return PendingSummary()
+
+    merged: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for it in list(a.items) + list(b.items):
+        key = str(it.get("content") or "").strip()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        merged.append(it)
+    return PendingSummary(count=len(merged), items=merged)
+
+
 def should_continue(
     agent_id: str,
     project_id: str,
@@ -140,7 +227,7 @@ def should_continue(
     if segments_used >= max_segments:
         return False, f"已达分段上限 {max_segments}"
 
-    summary = get_pending_todos(agent_id, project_id, session_id)
+    summary = get_pending_all(agent_id, project_id, session_id)
     if summary.error:
         return False, f"查询失败（保守停止）: {summary.error}"
     if not summary.has_pending:
@@ -155,13 +242,23 @@ def build_continue_nudge(summary: PendingSummary) -> str:
     """为"未完成事项"生成续跑提示（比通用 nudge 更有指向性）。"""
     if not summary.has_pending:
         return ""
+    has_plan = any(str(it.get("source")) == "task.md" for it in summary.items)
     lines = [
-        f"【未完成事项】还有 {summary.count} 项待办，请继续推进，不要停下等用户：",
+        f"【未完成事项】还有 {summary.count} 项未完成，请**继续推进**，"
+        "不要停下来问用户「要不要继续」：",
     ]
-    for it in summary.items[:5]:
+    for it in summary.items[:6]:
         title = str(it.get("content") or it.get("title") or "").strip()
         st = str(it.get("status") or "").strip()
+        src = str(it.get("source") or "")
+        tag = "计划" if src == "task.md" else st
         if title:
-            lines.append(f"- [{st}] {title[:80]}")
-    lines.append("完成一项就更新它的状态；全部完成后直接总结结果。")
+            lines.append(f"- [{tag}] {title[:80]}")
+    if has_plan:
+        lines.append(
+            "以上来自项目 task.md 计划。请直接开始下一项，"
+            "完成后勾选 `- [x]` 并继续下一项，**不要请求确认**。"
+        )
+    else:
+        lines.append("完成一项就更新它的状态；全部完成后直接总结结果。")
     return "\n".join(lines)

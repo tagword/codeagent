@@ -109,6 +109,7 @@ def test_should_not_continue_on_error(monkeypatch):
     import seed.core.proj_todos as pt
 
     monkeypatch.setattr(pt, "list_todos", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("x")))
+    monkeypatch.setattr(ac, "get_pending_plan", lambda a, p: ac.PendingSummary(error="x"))
     ok, reason = ac.should_continue("default", "p")
     assert not ok
     assert "保守停止" in reason
@@ -125,17 +126,17 @@ def test_nudge_lists_items():
         {"content": "写测试", "status": "in_progress"},
     ])
     txt = ac.build_continue_nudge(s)
-    assert "2 项待办" in txt
+    assert "2 项未完成" in txt
     assert "改 A 模块" in txt
     assert "写测试" in txt
-    assert "不要停下等用户" in txt
+    assert "不要停下来问用户" in txt
 
 
 def test_nudge_caps_items():
     s = ac.PendingSummary(count=20, items=[{"content": f"t{i}", "status": "pending"} for i in range(20)])
     txt = ac.build_continue_nudge(s)
-    assert txt.count("- [") == 5  # 只列前 5 条
-    assert "20 项待办" in txt
+    assert txt.count("- [") == 6  # 只列前 6 条
+    assert "20 项未完成" in txt
 
 
 # ---------- 回归：project_id 解析（端到端实测发现） ----------
@@ -239,3 +240,107 @@ def test_no_session_filter(monkeypatch):
     s = ac.get_pending_todos("default", "proj1", "a2a-ctx-abc")
     assert "session_id" not in captured, f"不应传 session_id：{captured}"
     assert s.count == 1, "跨会话待办应可见"
+
+
+# ---------- task.md 计划检测（覆盖"做完 Wave 就问要不要继续"） ----------
+def _make_task_md(tmp_path, content: str):
+    d = tmp_path / ".codeagent" / "default" / "docs"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "task.md").write_text(content, encoding="utf-8")
+    return str(tmp_path)
+
+
+def test_pending_plan_detects_unchecked(tmp_path, monkeypatch):
+    """回归：task.md 有未勾选项 → 视为未完成。"""
+    import seed.core.proj_reg as pr
+
+    root = _make_task_md(tmp_path, """# task.md
+
+## Wave 1: 基础 ✅
+  - [x] W1.1 完成
+  - [x] W1.2 完成
+
+## Wave 2: 首页
+  - [ ] W2.1 Hero 区域
+  - [ ] W2.2 功能卡片
+""")
+    monkeypatch.setattr(pr, "resolve_project_path", lambda a, p: root)
+    monkeypatch.setattr(ac, "resolve_project_id", lambda a, p: p)
+    s = ac.get_pending_plan("default", "proj1")
+    assert s.count == 2, f"应检出 2 项，实际 {s.count}"
+    assert "Hero" in s.items[0]["content"]
+
+
+def test_pending_plan_all_done(tmp_path, monkeypatch):
+    """全部勾选 → 无未完成。"""
+    import seed.core.proj_reg as pr
+
+    root = _make_task_md(tmp_path, """# task.md
+## Wave 1
+  - [x] W1.1
+  - [x] W1.2
+""")
+    monkeypatch.setattr(pr, "resolve_project_path", lambda a, p: root)
+    monkeypatch.setattr(ac, "resolve_project_id", lambda a, p: p)
+    assert ac.get_pending_plan("default", "proj1").count == 0
+
+
+def test_pending_plan_no_file(tmp_path, monkeypatch):
+    """无 task.md → 空（不报错）。"""
+    import seed.core.proj_reg as pr
+
+    monkeypatch.setattr(pr, "resolve_project_path", lambda a, p: str(tmp_path))
+    monkeypatch.setattr(ac, "resolve_project_id", lambda a, p: p)
+    assert ac.get_pending_plan("default", "proj1").count == 0
+
+
+def test_pending_plan_accepts_star_bullets(tmp_path, monkeypatch):
+    """兼容 `* [ ]` 写法。"""
+    import seed.core.proj_reg as pr
+
+    root = _make_task_md(tmp_path, "# t\n* [ ] 任务A\n* [x] 任务B\n")
+    monkeypatch.setattr(pr, "resolve_project_path", lambda a, p: root)
+    monkeypatch.setattr(ac, "resolve_project_id", lambda a, p: p)
+    assert ac.get_pending_plan("default", "proj1").count == 1
+
+
+def test_pending_all_merges_sources(monkeypatch):
+    """合并 todo + task.md，内容去重。"""
+    monkeypatch.setattr(ac, "get_pending_todos", lambda a, p, s="": ac.PendingSummary(
+        count=1, items=[{"content": "todo 项", "status": "pending"}],
+    ))
+    monkeypatch.setattr(ac, "get_pending_plan", lambda a, p: ac.PendingSummary(
+        count=2, items=[
+            {"content": "todo 项", "status": "pending", "source": "task.md"},  # 重复
+            {"content": "计划项", "status": "pending", "source": "task.md"},
+        ],
+    ))
+    s = ac.get_pending_all("default", "proj1")
+    assert s.count == 2, f"去重后应为 2，实际 {s.count}"
+
+
+def test_pending_all_both_empty(monkeypatch):
+    monkeypatch.setattr(ac, "get_pending_todos", lambda a, p, s="": ac.PendingSummary())
+    monkeypatch.setattr(ac, "get_pending_plan", lambda a, p: ac.PendingSummary())
+    assert not ac.get_pending_all("default", "proj1").has_pending
+
+
+def test_should_continue_uses_plan(monkeypatch):
+    """回归：只有 task.md 未完成时也应续跑（核心场景）。"""
+    monkeypatch.setattr(ac, "get_pending_todos", lambda a, p, s="": ac.PendingSummary())
+    monkeypatch.setattr(ac, "get_pending_plan", lambda a, p: ac.PendingSummary(
+        count=2, items=[{"content": "W2.1 Hero", "source": "task.md"}],
+    ))
+    ok, reason = ac.should_continue("default", "proj1", segments_used=0, max_segments=10)
+    assert ok, f"应续跑，实际: {reason}"
+    assert "未完成" in reason
+
+
+def test_nudge_mentions_no_confirm(monkeypatch):
+    """nudge 要明确要求"不要请求确认"。"""
+    s = ac.PendingSummary(count=1, items=[
+        {"content": "W2.1 Hero", "status": "pending", "source": "task.md"},
+    ])
+    txt = ac.build_continue_nudge(s)
+    assert "不要" in txt and "确认" in txt
+    assert "task.md" in txt

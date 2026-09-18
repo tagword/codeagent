@@ -548,18 +548,20 @@ async def run_chat_turn(
                             _run_was_cancelled = True
                             break
                         # Agent 自认为完成 —— 检查是否真有未完成事项
+                        # 两个信号源：① 项目 todo ② task.md 未勾选项
+                        # （后者覆盖"Agent 做完一个 Wave 就问要不要继续"）
                         try:
                             from codeagent.server.auto_continue import (
                                 build_continue_nudge,
-                                get_pending_todos,
+                                get_pending_all,
                             )
 
-                            _pend = get_pending_todos(agent_id, project_id or "", session_id)
+                            _pend = get_pending_all(agent_id, project_id or "", session_id)
                             if _pend.has_pending and (_segment + 1) < _max_seg:
                                 _pending_continue = True
                                 _pending_nudge = build_continue_nudge(_pend)
                                 logger.info(
-                                    "auto-continue: %d pending todos, continuing (segment %d/%d)",
+                                    "auto-continue: %d pending items, continuing (segment %d/%d)",
                                     _pend.count, _segment + 1, _max_seg,
                                 )
                         except Exception:
