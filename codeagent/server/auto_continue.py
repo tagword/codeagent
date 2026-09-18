@@ -31,6 +31,12 @@ logger = logging.getLogger(__name__)
 # 视为"未完成"的状态
 PENDING_STATUSES = frozenset({"pending", "in_progress", "todo", "doing"})
 
+# 陈旧 pending 阈值（小时）：超过此时间未更新的待办不再阻止停止。
+# 为什么需要：Agent 可能忘记更新 todo 状态，残留的 pending 项会导致
+# auto-continue 反复触发（直到 max_segments 用尽），既浪费 token 又
+# 违背"任务完成后自动停"的设计目标。
+STALE_PENDING_HOURS = 24.0
+
 # task.md 里的复选框（`- [ ]` 未完成 / `- [x]` 已完成）
 _RE_TASK_UNCHECKED = re.compile(r"^\s*[-*]\s*\[\s*\]\s*(.+?)\s*$", re.M)
 _RE_TASK_CHECKED = re.compile(r"^\s*[-*]\s*\[[xX]\]\s*(.+?)\s*$", re.M)
@@ -91,6 +97,27 @@ def resolve_project_id(agent_id: str, project_id: str) -> str:
     return pid
 
 
+def _is_stale(item: dict[str, Any]) -> bool:
+    """判断待办是否已陈旧（超过 STALE_PENDING_HOURS 未更新）。
+
+    解析失败时返回 False（保守：宁可继续，不可漏掉真实待办）。
+    """
+    import time as _t
+    from datetime import datetime
+
+    raw = str(item.get("updated_at") or item.get("created_at") or "").strip()
+    if not raw:
+        return False
+    try:
+        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.astimezone()
+        age_h = (_t.time() - dt.timestamp()) / 3600.0
+        return age_h > STALE_PENDING_HOURS
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def get_pending_todos(
     agent_id: str,
     project_id: str,
@@ -120,7 +147,16 @@ def get_pending_todos(
             it for it in items
             if isinstance(it, dict)
             and str(it.get("status") or "").strip().lower() in PENDING_STATUSES
+            and not _is_stale(it)
         ]
+        stale_n = sum(
+            1 for it in items
+            if isinstance(it, dict)
+            and str(it.get("status") or "").strip().lower() in PENDING_STATUSES
+            and _is_stale(it)
+        )
+        if stale_n:
+            logger.info("ignored %d stale pending todos (>%sh)", stale_n, STALE_PENDING_HOURS)
         return PendingSummary(count=len(pending), items=pending)
     except Exception as e:  # noqa: BLE001
         logger.debug("get_pending_todos failed (conservative empty): %s", e)

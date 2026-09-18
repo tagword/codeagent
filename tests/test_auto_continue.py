@@ -344,3 +344,79 @@ def test_nudge_mentions_no_confirm(monkeypatch):
     txt = ac.build_continue_nudge(s)
     assert "不要" in txt and "确认" in txt
     assert "task.md" in txt
+
+
+# ---------- 陈旧待办过滤（防残留 pending 永久阻止停止） ----------
+def _iso_hours_ago(h: float) -> str:
+    from datetime import datetime, timedelta, timezone
+    return (datetime.now(timezone.utc) - timedelta(hours=h)).isoformat()
+
+
+def test_stale_pending_ignored(monkeypatch):
+    """回归：超过 24h 未更新的 pending 不再阻止停止。
+
+    风险场景：Agent 忘记更新 todo 状态 → 残留 pending → 续跑反复触发。
+    """
+    import seed.core.proj_reg as pr
+    import seed.core.proj_todos as pt
+
+    monkeypatch.setattr(pr, "get_project", lambda a, p: {"id": p, "name": "x"})
+    monkeypatch.setattr(pt, "list_todos", lambda a, p, **k: [
+        {"id": "1", "content": "陈旧项", "status": "pending",
+         "updated_at": _iso_hours_ago(48)},
+    ])
+    s = ac.get_pending_todos("default", "p1")
+    assert s.count == 0, f"陈旧项应被忽略，实际 {s.count}"
+
+
+def test_fresh_pending_kept(monkeypatch):
+    """新鲜的 pending 仍应保留。"""
+    import seed.core.proj_reg as pr
+    import seed.core.proj_todos as pt
+
+    monkeypatch.setattr(pr, "get_project", lambda a, p: {"id": p, "name": "x"})
+    monkeypatch.setattr(pt, "list_todos", lambda a, p, **k: [
+        {"id": "1", "content": "新项", "status": "pending",
+         "updated_at": _iso_hours_ago(1)},
+    ])
+    s = ac.get_pending_todos("default", "p1")
+    assert s.count == 1
+
+
+def test_stale_parse_failure_conservative(monkeypatch):
+    """时间解析失败 → 保守保留（宁可不漏）。"""
+    import seed.core.proj_reg as pr
+    import seed.core.proj_todos as pt
+
+    monkeypatch.setattr(pr, "get_project", lambda a, p: {"id": p, "name": "x"})
+    monkeypatch.setattr(pt, "list_todos", lambda a, p, **k: [
+        {"id": "1", "content": "坏时间", "status": "pending", "updated_at": "not-a-date"},
+    ])
+    assert ac.get_pending_todos("default", "p1").count == 1
+
+
+def test_stale_no_timestamp_kept(monkeypatch):
+    """无时间戳 → 保守保留。"""
+    import seed.core.proj_reg as pr
+    import seed.core.proj_todos as pt
+
+    monkeypatch.setattr(pr, "get_project", lambda a, p: {"id": p, "name": "x"})
+    monkeypatch.setattr(pt, "list_todos", lambda a, p, **k: [
+        {"id": "1", "content": "无时间", "status": "pending"},
+    ])
+    assert ac.get_pending_todos("default", "p1").count == 1
+
+
+def test_stale_mixed(monkeypatch):
+    """混合：只过滤陈旧的。"""
+    import seed.core.proj_reg as pr
+    import seed.core.proj_todos as pt
+
+    monkeypatch.setattr(pr, "get_project", lambda a, p: {"id": p, "name": "x"})
+    monkeypatch.setattr(pt, "list_todos", lambda a, p, **k: [
+        {"id": "1", "content": "陈旧", "status": "pending", "updated_at": _iso_hours_ago(72)},
+        {"id": "2", "content": "新鲜", "status": "pending", "updated_at": _iso_hours_ago(2)},
+    ])
+    s = ac.get_pending_todos("default", "p1")
+    assert s.count == 1
+    assert s.items[0]["content"] == "新鲜"
