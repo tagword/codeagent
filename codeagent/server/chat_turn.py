@@ -61,6 +61,7 @@ async def run_chat_turn(
     broadcast_fn: Callable[..., Awaitable[None]] | None = None,
     if_busy: str = "queue",
     forced_skill_suffix: str = "",
+    with_evidence: bool = False,
 ) -> dict:
     """执行一轮 chat turn（追加 user 消息 → LLM 工具循环 → 合并/持久化）。
 
@@ -757,6 +758,21 @@ async def run_chat_turn(
                 }
                 for t in tool_trace
             ]
+            # ── 交付证据链：把工具执行轨迹提炼成证据块，附在回复末尾 ──
+            # 目的：Agent 说"完成"时给出可验证证据，用户无需再问"验证一下"
+            # （数据依据：5293 条用户消息中验证类占 9%，是最大一类）
+            # 默认关闭（with_evidence=False），避免改变既有行为。
+            _evidence_block = ""
+            if with_evidence:
+                try:
+                    from codeagent.server.evidence import build_evidence_appendix
+
+                    _evidence_block = build_evidence_appendix(trace_out)
+                except Exception:
+                    logger.exception("build evidence appendix failed")
+                    _evidence_block = ""
+            if _evidence_block:
+                reply = (reply or "") + "\n" + _evidence_block
             # ── Token 用量精确计算（基于 API 返回的 usage） ──
             _acc = {}
             _cost_info = {}
@@ -808,6 +824,7 @@ async def run_chat_turn(
                 "session_id": session_id,
                 "tools_used": tools_used,
                 "tool_trace": trace_out,
+                "evidence": _evidence_block,
                 "token_usage": _api_usage,
                 "context": _ctx,
                 "cost": _cost_info,

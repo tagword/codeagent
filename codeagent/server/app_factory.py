@@ -211,6 +211,7 @@ def create_app():
                 emit_ws=True,
                 broadcast_fn=_broadcast_session_event,
                 forced_skill_suffix=_forced_mcp_skill_suffix,
+                with_evidence=True,
             )
             if result.get("queued") or result.get("skipped"):
                 return JSONResponse(result, status_code=202)

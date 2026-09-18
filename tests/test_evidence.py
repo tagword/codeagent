@@ -1,0 +1,148 @@
+"""交付证据链测试。"""
+
+from codeagent.server import evidence as ev
+
+
+def _trace(*items):
+    return [{"tool": t, "arguments": a, "result": r} for t, a, r in items]
+
+
+# ---------- 分类 ----------
+def test_classify_test_pass():
+    b = ev.collect_evidence(_trace(
+        ("test_run", "pytest tests/", "657 passed, 1 warning in 2.49s"),
+    ))
+    assert b.tests_passed == 657
+    assert b.tests_failed == 0
+    assert not b.has_failure()
+
+
+def test_classify_test_fail():
+    b = ev.collect_evidence(_trace(
+        ("test_run", "pytest", "2 failed, 655 passed"),
+    ))
+    assert b.tests_failed == 2
+    assert b.tests_passed == 655
+    assert b.has_failure()
+
+
+def test_classify_git_commit():
+    b = ev.collect_evidence(_trace(
+        ("git", "commit -m 'x'", "[rsi/x abc1234] feat: something"),
+    ))
+    assert b.commits == ["abc1234"]
+
+
+def test_classify_file_edit():
+    b = ev.collect_evidence(_trace(
+        ("file_edit", "filepath=/a/b/chat_turn.py", "ok"),
+    ))
+    assert any(f.endswith("chat_turn.py") for f in b.files_touched)
+
+
+def test_classify_http_verify():
+    b = ev.collect_evidence(_trace(
+        ("bash", "curl -s -o /dev/null -w '%{http_code}' http://x", "HTTP 200"),
+    ))
+    assert len(b.items) == 1
+    assert b.items[0].kind == "verify"
+    assert b.items[0].ok is True
+
+
+def test_plain_bash_ignored():
+    """普通 bash 命令不记录（防噪音）。"""
+    b = ev.collect_evidence(_trace(("bash", "ls -la", "total 8\n...")))
+    assert b.is_empty()
+
+
+def test_failure_recorded():
+    b = ev.collect_evidence(_trace(
+        ("bash", "pytest", "Traceback (most recent call last): AssertionError"),
+    ))
+    assert b.has_failure()
+    assert b.failures
+
+
+def test_file_dedup():
+    """同一文件多次改动只留一条。"""
+    b = ev.collect_evidence(_trace(
+        ("file_edit", "filepath=/a/x.py", "ok"),
+        ("file_edit", "filepath=/a/x.py", "ok"),
+        ("file_write", "filepath=/a/x.py", "ok"),
+    ))
+    files = [i for i in b.items if i.kind == "file"]
+    assert len(files) == 1
+
+
+def test_empty_trace():
+    assert ev.collect_evidence(None).is_empty()
+    assert ev.collect_evidence([]).is_empty()
+
+
+def test_malformed_trace():
+    """非法结构不崩。"""
+    b = ev.collect_evidence([None, "x", {"tool": "bash", "arguments": "ls", "result": ""}])
+    assert isinstance(b, ev.EvidenceBundle)
+
+
+# ---------- 格式化 ----------
+def test_format_empty_returns_blank():
+    assert ev.format_evidence_block(ev.EvidenceBundle()) == ""
+
+
+def test_format_full_block():
+    b = ev.collect_evidence(_trace(
+        ("test_run", "pytest", "657 passed"),
+        ("git", "commit", "[main deadbee] x"),
+        ("file_edit", "filepath=/a/b.py", "ok"),
+        ("bash", "curl http://x", "HTTP 200"),
+    ))
+    txt = ev.format_evidence_block(b)
+    assert "本轮执行证据" in txt
+    assert "657 通过" in txt
+    assert "deadbee" in txt
+    assert "b.py" in txt
+    assert "HTTP 200" in txt
+
+
+def test_format_shows_failures():
+    b = ev.collect_evidence(_trace(
+        ("test_run", "pytest", "3 failed, 100 passed"),
+    ))
+    txt = ev.format_evidence_block(b)
+    assert "❌" in txt
+    assert "未通过项" in txt
+
+
+def test_build_appendix_convenience():
+    txt = ev.build_evidence_appendix(_trace(("test_run", "pytest", "10 passed")))
+    assert "10 通过" in txt
+    assert ev.build_evidence_appendix(None) == ""
+
+
+def test_to_dict_roundtrip():
+    b = ev.collect_evidence(_trace(("test_run", "pytest", "5 passed")))
+    d = b.to_dict()
+    assert d["tests_passed"] == 5
+    assert d["has_failure"] is False
+    assert isinstance(d["items"], list)
+
+
+# ---------- 集成：chat_turn 注入 ----------
+def test_chat_turn_signature_has_with_evidence():
+    """run_chat_turn 支持 with_evidence 参数（默认关闭，不改变既有行为）。"""
+    import inspect
+
+    from codeagent.server.chat_turn import run_chat_turn
+
+    sig = inspect.signature(run_chat_turn)
+    assert "with_evidence" in sig.parameters
+    assert sig.parameters["with_evidence"].default is False
+
+
+def test_evidence_default_off_keeps_reply_clean():
+    """默认关闭时，证据块为空（不污染回复）。"""
+    from codeagent.server.evidence import build_evidence_appendix
+
+    # 模拟：无证据时返回空串
+    assert build_evidence_appendix([]) == ""
