@@ -487,6 +487,7 @@ async def run_chat_turn(
                 _acc_usage: dict = {}
                 _seg_last_meta: dict = {}
                 _peak_across_segments = 0
+                _pending_nudge = ""
                 from seed.core.usage_accumulator import (
                     begin_usage_accumulation,
                     end_usage_accumulation,
@@ -534,9 +535,37 @@ async def run_chat_turn(
                             if isinstance(_v, (int, float)):
                                 _acc_usage[_k] = _acc_usage.get(_k, 0) + int(_v)
 
-                    if _seg_meta.get("stopped_reason") != "max_tool_rounds":
-                        if _seg_meta.get("stopped_reason") == "cancelled":
+                    _stop_reason = _seg_meta.get("stopped_reason")
+                    # ── 未完成事项驱动续跑 ──
+                    # 数据依据：5293 条用户消息中「继续」74 次（最高频）。
+                    # 原逻辑只在 max_tool_rounds 用尽时续跑；Agent 自己觉得
+                    # "做完了"就停 → 用户必须说"继续"。
+                    # 新增：若还有 pending todo，即使 Agent 认为完成也继续。
+                    _pending_continue = False
+                    _pending_nudge = ""
+                    if _stop_reason != "max_tool_rounds":
+                        if _stop_reason == "cancelled":
                             _run_was_cancelled = True
+                            break
+                        # Agent 自认为完成 —— 检查是否真有未完成事项
+                        try:
+                            from codeagent.server.auto_continue import (
+                                build_continue_nudge,
+                                get_pending_todos,
+                            )
+
+                            _pend = get_pending_todos(agent_id, project_id or "", session_id)
+                            if _pend.has_pending and (_segment + 1) < _max_seg:
+                                _pending_continue = True
+                                _pending_nudge = build_continue_nudge(_pend)
+                                logger.info(
+                                    "auto-continue: %d pending todos, continuing (segment %d/%d)",
+                                    _pend.count, _segment + 1, _max_seg,
+                                )
+                        except Exception:
+                            logger.debug("pending-todo check failed", exc_info=True)
+
+                    if not _pending_continue:
                         break
 
                     _segment += 1
@@ -573,7 +602,8 @@ async def run_chat_turn(
                     # Inject nudge as user message to continue
                     # n_before_ref deliberately NOT reset — nudge must be
                     # picked up by _on_tool_round_persist in the next segment
-                    _nudge = _auto_continue_nudge(_seg_meta)
+                    # 优先用"未完成事项"提示（更有指向性），否则用通用 nudge
+                    _nudge = _pending_nudge or _auto_continue_nudge(_seg_meta)
                     api_msgs.append(
                         {
                             "role": "user",
