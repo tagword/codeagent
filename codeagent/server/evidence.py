@@ -29,8 +29,24 @@ _GIT_TOOLS = {"git", "bash"}
 _VERIFY_TOOLS = {"bash", "test_run", "browser_screenshot", "curl"}
 
 # 结果里的关键信号
+# 注意：失败正则必须**精确**，否则会误判——
+# 例：测试名 `test_add_with_string_raises_type_error PASSED` 里的 "error"
+# 会被宽松的 `Error` 匹配到，导致"全通过"被误报为"有失败"。
 _RE_PASS = re.compile(r"(\d+)\s+passed|PASSED|✅|tests? passed|all checks passed", re.I)
-_RE_FAIL = re.compile(r"(\d+)\s+failed|FAILED|❌|Error|Traceback|AssertionError", re.I)
+_RE_FAIL = re.compile(
+    r"(\d+)\s+failed"          # N failed
+    r"|\bFAILED\b"             # pytest 的 FAILED 标记（词边界，不匹配 PASSED）
+    r"|❌"
+    r"|^Traceback \(most recent call last\)"   # 行首的 Traceback
+    r"|\bAssertionError\b"
+    r"|^E\s+\w*Error"          # pytest 错误行「E   ValueError: ...」
+    r"|\b\d+ error(s)?\b",     # N errors
+    re.I | re.M,
+)
+
+# 带数字计数的专用正则（优先使用，保证能取到数量）
+_RE_PASS_N = re.compile(r"(\d+)\s+passed", re.I)
+_RE_FAIL_N = re.compile(r"(\d+)\s+(?:failed|error)", re.I)
 _RE_COMMIT = re.compile(r"\b([0-9a-f]{7,40})\b")
 _RE_HTTP = re.compile(r"HTTP[/ ]?\d?\.?\d?\s*(\d{3})|status[:\s]+(\d{3})", re.I)
 
@@ -84,6 +100,29 @@ def _truncate(s: str, n: int = 300) -> str:
     return s if len(s) <= n else s[:n] + " …"
 
 
+def _extract_filename(args: str) -> str:
+    """从工具参数里提取文件名。
+
+    优先 ``filepath=xxx`` / ``"filepath": "xxx"``；
+    兜底用路径正则，但**排除** ``模块.属性`` 形态（如 ``demo_calc.add``）。
+
+    判定标准：扩展名必须是已知的**文件扩展名**（≥2 字符且非纯标识符后缀）。
+    """
+    args = args or ""
+    # 1. 优先显式 filepath 字段
+    m = re.search(r'["\']?filepath["\']?\s*[:=]\s*["\']?([^\s"\',}]+)', args)
+    if m:
+        return m.group(1)
+    # 2. 兜底：找路径形态，但排除 模块.属性
+    m = re.search(r"(/[\w./\-]+\.\w{1,8})", args)  # 必须含 /，排除 demo_calc.add
+    if m:
+        return m.group(1)
+    m = re.search(r"([\w\-]+\.(?:py|md|json|yaml|yml|toml|txt|js|ts|vue|html|css|sh|sql))", args)
+    if m:
+        return m.group(1)
+    return ""
+
+
 def _classify(tool: str, args: str, result: str) -> Evidence | None:
     """把一条工具轨迹分类成证据。返回 None 表示不值得记录。
 
@@ -112,8 +151,7 @@ def _classify(tool: str, args: str, result: str) -> Evidence | None:
 
     # ── 3. 文件工具 ──
     if tool in ("file_edit", "file_write", "apply_patch"):
-        fp = re.search(r"[\w./\-]+\.\w{1,8}", args)
-        fname = fp.group(0) if fp else ""
+        fname = _extract_filename(args)
         summary = f"改动：{fname}" if fname else "文件已修改"
         return Evidence("file", tool, summary, "", True)
 
@@ -136,8 +174,10 @@ def _classify(tool: str, args: str, result: str) -> Evidence | None:
 
 def _as_test_evidence(tool: str, result: str) -> Evidence:
     """从结果里提取测试通过/失败数。"""
-    m_pass = _RE_PASS.search(result)
-    m_fail = _RE_FAIL.search(result)
+    # 优先用带数字的计数（"8 passed" / "1 failed"），避免被无分组的
+    # PASSED/FAILED 标记抢先匹配导致数字丢失。
+    m_pass = _RE_PASS_N.search(result) or _RE_PASS.search(result)
+    m_fail = _RE_FAIL_N.search(result) or _RE_FAIL.search(result)
     n_pass = int(m_pass.group(1)) if (m_pass and m_pass.group(1)) else 0
     n_fail = int(m_fail.group(1)) if (m_fail and m_fail.group(1)) else 0
     ok: bool | None
@@ -184,8 +224,8 @@ def collect_evidence(tool_trace: list[dict[str, Any]] | None) -> EvidenceBundle:
 
         # 汇总
         if ev.kind == "test":
-            m_pass = _RE_PASS.search(result)
-            m_fail = _RE_FAIL.search(result)
+            m_pass = _RE_PASS_N.search(result)
+            m_fail = _RE_FAIL_N.search(result)
             if m_pass and m_pass.group(1):
                 bundle.tests_passed += int(m_pass.group(1))
             if m_fail and m_fail.group(1):

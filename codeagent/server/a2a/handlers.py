@@ -128,6 +128,7 @@ async def _handle_message_send(params: dict[str, Any]) -> dict[str, Any]:
             emit_ws=False,
             refresh_title=False,
             log_diary=False,
+            with_evidence=True,
         )
         state = STATE_COMPLETED
         reply = str(result.get("reply") or "")

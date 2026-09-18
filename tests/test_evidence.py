@@ -146,3 +146,60 @@ def test_evidence_default_off_keeps_reply_clean():
 
     # 模拟：无证据时返回空串
     assert build_evidence_appendix([]) == ""
+
+
+# ---------- 回归：真实场景误判 ----------
+def test_passed_not_misjudged_as_failed():
+    """回归：测试名含 'error' 子串时，不能把'全通过'误判为失败。
+
+    真实场景：test_add_with_string_raises_type_error PASSED
+    """
+    b = ev.collect_evidence(_trace(
+        ("bash", "pytest test_demo_calc.py",
+         "test_add_with_string_raises_type_error PASSED\n"
+         "============================== 8 passed in 0.01s =============================="),
+    ))
+    assert b.tests_passed == 8
+    assert b.tests_failed == 0
+    assert not b.has_failure(), f"误报失败: {b.failures}"
+
+
+def test_real_failure_still_detected():
+    """真失败仍要检出。"""
+    b = ev.collect_evidence(_trace(
+        ("bash", "pytest", "FAILED test_x.py::test_a - assert 1 == 2\n1 failed, 7 passed"),
+    ))
+    assert b.tests_failed == 1
+    assert b.has_failure()
+
+
+def test_traceback_detected():
+    b = ev.collect_evidence(_trace(
+        ("bash", "python x.py", "Traceback (most recent call last):\n  File \"x.py\""),
+    ))
+    assert b.has_failure()
+
+
+def test_filename_not_function_attr():
+    """回归：'demo_calc.add' 不能被当成文件名。"""
+    assert ev._extract_filename("filepath=/a/b/demo_calc.py") == "/a/b/demo_calc.py"
+    assert ev._extract_filename('{"filepath": "/a/b/x.py", "content": "..."}') == "/a/b/x.py"
+    # 模块.属性 形态不应被提取为文件
+    assert ev._extract_filename("demo_calc.add") == ""
+    assert ev._extract_filename("调用 demo_calc.add(a,b)") == ""
+
+
+def test_filename_fallback_known_ext():
+    assert ev._extract_filename("write to notes.md please") == "notes.md"
+
+
+def test_evidence_block_no_false_failure():
+    """端到端：全通过的任务，证据块不得出现'未通过项'。"""
+    b = ev.collect_evidence(_trace(
+        ("file_write", "filepath=/a/demo_calc.py", "ok"),
+        ("bash", "pytest", "8 passed in 0.01s"),
+    ))
+    txt = ev.format_evidence_block(b)
+    assert "8 通过" in txt
+    assert "未通过项" not in txt
+    assert "demo_calc.py" in txt

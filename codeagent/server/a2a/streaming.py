@@ -131,6 +131,7 @@ async def stream_message(params: dict[str, Any]) -> AsyncIterator[bytes]:
                 broadcast_fn=bridge,   # 桥接到队列
                 refresh_title=False,
                 log_diary=False,
+                with_evidence=True,
             )
         except Exception as e:  # noqa: BLE001
             logger.exception("a2a stream run failed")
