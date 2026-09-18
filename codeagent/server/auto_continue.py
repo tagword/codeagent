@@ -46,6 +46,43 @@ class PendingSummary:
         return {"count": self.count, "items": self.items[:10], "error": self.error}
 
 
+def resolve_project_id(agent_id: str, project_id: str) -> str:
+    """把可能是"名字"的 project_id 解析成真实 id。
+
+    背景（端到端实测发现）：A2A / WebUI 传入的 ``projectId`` 可能是项目
+    **名字**（如 ``ui-proj``）而非 id，导致 ``list_todos`` 查不到任何待办
+    → 课题 2（未完成事项驱动续跑）静默失效。
+
+    解析策略：
+    1. 若已是有效 id（``get_project`` 能查到）→ 原样返回
+    2. 否则在注册表里按 name / path 匹配 → 返回匹配到的 id
+    3. 都失败 → 返回原值（调用方保守处理）
+    """
+    pid = (project_id or "").strip()
+    if not pid:
+        return ""
+    try:
+        from seed.core.proj_reg import get_project, list_projects
+
+        if get_project(agent_id, pid):
+            return pid
+        # 按名字 / 路径匹配
+        try:
+            projects = list_projects(agent_id) or []
+        except Exception:
+            projects = []
+        for p in projects:
+            if not isinstance(p, dict):
+                continue
+            name = str(p.get("name") or "").strip()
+            path = str(p.get("path") or "").strip()
+            if pid in (name, path) or (path and path.endswith("/" + pid)):
+                return str(p.get("id") or pid)
+    except Exception as e:  # noqa: BLE001
+        logger.debug("resolve_project_id failed: %s", e)
+    return pid
+
+
 def get_pending_todos(
     agent_id: str,
     project_id: str,
@@ -55,7 +92,7 @@ def get_pending_todos(
 
     Args:
         agent_id: Agent 标识
-        project_id: 项目标识（空则无法查询，返回空）
+        project_id: 项目标识（可为名字，内部会解析成 id）
         session_id: 可选，限定到当前会话
 
     Returns:
@@ -66,7 +103,8 @@ def get_pending_todos(
     try:
         from seed.core.proj_todos import list_todos
 
-        items = list_todos(agent_id, project_id, session_id=session_id or None) or []
+        pid = resolve_project_id(agent_id, project_id)
+        items = list_todos(agent_id, pid, session_id=session_id or None) or []
         pending = [
             it for it in items
             if isinstance(it, dict)

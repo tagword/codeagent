@@ -136,3 +136,83 @@ def test_nudge_caps_items():
     txt = ac.build_continue_nudge(s)
     assert txt.count("- [") == 5  # 只列前 5 条
     assert "20 项待办" in txt
+
+
+# ---------- 回归：project_id 解析（端到端实测发现） ----------
+def test_resolve_valid_id_passthrough(monkeypatch):
+    """已是有效 id → 原样返回。"""
+    import seed.core.proj_reg as pr
+
+    monkeypatch.setattr(pr, "get_project", lambda a, p: {"id": p, "name": "x"})
+    assert ac.resolve_project_id("default", "98100283705d") == "98100283705d"
+
+
+def test_resolve_name_to_id(monkeypatch):
+    """回归：传名字（如 ui-proj）应解析成真实 id。
+
+    真实场景：A2A 传 projectId=ui-proj，list_todos 查不到 → 续跑静默失效。
+    """
+    import seed.core.proj_reg as pr
+
+    monkeypatch.setattr(pr, "get_project", lambda a, p: None)
+    monkeypatch.setattr(pr, "list_projects", lambda a: [
+        {"id": "ce55d710b2b4", "name": "ui-proj", "path": "/home/u2/agent/.rsi/workspace/ui-proj"},
+        {"id": "98100283705d", "name": "codeagent", "path": "/home/u2/agent"},
+    ])
+    assert ac.resolve_project_id("default", "ui-proj") == "ce55d710b2b4"
+
+
+def test_resolve_by_path_suffix(monkeypatch):
+    """按路径尾段匹配。"""
+    import seed.core.proj_reg as pr
+
+    monkeypatch.setattr(pr, "get_project", lambda a, p: None)
+    monkeypatch.setattr(pr, "list_projects", lambda a: [
+        {"id": "abc123", "name": "other", "path": "/home/u2/projects/myapp"},
+    ])
+    assert ac.resolve_project_id("default", "myapp") == "abc123"
+
+
+def test_resolve_unknown_returns_input(monkeypatch):
+    """解析失败 → 返回原值（调用方保守处理）。"""
+    import seed.core.proj_reg as pr
+
+    monkeypatch.setattr(pr, "get_project", lambda a, p: None)
+    monkeypatch.setattr(pr, "list_projects", lambda a: [])
+    assert ac.resolve_project_id("default", "nonexistent") == "nonexistent"
+
+
+def test_resolve_empty():
+    assert ac.resolve_project_id("default", "") == ""
+
+
+def test_resolve_error_conservative(monkeypatch):
+    """解析异常不崩。"""
+    import seed.core.proj_reg as pr
+
+    def _boom(*a, **k):
+        raise RuntimeError("registry corrupt")
+
+    monkeypatch.setattr(pr, "get_project", _boom)
+    assert ac.resolve_project_id("default", "x") == "x"
+
+
+def test_get_pending_uses_resolved_id(monkeypatch):
+    """端到端：传名字也能查到 todo。"""
+    import seed.core.proj_reg as pr
+    import seed.core.proj_todos as pt
+
+    monkeypatch.setattr(pr, "get_project", lambda a, p: None)
+    monkeypatch.setattr(pr, "list_projects", lambda a: [
+        {"id": "realid123", "name": "ui-proj", "path": "/x/ui-proj"},
+    ])
+    called = {}
+
+    def _list(aid, pid, **k):
+        called["pid"] = pid
+        return [{"id": "1", "content": "待办", "status": "pending"}]
+
+    monkeypatch.setattr(pt, "list_todos", _list)
+    s = ac.get_pending_todos("default", "ui-proj")
+    assert called["pid"] == "realid123", f"未解析：{called['pid']}"
+    assert s.count == 1
