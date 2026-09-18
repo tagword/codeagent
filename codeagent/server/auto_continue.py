@@ -93,7 +93,9 @@ def get_pending_todos(
     Args:
         agent_id: Agent 标识
         project_id: 项目标识（可为名字，内部会解析成 id）
-        session_id: 可选，限定到当前会话
+        session_id: **已弃用**，保留仅为兼容签名。
+            待办是**项目级**任务，跨会话有效——按 session 过滤会导致
+            A2A/新会话查不到既有待办（端到端实测发现的静默失效）。
 
     Returns:
         PendingSummary（永不抛异常）
@@ -104,7 +106,8 @@ def get_pending_todos(
         from seed.core.proj_todos import list_todos
 
         pid = resolve_project_id(agent_id, project_id)
-        items = list_todos(agent_id, pid, session_id=session_id or None) or []
+        # 不传 session_id：待办是项目级的，跨会话/跨轮次都应可见。
+        items = list_todos(agent_id, pid) or []
         pending = [
             it for it in items
             if isinstance(it, dict)

@@ -216,3 +216,26 @@ def test_get_pending_uses_resolved_id(monkeypatch):
     s = ac.get_pending_todos("default", "ui-proj")
     assert called["pid"] == "realid123", f"未解析：{called['pid']}"
     assert s.count == 1
+
+
+# ---------- 回归：不按 session 过滤（端到端实测发现） ----------
+def test_no_session_filter(monkeypatch):
+    """回归：待办是项目级的，不能按 session 过滤。
+
+    真实场景：A2A 会话 id 是 a2a-ctx-xxx，与 todo 创建时的 session_id
+    不同 → 精确匹配查不到 → 续跑静默失效。
+    """
+    import seed.core.proj_reg as pr
+    import seed.core.proj_todos as pt
+
+    monkeypatch.setattr(pr, "get_project", lambda a, p: {"id": p, "name": "x"})
+    captured = {}
+
+    def _list(aid, pid, **kw):
+        captured.update(kw)
+        return [{"id": "1", "content": "跨会话待办", "status": "pending"}]
+
+    monkeypatch.setattr(pt, "list_todos", _list)
+    s = ac.get_pending_todos("default", "proj1", "a2a-ctx-abc")
+    assert "session_id" not in captured, f"不应传 session_id：{captured}"
+    assert s.count == 1, "跨会话待办应可见"
