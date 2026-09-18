@@ -203,3 +203,72 @@ def test_evidence_block_no_false_failure():
     assert "8 通过" in txt
     assert "未通过项" not in txt
     assert "demo_calc.py" in txt
+
+
+# ---------- 回归：真实场景（端到端实测发现） ----------
+def test_code_check_not_counted_as_test():
+    """回归：code_check 的 'All checks passed!' 不是'测试通过'。"""
+    b = ev.collect_evidence(_trace(
+        ("code_check", "filepath=/a/x.py", "All checks passed!"),
+    ))
+    assert b.tests_passed == 0, "lint 通过不该计入测试通过数"
+    assert len(b.items) == 1
+    assert b.items[0].kind == "verify"
+    assert b.items[0].ok is True
+
+
+def test_code_check_with_errors_is_failure():
+    """回归：ruff 报错要判失败。"""
+    b = ev.collect_evidence(_trace(
+        ("code_check", "filepath=/a/x.py", "Found 1 error.\n[*] 1 fixable with the `--fix` option."),
+    ))
+    assert b.has_failure()
+    assert b.items[0].kind == "verify"
+
+
+def test_git_not_a_repo_not_failure():
+    """回归：'fatal: not a git repository' 不是任务失败。"""
+    b = ev.collect_evidence(_trace(
+        ("bash", "git rev-parse --is-inside-work-tree",
+         "fatal: not a git repository (or any of the parent directories): .git"),
+    ))
+    assert not b.has_failure()
+
+
+def test_pytest_collection_error_detected():
+    """回归：pytest 收集错误要检出（此前漏报）。"""
+    b = ev.collect_evidence(_trace(
+        ("bash", "pytest test_x.py", "ERROR: file or directory not found: test_x.py"),
+    ))
+    assert b.has_failure()
+
+
+def test_pytest_warning_not_failure():
+    """回归：'1 warning' 不是失败。"""
+    b = ev.collect_evidence(_trace(
+        ("bash", "pytest", "8 passed, 1 warning in 0.01s"),
+    ))
+    assert b.tests_passed == 8
+    assert not b.has_failure()
+
+
+def test_mixed_session_clean_evidence():
+    """端到端场景：一次真实会话（含 lint + git 失败 + pytest 通过）。
+
+    期望：只有 pytest 通过，无失败误报。
+    """
+    b = ev.collect_evidence(_trace(
+        ("bash", "ls -la", "total 40\ndrwxrwxr-x ..."),
+        ("file_write", "filepath=/a/strutil.py", "ok"),
+        ("file_write", "filepath=/a/test_strutil.py", "ok"),
+        ("code_check", "filepath=/a/strutil.py", "All checks passed!"),
+        ("bash", "pytest test_strutil.py -v", "test_a PASSED\ntest_b PASSED\n8 passed in 0.01s"),
+        ("bash", "git rev-parse", "fatal: not a git repository"),
+    ))
+    assert b.tests_passed == 8
+    assert b.tests_failed == 0
+    assert not b.has_failure(), f"误报失败: {b.failures}"
+    assert len(b.files_touched) == 2
+    txt = ev.format_evidence_block(b)
+    assert "8 通过" in txt
+    assert "未通过项" not in txt

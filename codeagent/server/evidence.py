@@ -32,21 +32,26 @@ _VERIFY_TOOLS = {"bash", "test_run", "browser_screenshot", "curl"}
 # 注意：失败正则必须**精确**，否则会误判——
 # 例：测试名 `test_add_with_string_raises_type_error PASSED` 里的 "error"
 # 会被宽松的 `Error` 匹配到，导致"全通过"被误报为"有失败"。
-_RE_PASS = re.compile(r"(\d+)\s+passed|PASSED|✅|tests? passed|all checks passed", re.I)
+_RE_PASS = re.compile(r"(\d+)\s+passed|PASSED|✅|tests? passed", re.I)
 _RE_FAIL = re.compile(
-    r"(\d+)\s+failed"          # N failed
+    r"(\d+)\s+failed"          # N failed（pytest 统计行）
     r"|\bFAILED\b"             # pytest 的 FAILED 标记（词边界，不匹配 PASSED）
     r"|❌"
     r"|^Traceback \(most recent call last\)"   # 行首的 Traceback
     r"|\bAssertionError\b"
     r"|^E\s+\w*Error"          # pytest 错误行「E   ValueError: ...」
-    r"|\b\d+ error(s)?\b",     # N errors
+    r"|\bERROR: (?:file|directory|collection|import)\b"  # pytest 收集错误
+    r"|\b\d+ errors?\b(?=\s*(?:in|during|,|$))",  # "N errors" 但要求后接统计语境
     re.I | re.M,
 )
 
 # 带数字计数的专用正则（优先使用，保证能取到数量）
 _RE_PASS_N = re.compile(r"(\d+)\s+passed", re.I)
 _RE_FAIL_N = re.compile(r"(\d+)\s+(?:failed|error)", re.I)
+
+# 代码检查（lint）专用信号
+_RE_CHECK_OK = re.compile(r"all checks passed|no issues found|0 error", re.I)
+_RE_CHECK_ERR = re.compile(r"found\s+(\d+)\s+error|(\d+)\s+error\(s\)|✖", re.I)
 _RE_COMMIT = re.compile(r"\b([0-9a-f]{7,40})\b")
 _RE_HTTP = re.compile(r"HTTP[/ ]?\d?\.?\d?\s*(\d{3})|status[:\s]+(\d{3})", re.I)
 
@@ -140,6 +145,10 @@ def _classify(tool: str, args: str, result: str) -> Evidence | None:
     if tool in ("test_run", "test_gen") or "pytest" in tool:
         return _as_test_evidence(tool, result)
 
+    # ── 1b. 代码检查工具（lint）——归 verify，不归 test ──
+    if tool in ("code_check", "code_analyze", "lsp_diagnostics"):
+        return _as_check_evidence(tool, result)
+
     # ── 2. git 工具 ──
     if tool == "git":
         if "commit" in args or "push" in args:
@@ -169,6 +178,22 @@ def _classify(tool: str, args: str, result: str) -> Evidence | None:
         # 4c. 其他 bash 输出不记（噪音太大）
         return None
 
+    return None
+
+
+def _as_check_evidence(tool: str, result: str) -> Evidence | None:
+    """代码检查（lint）证据。
+
+    注意：`All checks passed!` 是 lint 通过，**不是**"测试通过"——
+    不能计入 tests_passed，否则证据块会误导。
+    """
+    r = result or ""
+    if _RE_CHECK_OK.search(r):
+        return Evidence("verify", tool, "代码检查通过", _truncate(r, 200), True)
+    m = _RE_CHECK_ERR.search(r)
+    if m:
+        n = m.group(1) or "?"
+        return Evidence("verify", tool, f"代码检查：{n} 个问题", _truncate(r, 300), False)
     return None
 
 
