@@ -728,7 +728,16 @@ def _cmd_chat_llm(args):
             chat_sess.messages,
             skills_suffix=_skills_suffix,
         )
-        compact_result = maybe_compact_context_messages(api_msgs, llm)
+        _persisted_usage = (
+            chat_sess.metadata.get("context_usage")
+            if isinstance(chat_sess.metadata, dict)
+            else None
+        )
+        compact_result = maybe_compact_context_messages(
+            api_msgs,
+            llm,
+            persisted_context_usage=_persisted_usage,
+        )
         persist_compact_summary(chat_sess.messages, compact_result)
         strip_ephemeral_message_fields(api_msgs)
         if not isinstance(chat_sess.metadata, dict):
@@ -760,6 +769,24 @@ def _cmd_chat_llm(args):
                 )
             )
             tail = merge_llm_tail_into_full(chat_sess.messages, api_msgs, n_before)
+            # 落盘本轮峰值用量，供下一轮 maybe_compact_context_messages 的
+            # persisted_context_usage 来源使用（CLI 路径此前完全缺失此来源）。
+            with contextlib.suppress(Exception):
+                if isinstance(_loop_meta, dict):
+                    _peak = int(_loop_meta.get("peak_prompt_tokens") or 0)
+                    if _peak > 0:
+                        if not isinstance(chat_sess.metadata, dict):
+                            chat_sess.metadata = {}
+                        _prev = chat_sess.metadata.get("context_usage")
+                        _prev_peak = (
+                            int(_prev.get("peak_prompt_tokens") or 0)
+                            if isinstance(_prev, dict)
+                            else 0
+                        )
+                        chat_sess.metadata["context_usage"] = {
+                            "peak_prompt_tokens": max(_peak, _prev_peak),
+                            "compact_count": int(_loop_meta.get("compact_count") or 0),
+                        }
             print(reply)
             if tools_used:
                 print(f"  [tools] {', '.join(tools_used)}")
