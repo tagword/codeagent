@@ -1,107 +1,61 @@
-"""
-DeepSeek 模型定价表 & 费用计算。
+"""Thin wrapper over :mod:`seed_model_providers.pricing` (DeepSeek only).
 
-定价数据来源：https://api-docs.deepseek.com/zh-cn/quick_start/pricing
-当前 deepseek-v4-pro 模型 2.5 折，优惠期至 2026-05-31 23:59 (UTC+8)。
+Canonical pricing lives in ``seed_model_providers.pricing``; this module
+keeps the legacy 2-arg API (``calculate_cost(model, usage)``,
+``normalize_model(model)``) so existing callers in ``codeagent`` continue
+to work without changes.
+
+Only DeepSeek pricing is currently exposed. When a non-DeepSeek provider
+needs pricing here, extend the signature with ``provider``.
 """
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
-# ── 定价表（元/百万 tokens） ─────────────────────────────────
-# 模型名统一映射到标准化名称
-# deepseek-v4-flash = 之前 deepseek-chat（非思考） / deepseek-reasoner（思考）
-# deepseek-v4-pro   = 新旗舰模型
-
-PRICING_TABLE: dict[str, dict[str, float]] = {
-    "deepseek-v4-flash": {
-        "input_cache_hit": 0.02,
-        "input_cache_miss": 1.0,
-        "output": 2.0,
-    },
-    "deepseek-v4-pro": {
-        "input_cache_hit": 0.025,
-        "input_cache_miss": 3.0,
-        "output": 6.0,
-    },
-}
-
-# 别名映射（旧模型名 → 标准化名）
-_MODEL_ALIASES: dict[str, str] = {
-    "deepseek-chat": "deepseek-v4-flash",
-    "deepseek-reasoner": "deepseek-v4-flash",
-    "deepseek-v4-flash": "deepseek-v4-flash",
-    "deepseek-v4-pro": "deepseek-v4-pro",
-}
+from seed_model_providers.pricing import (
+    PRICING_TABLE,
+    calculate_cost as _smp_calculate_cost,
+    format_cost,
+    is_peak_time,
+    normalize_model as _smp_normalize_model,
+    resolve_bucket as _smp_resolve_bucket,
+)
 
 
 def normalize_model(model: str) -> str | None:
-    """将模型名标准化为定价表中的 key。未知模型返回 None。"""
-    key = model.strip().lower()
-    return _MODEL_ALIASES.get(key)
+    """DeepSeek-only: 把模型名标准化为定价表 key（与旧版语义一致）。
 
-
-def calculate_cost(model: str, usage: dict[str, Any]) -> dict[str, Any]:
-    """根据模型和 usage 计算费用（人民币元）。
-
-    Args:
-        model: 模型名（自动匹配别名）
-        usage: DeepSeek API 返回的 usage 对象，包含：
-            - prompt_cache_hit_tokens (int): 缓存命中的输入 tokens
-            - prompt_cache_miss_tokens (int): 缓存未命中的输入 tokens
-            - completion_tokens (int): 输出 tokens
-            - total_tokens (int): 总计
-
-    Returns:
-        {
-            "total_cost": float,       # 总费用（元）
-            "cache_hit_cost": float,   # 缓存命中费用
-            "cache_miss_cost": float,  # 缓存未命中费用
-            "output_cost": float,      # 输出费用
-            "currency": "CNY",
-            "model": str,              # 标准化模型名
-        }
-        如果模型不在定价表中或 usage 为空，所有费用返回 0。
+    若未来要支持多 provider，应改为 ``normalize_model(provider, model)`` 并
+    更新所有调用方（参见 usage_billing.calculate_cost / normalize_model 的
+    调用栈）。
     """
-    std_model = normalize_model(model)
-    if not std_model or not usage:
-        return {
-            "total_cost": 0.0,
-            "cache_hit_cost": 0.0,
-            "cache_miss_cost": 0.0,
-            "output_cost": 0.0,
-            "currency": "CNY",
-            "model": model,
-        }
-
-    prices = PRICING_TABLE[std_model]
-
-    cache_hit = int(usage.get("prompt_cache_hit_tokens", 0) or 0)
-    cache_miss = int(usage.get("prompt_cache_miss_tokens", 0) or 0)
-    output = int(usage.get("completion_tokens", 0) or 0)
-
-    cache_hit_cost = cache_hit * prices["input_cache_hit"] / 1_000_000
-    cache_miss_cost = cache_miss * prices["input_cache_miss"] / 1_000_000
-    output_cost = output * prices["output"] / 1_000_000
-    total = cache_hit_cost + cache_miss_cost + output_cost
-
-    return {
-        "total_cost": round(total, 6),
-        "cache_hit_cost": round(cache_hit_cost, 6),
-        "cache_miss_cost": round(cache_miss_cost, 6),
-        "output_cost": round(output_cost, 6),
-        "currency": "CNY",
-        "model": std_model,
-    }
+    return _smp_normalize_model("deepseek", model)
 
 
-def format_cost(cost: float, currency: str = "CNY") -> str:
-    """将费用格式化为可读字符串。"""
-    if cost <= 0:
-        return "¥0"
-    if cost < 0.01:
-        return f"¥{cost:.4f}"
-    if cost < 1:
-        return f"¥{cost:.3f}"
-    return f"¥{cost:.2f}"
+def calculate_cost(
+    model: str,
+    usage: dict[str, Any],
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """DeepSeek-only: 计算费用（保留旧 2 参签名）。
+
+    Returns: 参见 :func:`seed_model_providers.pricing.calculate_cost`。
+    """
+    return _smp_calculate_cost("deepseek", model, usage, now=now)
+
+
+def resolve_bucket(now: datetime | None = None) -> str:
+    """DeepSeek-only: 返回当前时段 bucket（"peak" / "off_peak"）。"""
+    return _smp_resolve_bucket("deepseek", now)
+
+
+__all__ = [
+    "PRICING_TABLE",
+    "normalize_model",
+    "calculate_cost",
+    "format_cost",
+    "is_peak_time",
+    "resolve_bucket",
+]
