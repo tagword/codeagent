@@ -1,5 +1,33 @@
 # Changelog
 
+## 1.2.0 (2026-10-18)
+
+本轮把 RSI 实验线的 31 个 commit 合入正式线，并修复合入过程中暴露的计费缺陷。
+
+### 新增能力
+- **团队协作**：team run 真实 LLM 执行（替换 `[模拟]`）、成员可配角色提示词（A 形态角色扮演）、运行历史面板 + 失败 run 恢复重跑、卡死 run watchdog 惰性清理 + 手动停止、并发上限与成本统计
+- **多 Agent 管理**：page-agent 多 Agent 管理、`list_agents` 工具让 Agent 可发现彼此、团队结果导出、Agent 页改主从两栏布局（页面高度 2400px → 1100px）
+- **A2A 协议**：Agent Card + JSON-RPC 端点、`message/stream`（SSE 流式）、`tasks/get` 改从磁盘加载 session（重启后不再丢）
+- **交付证据链**：Agent 声明完成时附可验证证据（测试计数去累加、lint/收集错误不再漏报）
+- **自动续跑**：未完成事项驱动续跑，覆盖「做完一个 Wave 就问要不要继续」、`task.md` 计划检测、陈旧 pending 过滤
+- **CLI**：`chat --project-id` 让派发任务归入 Web UI 项目视图
+
+### 修复
+- **计费时刻不可控**（真实缺陷）：`merge_accumulated_usage` 内部调用 `calculate_cost` 不传 `now`，费用随运行时刻在 peak/off_peak 间浮动，同一用量白天算 2 倍价。新增 `now` 参数透传
+- **测试随运行时刻飘移**：`test_pricing` / `test_usage_billing` 未固定时段，白天跑 peak(2.0)、深夜跑 off_peak(1.0)，同一断言时对时错。全部显式传 `now`，并新增 peak vs off_peak 2 倍差验证
+- **定价表口径同步**：测试跟随 `seed_model_providers` 1.0.2 真实定价表（`deepseek-flash` / `deepseek-v4-pro`）
+- **CLI `--version` 写死**：硬编码 `v1.1.0`，改为动态读取包版本
+- **版本号静默回落**：`__version__` 只查 `tagword-codeagent`，历史 editable 安装的 dist-info 名是 `codeagent` → 异常 → 回落 `0.0.0`。改为依次尝试两个名字
+- **Agent 数据根不一致**：统一 agent 数据根解析，根治「新建后 WebUI 不可见」；空壳 agent 不再注册，persona 初始化不再静默降级
+- **Agent 删除误删**：图标语义 + 弱化 + 强确认
+
+### 依赖
+- `seed-model-providers>=1.0.3`（新增非数值 usage 字段容错，避免 `ValueError` 中断计费）
+
+### 质量
+- 测试 737 passed（新增约 20 组测试，+6400 行）
+- ruff 全仓归零
+
 ## 1.1.36 (2026-08-27)
 
 - fix(build): Docker 镜像升级到 tagword-codeagent 1.1.36 + seed-kernel 1.0.19 — 让 Docker 部署也拿到 mcp_call 参数名冲突修复（此前钉死 seed-kernel==1.0.16 缺修复）。seed-kernel 1.0.19 含 ToolExecutor 调度参数 tool_name→tool 修复
