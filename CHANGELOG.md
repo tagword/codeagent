@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.2.2 (2026-10-21)
+
+### 修复
+
+- **撞满工具轮次后静默停止**（v1.2.0 回归，严重）
+  - v1.2.0 新增「pending todo 驱动续跑」时，把 pending 检查塞进了
+    `if _stop_reason != "max_tool_rounds":` 分支，导致撞满 24 轮时整块跳过、
+    `_pending_continue` 恒为 `False` → 直接 `break`，`_segment += 1` 不可达
+  - 等于用新能力换掉了 v1.1.36 的原有能力（撞满轮次续跑），而非叠加
+  - 修复：两条续跑路径拆开，pending 检查提到 `max_tool_rounds` 判断之外；
+    撞满轮次时**无条件续跑**（不依赖 pending 查询，避免查询失败再次静默停止）
+
+### 测试
+
+- 修正 `test_pending_check_runs_even_when_agent_thinks_done`：原断言
+  `assert 'if _stop_reason != "max_tool_rounds"' in src` 断言的正是缺陷结构
+  本身，把 bug 锁成了预期；改为反向断言
+- 新增 5 项**行为测试**：按真实控制流模拟分段循环，让「轮数用尽是否续跑」
+  可证伪。源码文本断言只能证明「代码长这样」，不能证明「跑起来是这样」
+- 验证：还原 v1.2.0 代码后新测试失败，恢复后全绿（750 passed，ruff 通过）
+
 ## 1.2.1 (2026-10-21)
 
 - **fix(auto-continue)**：`get_pending_all` 补异常兜底。它是 chat_turn 续跑判定的入口，一旦抛异常会被 `except Exception: logger.debug(...)` 静默吞掉 → Agent 误判「无未完成事项」而停止。这是「24 轮后静默停止」的隐形来源
