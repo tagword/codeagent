@@ -223,9 +223,17 @@ def get_pending_all(
 
     设计：todo 反映"Agent 自己记的待办"，task.md 反映"项目计划"。
     两者都为空才算真正完成。
+
+    安全约束：本函数是 chat_turn 续跑判定的入口，一旦抛异常会被
+    ``except Exception: logger.debug(...)`` 静默吞掉 → Agent 误判
+    "无未完成" 而停止（静默停止的隐形来源）。故自身兜底所有异常。
     """
-    a = get_pending_todos(agent_id, project_id, session_id)
-    b = get_pending_plan(agent_id, project_id)
+    try:
+        a = get_pending_todos(agent_id, project_id, session_id)
+        b = get_pending_plan(agent_id, project_id)
+    except Exception as e:  # noqa: BLE001
+        logger.debug("get_pending_all failed (conservative empty): %s", e)
+        return PendingSummary(error=str(e))
     if a.error and b.error:
         return PendingSummary(error=a.error)
     if not a.has_pending and not b.has_pending:
