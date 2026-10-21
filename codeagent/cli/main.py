@@ -480,9 +480,8 @@ def _cli_vision_preset_id(args) -> str:
 
 
 def _cli_stage_path_attachment(path: str, *, agent_id: str, session_id: str):
-    from pathlib import Path
-
     import mimetypes
+    from pathlib import Path
 
     from codeagent.core.attachments import save_attachment
 
@@ -550,10 +549,8 @@ def _cli_startup_attachments(args, *, agent_id: str, session_id: str, project_ro
 
 def _cli_handle_slash_attach(line: str, *, agent_id: str, session_id: str, project_root):
     """Return (handled, attachments, image_dir_tag, message_text)."""
-    from pathlib import Path
 
     from codeagent.core import env as ca_env
-    from codeagent.core.attachments import scan_image_directory
 
     low = line.strip().lower()
     if low in ('/clear-vision', '/clear_vision'):
@@ -584,14 +581,19 @@ def _cmd_chat_llm(args):
 
     from seed_tools import setup_builtin_tools
 
+    from codeagent.runtime.prompt_enrichment import (
+        build_skills_suffix,
+        get_cached_system_prompt,
+        record_chat_turn_diary,
+    )
     from seed.core.agent_context import (
         set_active_agent_id,
         set_active_audio_preset,
         set_active_image_gen_preset,
         set_active_llm_session,
-        set_active_vision_preset,
         set_active_music_preset,
         set_active_video_gen_preset,
+        set_active_vision_preset,
     )
     from seed.core.agent_runtime import (
         build_api_projection_messages,
@@ -600,12 +602,6 @@ def _cmd_chat_llm(args):
         persist_compact_summary,
         run_llm_tool_loop,
         strip_ephemeral_message_fields,
-    )
-    from codeagent.runtime.prompt_enrichment import (
-        build_skills_suffix,
-        fresh_system_prompt,
-        get_cached_system_prompt,
-        record_chat_turn_diary,
     )
     from seed.core.llm_exec import LLMError
     from seed.core.llm_presets import llm_executor_from_resolved, resolve_preset
@@ -707,7 +703,6 @@ def _cmd_chat_llm(args):
             message_has_video_attachments,
         )
         from codeagent.core.audio_models import preset_supports_audio_id
-        from codeagent.core.vision_models import preset_supports_vision_id
 
         user_msg = build_user_message(
             message_text,
@@ -716,21 +711,24 @@ def _cmd_chat_llm(args):
         )
         from codeagent.core.image_understanding import image_attachment_allowed, video_attachment_allowed
 
-        if message_has_image_attachments(user_msg) or pending_dir_tag:
-            if not image_attachment_allowed(vision_preset_id or ""):
-                print(
-                    '[error] 发送图片需要 --vision-llm（supports_vision）'
-                    ' 或已配置 MiniMax MCP（understand_image）'
-                )
-                continue
-        if message_has_video_attachments(user_msg):
-            if not video_attachment_allowed(vision_preset_id or ""):
-                print('[error] 发送视频需要有效的 --vision-llm 或 CODEAGENT_VISION_PRESET_ID')
-                continue
-        if message_has_audio_attachments(user_msg):
-            if not audio_preset_id or not preset_supports_audio_id(audio_preset_id):
-                print('[error] 发送音频需要有效的 --audio-llm 或 CODEAGENT_AUDIO_PRESET_ID')
-                continue
+        if (message_has_image_attachments(user_msg) or pending_dir_tag) and not image_attachment_allowed(
+            vision_preset_id or ""
+        ):
+            print(
+                '[error] 发送图片需要 --vision-llm（supports_vision）'
+                ' 或已配置 MiniMax MCP（understand_image）'
+            )
+            continue
+        if message_has_video_attachments(user_msg) and not video_attachment_allowed(
+            vision_preset_id or ""
+        ):
+            print('[error] 发送视频需要有效的 --vision-llm 或 CODEAGENT_VISION_PRESET_ID')
+            continue
+        if message_has_audio_attachments(user_msg) and (
+            not audio_preset_id or not preset_supports_audio_id(audio_preset_id)
+        ):
+            print('[error] 发送音频需要有效的 --audio-llm 或 CODEAGENT_AUDIO_PRESET_ID')
+            continue
 
         pending_attachments = []
         pending_dir_tag = ''
@@ -791,7 +789,7 @@ def _cmd_chat_llm(args):
                     max_tool_rounds=max_rounds,
                 )
             )
-            tail = merge_llm_tail_into_full(chat_sess.messages, api_msgs, n_before)
+            merge_llm_tail_into_full(chat_sess.messages, api_msgs, n_before)
             # 落盘本轮峰值用量，供下一轮 maybe_compact_context_messages 的
             # persisted_context_usage 来源使用（CLI 路径此前完全缺失此来源）。
             with contextlib.suppress(Exception):
@@ -851,10 +849,9 @@ def _cmd_chat_llm(args):
 def cmd_webui_token(args):
     import secrets
 
-    from codeagent.web.auth_impl import TOKEN_FILENAME
-
     # cmd_webui_token can be invoked directly; ensure env file is loaded.
     from codeagent.core.bootstrap import bootstrap_codeagent_runtime
+    from codeagent.web.auth_impl import TOKEN_FILENAME
 
     bootstrap_codeagent_runtime()
     from seed.core.config_plane import project_root as _project_root

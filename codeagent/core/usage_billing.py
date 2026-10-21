@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from codeagent.core.pricing import calculate_cost
@@ -27,8 +28,12 @@ def merge_accumulated_usage(
     prev: dict[str, Any] | None,
     model_name: str,
     api_usage: dict[str, Any] | None,
+    now: datetime | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     """Merge one LLM round into session ``accumulated_usage``.
+
+    Args:
+        now: 计费时刻（默认当前北京时间）；测试时显式传入以固定 peak/off_peak 时段。
 
     Returns:
         ``(accumulated_usage, round_cost, accumulated_cost_summary)``
@@ -49,7 +54,7 @@ def merge_accumulated_usage(
 
     total_cost_val = 0.0
     for mname, mdata in per_model.items():
-        mcost = calculate_cost(mname, mdata)
+        mcost = calculate_cost(mname, mdata, now=now)
         cost_val = float(mcost.get("total_cost", 0) or 0)
         mdata["cost"] = round(cost_val, 6)
         total_cost_val += cost_val
@@ -58,7 +63,7 @@ def merge_accumulated_usage(
     acc["total_cost"] = round(total_cost_val, 6)
     acc["currency"] = "CNY"
 
-    round_cost = calculate_cost(model_name, api_usage)
+    round_cost = calculate_cost(model_name, api_usage, now=now)
     acc["last_request"] = {
         "model": model_name,
         "usage": api_usage,

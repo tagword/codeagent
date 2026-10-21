@@ -5,11 +5,16 @@
 2. 空 usage / 无 prev 的边界
 3. 非数值字段容错
 """
+from datetime import datetime
+
 from codeagent.core.usage_billing import merge_accumulated_usage
+
+# 2026-10-18 是周日 03:00（北京时间），确定落在 off_peak 计费时段
+OFF_PEAK_NOW = datetime(2026, 10, 18, 3, 0)
 
 
 def test_merge_from_empty_both():
-    acc, round_cost, acc_cost = merge_accumulated_usage(None, "deepseek-v4-flash", None)
+    acc, round_cost, acc_cost = merge_accumulated_usage(None, "deepseek-v4-flash", None, now=OFF_PEAK_NOW)
     # 无历史无 usage → 各 token 为 0
     for key in ("prompt_tokens", "completion_tokens", "total_tokens"):
         assert acc[key] == 0
@@ -20,23 +25,23 @@ def test_merge_from_empty_both():
 
 def test_merge_first_round_with_usage():
     usage = {"prompt_cache_miss_tokens": 1_000_000, "completion_tokens": 100_000}
-    acc, round_cost, acc_cost = merge_accumulated_usage(None, "deepseek-v4-flash", usage)
-    # flash: 1M miss(1.0) + 100K output(2.0) → 1.0 + 0.2 = 1.2
+    acc, round_cost, acc_cost = merge_accumulated_usage(None, "deepseek-v4-flash", usage, now=OFF_PEAK_NOW)
+    # flash(off_peak): 1M miss(1.0) + 100K output(0.4) → 1.4
     assert acc["prompt_cache_miss_tokens"] == 1_000_000
     assert acc["completion_tokens"] == 100_000
-    assert round(acc["total_cost"], 6) == round(1.2, 6)
+    assert round(acc["total_cost"], 6) == round(1.4, 6)
     assert acc["currency"] == "CNY"
     # round_cost 是单次请求费用
-    assert round(float(round_cost.get("total_cost", 0)), 6) == round(1.2, 6)
+    assert round(float(round_cost.get("total_cost", 0)), 6) == round(1.4, 6)
 
 
 def test_merge_accumulates_across_rounds():
     r1_usage = {"completion_tokens": 100_000}
-    acc1, _, _ = merge_accumulated_usage(None, "deepseek-v4-flash", r1_usage)
+    acc1, _, _ = merge_accumulated_usage(None, "deepseek-v4-flash", r1_usage, now=OFF_PEAK_NOW)
     assert acc1["completion_tokens"] == 100_000
     # 第二轮在 acc1 基础上累加
     r2_usage = {"completion_tokens": 50_000}
-    acc2, _, _ = merge_accumulated_usage(acc1, "deepseek-v4-flash", r2_usage)
+    acc2, _, _ = merge_accumulated_usage(acc1, "deepseek-v4-flash", r2_usage, now=OFF_PEAK_NOW)
     assert acc2["completion_tokens"] == 150_000
     # total_tokens 只累加显式提供的 key；这里未提供 total_tokens，故仍为 0
     assert acc2["total_tokens"] == 0
@@ -44,9 +49,9 @@ def test_merge_accumulates_across_rounds():
 
 def test_merge_different_models_tracked_separately_in_per_model():
     usage_flash = {"completion_tokens": 100_000}
-    acc1, _, _ = merge_accumulated_usage(None, "deepseek-v4-flash", usage_flash)
+    acc1, _, _ = merge_accumulated_usage(None, "deepseek-v4-flash", usage_flash, now=OFF_PEAK_NOW)
     usage_pro = {"completion_tokens": 50_000}
-    acc2, _, _ = merge_accumulated_usage(acc1, "deepseek-v4-pro", usage_pro)
+    acc2, _, _ = merge_accumulated_usage(acc1, "deepseek-v4-pro", usage_pro, now=OFF_PEAK_NOW)
     # per_model 分开记录
     assert acc2["per_model"]["deepseek-v4-flash"]["completion_tokens"] == 100_000
     assert acc2["per_model"]["deepseek-v4-pro"]["completion_tokens"] == 50_000
@@ -56,37 +61,36 @@ def test_merge_different_models_tracked_separately_in_per_model():
 
 def test_merge_same_model_accumulates_in_per_model():
     usage = {"completion_tokens": 100_000}
-    acc1, _, _ = merge_accumulated_usage(None, "deepseek-v4-flash", usage)
-    acc2, _, _ = merge_accumulated_usage(acc1, "deepseek-v4-flash", usage)
+    acc1, _, _ = merge_accumulated_usage(None, "deepseek-v4-flash", usage, now=OFF_PEAK_NOW)
+    acc2, _, _ = merge_accumulated_usage(acc1, "deepseek-v4-flash", usage, now=OFF_PEAK_NOW)
     assert acc2["per_model"]["deepseek-v4-flash"]["completion_tokens"] == 200_000
 
 
 def test_merge_total_cost_is_sum_of_models():
-    # flash: 100K completion = 0.2; pro: 100K completion = 0.6
-    acc1, _, _ = merge_accumulated_usage(None, "deepseek-v4-flash", {"completion_tokens": 100_000})
-    acc2, _, _ = merge_accumulated_usage(acc1, "deepseek-v4-pro", {"completion_tokens": 100_000})
-    assert round(acc2["total_cost"], 6) == round(0.2 + 0.6, 6)
-    assert round(acc2["per_model"]["deepseek-v4-flash"]["cost"], 6) == round(0.2, 6)
-    assert round(acc2["per_model"]["deepseek-v4-pro"]["cost"], 6) == round(0.6, 6)
+    # flash(off_peak): 100K output = 0.4; pro(off_peak): 100K output = 1.35
+    acc1, _, _ = merge_accumulated_usage(None, "deepseek-v4-flash", {"completion_tokens": 100_000}, now=OFF_PEAK_NOW)
+    acc2, _, _ = merge_accumulated_usage(acc1, "deepseek-v4-pro", {"completion_tokens": 100_000}, now=OFF_PEAK_NOW)
+    assert round(acc2["total_cost"], 6) == round(0.4 + 1.35, 6)
+    assert round(acc2["per_model"]["deepseek-v4-flash"]["cost"], 6) == round(0.4, 6)
+    assert round(acc2["per_model"]["deepseek-v4-pro"]["cost"], 6) == round(1.35, 6)
 
 
 def test_merge_round_cost_reflects_only_current_request():
     acc, round_cost, acc_cost = merge_accumulated_usage(
-        None, "deepseek-v4-flash", {"completion_tokens": 100_000}
-    )
+        None, "deepseek-v4-flash", {"completion_tokens": 100_000}, now=OFF_PEAK_NOW)
     # round_cost 只含本次请求的 cost
-    assert round(float(round_cost.get("total_cost", 0)), 6) == round(0.2, 6)
+    assert round(float(round_cost.get("total_cost", 0)), 6) == round(0.4, 6)
 
 
 def test_merge_non_numeric_usage_treated_as_zero():
     # 非数值字段不崩溃，按 0 处理
-    acc, _, _ = merge_accumulated_usage(None, "deepseek-v4-flash", {"completion_tokens": "abc"})
+    acc, _, _ = merge_accumulated_usage(None, "deepseek-v4-flash", {"completion_tokens": "abc"}, now=OFF_PEAK_NOW)
     assert acc["completion_tokens"] == 0
 
 
 def test_merge_unknown_model_cost_zero_but_tokens_counted():
     usage = {"completion_tokens": 100_000}
-    acc, round_cost, _ = merge_accumulated_usage(None, "no-such-model", usage)
+    acc, round_cost, _ = merge_accumulated_usage(None, "no-such-model", usage, now=OFF_PEAK_NOW)
     # tokens 照常累加，但费用为 0（未知模型无定价）
     assert acc["completion_tokens"] == 100_000
     assert acc["total_cost"] == 0.0
@@ -95,7 +99,7 @@ def test_merge_unknown_model_cost_zero_but_tokens_counted():
 
 def test_merge_prev_preserves_non_usage_fields():
     prev = {"custom_field": "keep-me"}
-    acc, _, _ = merge_accumulated_usage(prev, "deepseek-v4-flash", {})
+    acc, _, _ = merge_accumulated_usage(prev, "deepseek-v4-flash", {}, now=OFF_PEAK_NOW)
     # prev 的 token 字段会被 _add_usage_keys 处理，但自定义字段应保留在结果结构里
     # （per_model / total_cost 等由函数重建）
     assert acc["total_cost"] == 0.0

@@ -16,10 +16,16 @@ from typing import Any
 
 from seed_model_providers.pricing import (
     PRICING_TABLE,
-    calculate_cost as _smp_calculate_cost,
     format_cost,
     is_peak_time,
+)
+from seed_model_providers.pricing import (
+    calculate_cost as _smp_calculate_cost,
+)
+from seed_model_providers.pricing import (
     normalize_model as _smp_normalize_model,
+)
+from seed_model_providers.pricing import (
     resolve_bucket as _smp_resolve_bucket,
 )
 
