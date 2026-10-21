@@ -214,6 +214,26 @@ def get_pending_plan(
         return PendingSummary(error=str(e))
 
 
+def _sort_by_priority(
+    todos: list[dict[str, Any]],
+    plan_items: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """按优先级排序待办：项目 todo 在前，task.md 计划在后。
+
+    优先级规则（显式定义，供测试锁定）：
+
+    ==========  ==========================================
+    优先级      来源
+    ==========  ==========================================
+    1（最高）   项目 todo —— 当前任务亲手记下的待办
+    2          task.md 计划 —— 项目级，粒度粗、可能过时
+    ==========  ==========================================
+
+    同一优先级内保持原有相对顺序（稳定排序），不擅自重排。
+    """
+    return list(todos) + list(plan_items)
+
+
 def get_pending_all(
     agent_id: str,
     project_id: str,
@@ -239,9 +259,17 @@ def get_pending_all(
     if not a.has_pending and not b.has_pending:
         return PendingSummary()
 
+    # 优先级（显式化）：项目 todo 优先于 task.md 计划。
+    #
+    # 为什么：todo 是 Agent 在**当前任务**中亲手记下的待办，粒度更细、
+    # 时效性更强；task.md 是项目级计划，粒度粗、可能已过时。
+    # 续跑时应先做 todo 里明确记下的事，而不是从项目计划里重新挑一项。
+    #
+    # 同时保证去重时**保留先出现的一方**（即 todo）——若某 plan 项与
+    # todo 项文本相同，丢弃 plan 项而非 todo 项。
     merged: list[dict[str, Any]] = []
     seen: set[str] = set()
-    for it in list(a.items) + list(b.items):
+    for it in _sort_by_priority(list(a.items), list(b.items)):
         key = str(it.get("content") or "").strip()
         if not key or key in seen:
             continue
@@ -291,16 +319,46 @@ def build_continue_nudge(summary: PendingSummary) -> str:
         f"【未完成事项】还有 {summary.count} 项未完成，请**继续推进**，"
         "不要停下来问用户「要不要继续」：",
     ]
-    for it in summary.items[:6]:
+    # 按优先级分组输出：先 todo（当前任务），后 task.md（项目计划），
+    # 让模型明确知道先后顺序，而不是把两类混在一起无从取舍。
+    todo_items = [
+        it for it in summary.items if str(it.get("source")) != "task.md"
+    ]
+    plan_items = [
+        it for it in summary.items if str(it.get("source")) == "task.md"
+    ]
+
+    def _render(it: dict[str, Any]) -> str | None:
         title = str(it.get("content") or it.get("title") or "").strip()
+        if not title:
+            return None
         st = str(it.get("status") or "").strip()
         src = str(it.get("source") or "")
-        tag = "计划" if src == "task.md" else st
-        if title:
-            lines.append(f"- [{tag}] {title[:80]}")
+        tag = "计划" if src == "task.md" else (st or "待办")
+        return f"- [{tag}] {title[:80]}"
+
+    if todo_items:
+        lines.append(f"**优先处理（当前任务待办，{len(todo_items)} 项）**：")
+        for it in todo_items[:6]:
+            line = _render(it)
+            if line:
+                lines.append(line)
+
+    if plan_items:
+        if todo_items:
+            lines.append(
+                f"**以上待办完成后，再做项目计划（task.md，{len(plan_items)} 项）**："
+            )
+        else:
+            lines.append("**项目计划（task.md）**：")
+        for it in plan_items[:6]:
+            line = _render(it)
+            if line:
+                lines.append(line)
+
     if has_plan:
         lines.append(
-            "以上来自项目 task.md 计划。请直接开始下一项，"
+            "请直接开始下一项，"
             "完成后勾选 `- [x]` 并继续下一项，**不要请求确认**。"
         )
     else:

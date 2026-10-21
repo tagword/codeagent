@@ -420,3 +420,103 @@ def test_stale_mixed(monkeypatch):
     s = ac.get_pending_todos("default", "p1")
     assert s.count == 1
     assert s.items[0]["content"] == "新鲜"
+
+
+# ─────────────── 优先级：项目 todo 优先于 task.md 计划 ───────────────
+#
+# 规则（见 auto_continue._sort_by_priority）：
+#   1（最高）项目 todo —— 当前任务亲手记下的待办
+#   2        task.md 计划 —— 项目级，粒度粗、可能过时
+#
+# 续跑时先做 todo 里明确记下的事，而不是从项目计划重新挑一项。
+
+
+def test_todo_items_come_before_plan_items():
+    """合并后 todo 必须排在 task.md 计划之前。"""
+    todos = [
+        {"content": "修复登录超时", "status": "in_progress", "source": "todo"},
+        {"content": "补测试", "status": "pending", "source": "todo"},
+    ]
+    plan = [
+        {"content": "Wave 3 部署", "source": "task.md"},
+        {"content": "Wave 4 验收", "source": "task.md"},
+    ]
+    ordered = ac._sort_by_priority(todos, plan)
+    contents = [str(it.get("content")) for it in ordered]
+    assert contents == [
+        "修复登录超时",
+        "补测试",
+        "Wave 3 部署",
+        "Wave 4 验收",
+    ], f"优先级顺序错误：{contents}"
+
+
+def test_sort_by_priority_is_stable_within_same_level():
+    """同优先级内保持原有相对顺序，不擅自重排。"""
+    todos = [{"content": f"T{i}", "source": "todo"} for i in range(5)]
+    plan = [{"content": f"P{i}", "source": "task.md"} for i in range(5)]
+    ordered = ac._sort_by_priority(todos, plan)
+    assert [str(it["content"]) for it in ordered][:5] == [f"T{i}" for i in range(5)]
+
+
+def test_dedup_keeps_todo_when_text_identical_to_plan_item():
+    """文本相同时必须保留 todo，丢弃 plan 项（不能反之）。"""
+    todos = [{"content": "同名字项", "status": "pending", "source": "todo"}]
+    plan = [{"content": "同名字项", "source": "task.md"}]
+
+    # 复刻 get_pending_all 的去重逻辑（含 _sort_by_priority）
+    merged, seen = [], set()
+    for it in ac._sort_by_priority(todos, plan):
+        key = str(it.get("content") or "").strip()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        merged.append(it)
+
+    assert len(merged) == 1, f"去重后应只剩 1 项，实际 {len(merged)}"
+    assert merged[0].get("source") == "todo", (
+        f"去重时应保留 todo，实际保留了 {merged[0].get('source')}"
+    )
+
+
+def test_nudge_puts_todo_section_before_plan_section():
+    """nudge 必须把「优先处理的 todo」排在「项目计划」之前。"""
+    summary = ac.PendingSummary(
+        count=3,
+        items=[
+            {"content": "修复登录超时", "status": "in_progress", "source": "todo"},
+            {"content": "补测试", "status": "pending", "source": "todo"},
+            {"content": "Wave 3 部署", "source": "task.md"},
+        ],
+    )
+    text = ac.build_continue_nudge(summary)
+    i_todo = text.find("修复登录超时")
+    i_plan = text.find("Wave 3 部署")
+    assert i_todo != -1 and i_plan != -1, f"nudge 缺少待办或计划项：\n{text}"
+    assert i_todo < i_plan, f"nudge 中 todo 应排在 plan 之前：\n{text}"
+    assert "优先处理" in text, "nudge 未标注 todo 为优先项"
+
+
+def test_nudge_todo_only_has_no_plan_section():
+    """只有 todo 时不应出现「项目计划」分组。"""
+    summary = ac.PendingSummary(
+        count=1,
+        items=[{"content": "只有 todo", "status": "pending", "source": "todo"}],
+    )
+    text = ac.build_continue_nudge(summary)
+    assert "只有 todo" in text
+    assert "task.md" not in text, f"无计划项时不应提及 task.md：\n{text}"
+
+
+def test_nudge_plan_only_still_renders():
+    """只有 task.md 计划时仍能正常输出（不因分组逻辑崩掉）。"""
+    summary = ac.PendingSummary(
+        count=2,
+        items=[
+            {"content": "Wave 3 部署", "source": "task.md"},
+            {"content": "Wave 4 验收", "source": "task.md"},
+        ],
+    )
+    text = ac.build_continue_nudge(summary)
+    assert "Wave 3 部署" in text and "Wave 4 验收" in text
+    assert "优先处理" not in text, "无 todo 时不应出现优先分组"
