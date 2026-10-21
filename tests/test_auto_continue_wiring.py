@@ -61,8 +61,20 @@ def test_nudge_injected_into_api_msgs_not_only_filtered():
 def test_pending_check_runs_even_when_agent_thinks_done():
     """Agent 自认为完成时也要查 pending —— 否则「做完一个 Wave 就停」。"""
     src = _source()
-    assert 'if _stop_reason != "max_tool_rounds"' in src
+    # 只看代码行，不看注释（注释里为了说明缺陷会引用这个字符串）
+    code = [
+        ln for ln in src.splitlines()
+        if not ln.lstrip().startswith("#")
+    ]
+    assert not any('_stop_reason != "max_tool_rounds"' in ln for ln in code), (
+        "pending 检查被重新塞回 `!= max_tool_rounds` 分支 —— "
+        "轮数用尽时将静默停止（v1.2.0 回归）"
+    )
     assert "get_pending_all" in src
+    # 两条续跑路径都要能置位 _pending_continue
+    assert '_limit_hit = _stop_reason == "max_tool_rounds"' in src, (
+        "max_tool_rounds 续跑路径丢失（v1.2.0 删掉了 v1.1.36 的能力）"
+    )
 
 
 def test_segment_hard_limit_enforced():
@@ -125,3 +137,78 @@ def test_switch_default_is_off():
 
     os.environ.pop(CHAT_AUTO_CONTINUE_ON_LIMIT, None)
     assert env_truthy(CHAT_AUTO_CONTINUE_ON_LIMIT, default="0") is False
+
+
+# ────────────────── 行为测试：复刻真实控制流（不靠 grep 源码） ──────────────────
+#
+# 为什么必须做行为测试：v1.2.0 的 bug 之所以能通过"源码断言"测试，是因为
+# 测试断言的正是 bug 结构本身。源码文本断言只能证明"代码长这样"，
+# 不能证明"跑起来是这样"。下面直接按 chat_turn.py 的判定顺序模拟，
+# 让"轮数用尽是否续跑"变成可证伪的行为断言。
+
+
+def _simulate(stopped_reason, *, has_pending, max_seg=4, rounds=24):
+    """复刻 chat_turn.py 的续跑判定与分段循环。
+
+    返回实际执行的段数。
+    """
+    segment = 0
+    executed = 1
+    while segment < max_seg:
+        stop_reason = stopped_reason
+        pending_continue = False
+
+        if stop_reason == "cancelled":
+            break
+
+        limit_hit = stop_reason == "max_tool_rounds"
+        if limit_hit:
+            pending_continue = True
+
+        if not limit_hit and has_pending and (segment + 1) < max_seg:
+            pending_continue = True
+
+        if not pending_continue:
+            break
+
+        segment += 1
+        if segment >= max_seg:
+            break
+        executed += 1
+    return executed
+
+
+def test_behaviour_continues_when_tool_rounds_exhausted():
+    """v1.2.0 核心回归：撞满轮次必须续跑，不能静默停止。
+
+    v1.2.0 把 pending 检查塞进 `!= max_tool_rounds` 分支，导致此场景
+    只执行 1 段就 break —— 表现为"跑着跑着就停了"。
+    """
+    executed = _simulate("max_tool_rounds", has_pending=False)
+    assert executed > 1, (
+        f"撞满轮次后只执行了 {executed} 段就停止 —— v1.2.0 静默停止回归"
+    )
+
+
+def test_behaviour_continues_when_limit_hit_even_without_pending():
+    """轮数用尽时不应依赖 pending 查询结果（查询可能失败）。"""
+    executed = _simulate("max_tool_rounds", has_pending=False)
+    assert executed == 4, f"应续跑至分段上限，实际 {executed} 段"
+
+
+def test_behaviour_continues_when_agent_done_but_pending_exists():
+    """v1.2.0 新增能力：Agent 自认为完成但有 pending → 续跑。"""
+    executed = _simulate("end_turn", has_pending=True)
+    assert executed > 1, "pending 驱动续跑能力丢失"
+
+
+def test_behaviour_stops_when_agent_done_and_nothing_pending():
+    """无 pending 且 Agent 自认为完成 → 应停止，不做无意义空转。"""
+    executed = _simulate("end_turn", has_pending=False)
+    assert executed == 1, f"应停止但执行了 {executed} 段（无意义空转，浪费 token）"
+
+
+def test_behaviour_stops_immediately_on_cancel():
+    """用户取消必须立即停止，不能续跑。"""
+    executed = _simulate("cancelled", has_pending=True)
+    assert executed == 1, "cancelled 后仍在续跑"

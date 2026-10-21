@@ -536,20 +536,41 @@ async def run_chat_turn(
                                 _acc_usage[_k] = _acc_usage.get(_k, 0) + int(_v)
 
                     _stop_reason = _seg_meta.get("stopped_reason")
-                    # ── 未完成事项驱动续跑 ──
+                    # ── 续跑判定（v1.2.2 修复静默停止）──
                     # 数据依据：5293 条用户消息中「继续」74 次（最高频）。
-                    # 原逻辑只在 max_tool_rounds 用尽时续跑；Agent 自己觉得
-                    # "做完了"就停 → 用户必须说"继续"。
-                    # 新增：若还有 pending todo，即使 Agent 认为完成也继续。
+                    # 两条续跑路径：
+                    #   A. max_tool_rounds 用尽 → 续跑（v1.1.36 原有行为）
+                    #   B. Agent 自认为完成但仍有 pending todo → 也续跑
+                    #
+                    # v1.2.0 缺陷：pending 检查被塞进
+                    # `if _stop_reason != "max_tool_rounds":` 分支 → 路径 A 时
+                    # 整块跳过、_pending_continue 恒 False → 撞满轮次直接 break
+                    # 静默停止。等于用新能力换掉旧能力，而非叠加。
+                    # 修复：把 pending 检查提到 max_tool_rounds 判断之外。
                     _pending_continue = False
                     _pending_nudge = ""
-                    if _stop_reason != "max_tool_rounds":
-                        if _stop_reason == "cancelled":
-                            _run_was_cancelled = True
-                            break
-                        # Agent 自认为完成 —— 检查是否真有未完成事项
-                        # 两个信号源：① 项目 todo ② task.md 未勾选项
-                        # （后者覆盖"Agent 做完一个 Wave 就问要不要继续"）
+                    if _stop_reason == "cancelled":
+                        _run_was_cancelled = True
+                        break
+
+                    # 轮数用尽只说明"话没说完"，不代表"活干完了" → 应续跑。
+                    # 不依赖 pending 查询：查询失败也不能静默停止。
+                    _limit_hit = _stop_reason == "max_tool_rounds"
+                    if _limit_hit:
+                        _pending_continue = True
+                        _pending_nudge = (
+                            f"上一段用完了 {max_rounds} 轮工具调用预算，任务尚未完成。"
+                            "请继续未完成的工作，不要停下来征询。"
+                        )
+                        logger.info(
+                            "auto-continue: tool-round limit hit, continuing (segment %d/%d)",
+                            _segment + 1, _max_seg,
+                        )
+
+                    # 检查是否真有未完成事项（路径 B）
+                    # 两个信号源：① 项目 todo ② task.md 未勾选项
+                    # （后者覆盖"Agent 做完一个 Wave 就问要不要继续"）
+                    if not _limit_hit and (_segment + 1) < _max_seg:
                         try:
                             from codeagent.server.auto_continue import (
                                 build_continue_nudge,
