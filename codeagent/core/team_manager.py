@@ -5,10 +5,10 @@ Usage::
     from codeagent.core.team_manager import TeamManager
     tm = TeamManager()
     tm.init_from_config(".codeagent/config/team.json")
-    
+
     # Later, when runtime is available:
     tm.register_members(session_factory, llm_executor)
-    
+
     # Lookup:
     lead = tm.get_lead()
     members = tm.get_members()
@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Callable
 
 from seed.core.agent_registry import AgentHandle, AgentRegistry
 
@@ -32,9 +32,9 @@ logger = logging.getLogger(__name__)
 class TeamManager:
     """Singleton that manages team configuration and agent lifecycle."""
 
-    _instance: Optional["TeamManager"] = None
+    _instance: TeamManager | None = None
 
-    def __new__(cls) -> "TeamManager":
+    def __new__(cls) -> TeamManager:
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance._reset_state()
@@ -45,7 +45,7 @@ class TeamManager:
         self._initialized = False
         self._config = None
         self._lead_handle = None
-        self._member_handles: Dict[str, AgentHandle] = {}
+        self._member_handles: dict[str, AgentHandle] = {}
 
     @classmethod
     def _reset(cls) -> None:
@@ -92,7 +92,7 @@ class TeamManager:
         """The loaded TeamConfig (None if not in team mode)."""
         return self._config
 
-    def get_lead(self) -> Optional[AgentHandle]:
+    def get_lead(self) -> AgentHandle | None:
         """Return the registered Lead agent handle."""
         if self._lead_handle:
             return self._lead_handle
@@ -101,11 +101,11 @@ class TeamManager:
             return AgentRegistry.get(self._config.lead.id)
         return None
 
-    def get_members(self) -> List[AgentHandle]:
+    def get_members(self) -> list[AgentHandle]:
         """Return list of all registered member agent handles."""
         return list(self._member_handles.values())
 
-    def get_agent(self, agent_id: str) -> Optional[AgentHandle]:
+    def get_agent(self, agent_id: str) -> AgentHandle | None:
         """Look up a registered agent by id.
 
         Checks members first, then lead.
@@ -117,7 +117,7 @@ class TeamManager:
 
     def register_members(
         self,
-        create_agent: Callable[[str, str, List[str]], Any],
+        create_agent: Callable[[str, str, list[str]], Any],
     ) -> int:
         """Register all member agents with AgentRegistry.
 

@@ -3,9 +3,10 @@ import argparse
 import sys
 from datetime import datetime
 
+from seed_tools import setup_builtin_tools
+
 from seed.core.persistence import ensure_session_dir, list_sessions, save_session
 from seed.core.routing import find_commands, get_all_commands
-from seed_tools import setup_builtin_tools
 
 # Prefer ``python -m codeagent`` / ``codeagent.cli.main`` — kept for compatibility.
 

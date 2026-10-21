@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -39,10 +39,11 @@ class Orchestrator:
 
         meta = dict(metadata or {})
         subtasks = meta.get("subtasks")
-        if isinstance(subtasks, list):
-            tasks = [str(t).strip() for t in subtasks if str(t).strip()]
-        else:
-            tasks = []
+        tasks = (
+            [str(t).strip() for t in subtasks if str(t).strip()]
+            if isinstance(subtasks, list)
+            else []
+        )
 
         if not tasks and auto_split_enabled(meta.get("auto_split")):
             tasks = split_user_tasks(user_text)
@@ -134,14 +135,15 @@ class Orchestrator:
             return i, reply, wmeta or {}
 
         with ThreadPoolExecutor(max_workers=max_workers) as pool:
-            futures = [pool.submit(_job, i, t) for i, t in enumerate(tasks)]
-            for fut in as_completed(futures):
+            # dict 关联 index→future，异常时仍能拿到原始 index，避免 key 冲突覆盖
+            futures: dict[int, Any] = {i: pool.submit(_job, i, t) for i, t in enumerate(tasks)}
+            for i, fut in futures.items():
                 try:
-                    i, reply, wmeta = fut.result()
+                    _, reply, wmeta = fut.result()
                     results[i] = (reply, wmeta)
                 except Exception as e:
-                    logger.exception("orchestrator subtask failed")
-                    results[len(results)] = (f"[subtask error] {e}", {})
+                    logger.exception("orchestrator subtask %d failed", i)
+                    results[i] = (f"[subtask error] {e}", {})
 
         parts = []
         metas = []

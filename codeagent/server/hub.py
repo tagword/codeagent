@@ -13,12 +13,10 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
 import time
 import uuid
-from collections import defaultdict
+from collections.abc import AsyncGenerator
 from pathlib import Path
-from typing import Any, AsyncGenerator
 
 from codeagent.core.paths import codeagent_home
 
@@ -61,7 +59,7 @@ def load_messages(
         return []
     msgs: list[dict] = []
     try:
-        with open(str(path), "r", encoding="utf-8") as f:
+        with open(str(path), encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if not line:
@@ -168,7 +166,7 @@ def _format_sse(msg: dict) -> bytes:
     data = json.dumps(msg, ensure_ascii=False)
     lines = [
         f"id: {msg.get('id', '')}",
-        f"event: message",
+        "event: message",
         f"data: {data}",
         "",
     ]

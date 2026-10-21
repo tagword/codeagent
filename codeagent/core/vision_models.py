@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import os
-from typing import Any, Optional
+import contextlib
+from typing import Any
 
 from codeagent.core import env as ca_env
 
@@ -17,9 +17,7 @@ def list_vision_presets() -> list[dict[str, Any]]:
 def preset_supports_vision(preset: dict[str, Any] | None) -> bool:
     if not isinstance(preset, dict):
         return False
-    if preset.get("supports_vision") is True:
-        return True
-    return False
+    return preset.get("supports_vision") is True
 
 
 def preset_supports_vision_id(preset_id: str) -> bool:
@@ -32,7 +30,7 @@ def preset_supports_vision_id(preset_id: str) -> bool:
     return False
 
 
-def resolve_preset_id(preset_id: Optional[str]) -> Optional[dict[str, Any]]:
+def resolve_preset_id(preset_id: str | None) -> dict[str, Any] | None:
     from seed.core.llm_presets import load_presets, resolve_preset
 
     pid = (preset_id or "").strip()
@@ -44,8 +42,7 @@ def resolve_preset_id(preset_id: Optional[str]) -> Optional[dict[str, Any]]:
     return resolve_preset(None)
 
 
-def get_vision_executor(vision_llm_id: Optional[str] = None):
-    from seed.core.llm_exec import get_llm_executor
+def get_vision_executor(vision_llm_id: str | None = None):
     from seed.core.llm_presets import llm_executor_from_resolved
 
     pid = (vision_llm_id or "").strip()
@@ -59,7 +56,7 @@ def get_vision_executor(vision_llm_id: Optional[str] = None):
     raise ValueError("vision_llm_id required (no CODEAGENT_VISION_PRESET_ID fallback)")
 
 
-def resolve_main_llm(llm_id: Optional[str] = None):
+def resolve_main_llm(llm_id: str | None = None):
     from seed.core.llm_presets import llm_executor_from_resolved, resolve_preset
 
     pid = (llm_id or "").strip()
@@ -85,9 +82,7 @@ def resolve_main_llm(llm_id: Optional[str] = None):
     if not mt_override:
         mt_override = _ea.pick_nonempty(*_ea.LLM_MAX_TOKENS)
     if mt_override:
-        try:
+        with contextlib.suppress(ValueError, TypeError):
             cfg["max_tokens"] = int(mt_override)
-        except (ValueError, TypeError):
-            pass
 
     return llm_executor_from_resolved(cfg)

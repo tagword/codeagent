@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from seed.integrations.mcp_config import MINIMAX_MCP_SERVER_ID, get_server_config
 
@@ -12,7 +12,7 @@ MINIMAX_UNDERSTAND_IMAGE_TOOL = "understand_image"
 MCP_QUALIFIED_UNDERSTAND_IMAGE = f"mcp__{MINIMAX_MCP_SERVER_ID}__{MINIMAX_UNDERSTAND_IMAGE_TOOL}"
 
 
-def minimax_mcp_configured(base: Optional[Path] = None) -> bool:
+def minimax_mcp_configured(base: Path | None = None) -> bool:
     """MiniMax MCP server enabled in config with a non-empty API key."""
     from seed.integrations.mcp_client import mcp_globally_enabled
 
@@ -26,10 +26,10 @@ def minimax_mcp_configured(base: Optional[Path] = None) -> bool:
 
 
 def minimax_mcp_understand_image_ready(
-    base: Optional[Path] = None,
+    base: Path | None = None,
     *,
     probe: bool = False,
-    servers_status: Optional[list[dict[str, Any]]] = None,
+    servers_status: list[dict[str, Any]] | None = None,
 ) -> bool:
     """True when MiniMax MCP can run ``understand_image`` (configured; optionally probed)."""
     if not minimax_mcp_configured(base):
@@ -51,7 +51,7 @@ def minimax_mcp_understand_image_ready(
     return False
 
 
-def image_attachment_allowed(vision_llm_id: str, base: Optional[Path] = None) -> bool:
+def image_attachment_allowed(vision_llm_id: str, base: Path | None = None) -> bool:
     """User may send image attachments when a vision preset or MiniMax MCP is available."""
     vid = (vision_llm_id or "").strip()
     if vid == MCP_VISION_SENTINEL:
@@ -72,10 +72,10 @@ def video_attachment_allowed(vision_llm_id: str) -> bool:
 
 
 def image_understanding_status(
-    base: Optional[Path] = None,
+    base: Path | None = None,
     *,
     probe: bool = False,
-    servers_status: Optional[list[dict[str, Any]]] = None,
+    servers_status: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     configured = minimax_mcp_configured(base)
     ready = minimax_mcp_understand_image_ready(

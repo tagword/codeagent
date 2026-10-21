@@ -4,17 +4,11 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import re
 from pathlib import Path
 
 from codeagent.core.env import product_home
 from seed.core.config_plane import project_root as _kernel_project_root
-
-logger = logging.getLogger(__name__)
-
-
-def codeagent_home() -> Path:
-    """Product data root (``~/.codeagent``). Same as ``project_root()`` after bootstrap."""
-    return product_home()
 from seed.core.paths import (
     agent_archive_dir,
     agent_daily_dir,
@@ -33,12 +27,37 @@ from seed.core.paths import (
     ensure_agent_dirs,
 )
 
+logger = logging.getLogger(__name__)
+
+
+def codeagent_home() -> Path:
+    """Product data root (``~/.codeagent``). Same as ``project_root()`` after bootstrap."""
+    return product_home()
 
 # ---------------------------------------------------------------------------
 # Project-level working directories (.codeagent/{agent_id}/)
 # ---------------------------------------------------------------------------
 
 _PROJECT_SUBDIRS = ("docs", "plans", "scripts", "sessions", "skills", "cache", "tmp")
+
+# 允许的 agent_id 字符：字母数字、连字符、下划线、点。拒绝路径分隔符/穿越。
+_SAFE_AGENT_ID_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+
+
+def _sanitize_agent_id(agent_id: str) -> str:
+    """Return a path-safe agent_id, or '' if it contains path traversal/separators.
+
+    agent_id 常来自用户可控输入（WebUI query / chat 参数），直接拼进路径会导致
+    路径穿越（如 ``../`` 写到 .codeagent 之外）。这里做纵深防御：只接受安全字符，
+    非法则返回空串，调用方回退到默认。
+    """
+    aid = (agent_id or "").strip()
+    if not aid:
+        return ""
+    if _SAFE_AGENT_ID_RE.match(aid):
+        return aid
+    logger.warning("Rejecting unsafe agent_id %r (path traversal guard)", agent_id)
+    return ""
 
 
 def _codeagent_dir(root: Path | None = None) -> Path:
@@ -48,8 +67,14 @@ def _codeagent_dir(root: Path | None = None) -> Path:
 
 
 def _agent_work_dir(agent_id: str, root: Path | None = None) -> Path:
-    """Return the agent work directory ``.codeagent/{agent_id}/``."""
-    return _codeagent_dir(root) / agent_id
+    """Return the agent work directory ``.codeagent/{agent_id}/``.
+
+    agent_id 会先净化，非法（含路径分隔符/穿越）回退到默认，避免路径穿越。
+    """
+    from seed.core.paths import agent_id_default
+
+    aid = _sanitize_agent_id(agent_id) or agent_id_default()
+    return _codeagent_dir(root) / aid
 
 
 def ensure_project_dirs(
@@ -70,7 +95,8 @@ def ensure_project_dirs(
     from seed.core.paths import agent_id_default
 
     base = Path(root).resolve() if root is not None else Path.cwd().resolve()
-    aid = (agent_id or "").strip() or agent_id_default()
+    raw_aid = (agent_id or "").strip() or agent_id_default()
+    aid = _sanitize_agent_id(raw_aid) or agent_id_default()
 
     ca_root = _codeagent_dir(base)
     ca_root.mkdir(parents=True, exist_ok=True)
@@ -181,21 +207,59 @@ def _read_bundled_persona_file(fname: str) -> str | None:
         return None
 
 
+def _fallback_persona_source_dir() -> Path | None:
+    """Return an existing agent's persona dir to copy from as a last resort.
+
+    When the bundled template cannot be resolved (e.g. a trimmed deployment or
+    an isolated ``SEED_PROJECT_ROOT``), falling back to the *default* agent's
+    persona keeps newly created agents usable instead of leaving a hollow
+    ``persona/`` directory behind.
+    """
+    try:
+        from codeagent.server.webui_handlers_agentmeta import _agents_dir
+
+        # Follow the kernel data root (same tree the scaffold writes into), not
+        # the product home, so the fallback source is actually present.
+        default_persona = _agents_dir(_kernel_project_root()) / agent_id_default() / "persona"
+        if default_persona.is_dir() and any(default_persona.glob("*.md")):
+            return default_persona
+    except Exception:
+        pass
+    return None
+
+
 def _ensure_default_persona_files(persona_dir: Path) -> None:
-    """Create default persona *.md from bundled template if they do not exist."""
-    if _bundled_persona_defaults_dir() is None:
-        logger.warning(
-            "Bundled persona defaults missing; skipping persona init for %s",
+    """Create default persona *.md for an agent, never leaving a hollow dir.
+
+    Order of precedence:
+      1. bundled package template (normal case)
+      2. persona copied from the default agent (fallback)
+    If neither source is available we log an **error** (not a silent warning)
+    because a persona-less agent would later be advertised as callable.
+    """
+    bundled_ok = _bundled_persona_defaults_dir() is not None
+    fallback_dir = None if bundled_ok else _fallback_persona_source_dir()
+
+    if not bundled_ok and fallback_dir is None:
+        logger.error(
+            "No persona template available (bundled missing, no default agent); "
+            "agent %s would be hollow and is left uninitialised",
             persona_dir,
         )
         return
+
     for fname in _PERSONA_INIT_FILENAMES:
         p = persona_dir / fname
         if p.is_file():
             continue
         body = _read_bundled_persona_file(fname)
+        if not body and fallback_dir is not None:
+            src = fallback_dir / fname
+            if src.is_file():
+                with contextlib.suppress(OSError):
+                    body = src.read_text(encoding="utf-8")
         if not body:
-            logger.warning("Bundled persona file missing: %s", fname)
+            logger.warning("Persona file unavailable from any source: %s", fname)
             continue
         with contextlib.suppress(OSError):
             p.write_text(body, encoding="utf-8")

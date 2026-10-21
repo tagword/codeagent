@@ -23,7 +23,7 @@ def _parse_body_json(body: bytes) -> dict[str, Any]:
 
 async def api_attachment_upload(request: Request) -> JSONResponse:
     from codeagent.core import env as ca_env
-    from codeagent.core.attachments import save_attachment, _max_count
+    from codeagent.core.attachments import save_attachment
 
     try:
         body = await request.json()
@@ -66,7 +66,7 @@ async def api_attachment_upload(request: Request) -> JSONResponse:
 
 async def api_attachment_batch(request: Request) -> JSONResponse:
     from codeagent.core import env as ca_env
-    from codeagent.core.attachments import save_attachment, _max_count, _dir_max_files
+    from codeagent.core.attachments import _dir_max_files, _max_count, save_attachment
 
     try:
         body = await request.json()
@@ -118,9 +118,10 @@ async def api_attachment_batch(request: Request) -> JSONResponse:
 
 
 async def api_attachment_get(request: Request) -> Response:
+    import mimetypes
+
     from codeagent.core import env as ca_env
     from codeagent.core.attachments import resolve_attachment_path
-    import mimetypes
 
     attachment_id = request.path_params.get("attachment_id") or ""
     agent_id = str(request.query_params.get("agent_id") or ca_env.default_agent_id()).strip() or "default"
@@ -143,12 +144,12 @@ async def api_attachment_get(request: Request) -> Response:
 
 async def api_file_serve(request: Request) -> Response:
     """Serve local files from the server filesystem.
-    
+
     Security: only serves files under /home/u2/ (agent workspace).
     Rejects '..' path traversal.
     """
-    from pathlib import Path as _Path
     import mimetypes as _mime
+    from pathlib import Path as _Path
 
     raw = request.query_params.get("path", "").strip()
     if not raw:
@@ -186,16 +187,15 @@ async def api_file_serve(request: Request) -> Response:
 
 def parse_chat_multimodal_body(body: dict[str, Any]) -> tuple[str, list[str], bool, dict[str, Any]]:
     """Return (message_text, attachment_ids, has_image, extra)."""
+    from codeagent.core import env as ca_env
     from codeagent.core.attachments import (
-        ATTACHMENT_TAG_RE,
         build_user_message,
         message_has_audio_attachments,
         message_has_image_attachments,
         message_has_video_attachments,
-        save_attachment,
         parse_image_dir_tags,
+        save_attachment,
     )
-    from codeagent.core import env as ca_env
 
     agent_id = str(body.get("agent_id") or ca_env.default_agent_id()).strip() or "default"
     session_id = str(body.get("session_id") or "web-chat").strip() or "web-chat"

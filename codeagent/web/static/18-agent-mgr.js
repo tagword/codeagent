@@ -49,7 +49,17 @@ function _renderAgentDetail(a) {
   var isActive = a.id === (typeof agentId !== 'undefined' ? agentId : 'default');
   var tools = a.tools && a.tools.acquired && a.tools.acquired.allow ? a.tools.acquired.allow : [];
 
-  document.getElementById('agentDetailTitle').textContent = 'Agent 配置: ' + (a.name || a.id);
+  document.getElementById('agentDetailTitle').textContent = (a.name || a.id) + ' · 配置';
+
+  // 删除按钮：当前活跃 Agent 不可删（与列表 ✕ 同规则）
+  var delBtn = document.getElementById('btnAgentDelete');
+  if (delBtn) {
+    var locked = (a.id === 'default') || isActive;
+    delBtn.disabled = locked;
+    delBtn.title = locked
+      ? (a.id === 'default' ? '内置 Agent 不可删除' : '当前活跃 Agent 不可删除')
+      : '删除该 Agent';
+  }
 
   // 描述
   var descHtml = '<span class="agent-detail__desc-text">' + escHtml(a.description || '') + '</span>'
@@ -77,7 +87,7 @@ function _renderAgentDetail(a) {
     + '<div class="agent-card__avatar agent-card__avatar--' + color + '">' + escHtml(firstChar) + '</div>'
     + '<div class="agent-detail__hero-info">'
     + '<div class="agent-detail__hero-name">' + escHtml(name) + '</div>'
-    + '<div class="agent-detail__hero-id">' + escHtml(a.id) + '</div>'
+    + (name !== a.id ? '<div class="agent-detail__hero-id">' + escHtml(a.id) + '</div>' : '')
     + '<div class="agent-detail__hero-desc" id="agentDetailDesc">' + descHtml + '</div>'
     + '<div class="agent-detail__hero-status' + (isActive ? ' agent-detail__hero-status--active' : '') + '">'
     + (isActive ? '🟢 当前活跃' : '⚪ 未激活') + '</div>'
@@ -85,7 +95,7 @@ function _renderAgentDetail(a) {
     // Grid
     + '<div class="agent-detail__grid">'
     + '<div class="agent-detail__card" id="agentToolsCard" style="grid-column:1/-1">'
-    + '<div class="agent-detail__card-title">已启用工具' + (a.tools_configured ? ' (' + tools.length + ')' : '') + '</div>'
+    + '<div class="agent-detail__card-title">' + (a.tools_configured ? '已启用工具 (' + tools.length + ')' : '工具权限') + '</div>'
     + '<div id="agentToolsContent">' + toolsHtml + '</div>'
     + '</div></div>'
     + '</div>';

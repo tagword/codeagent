@@ -44,13 +44,22 @@ async function loadMdFiles(overrideAgentId) {
 function buildMdFileCard(name) {
   var wrap = document.createElement('div'); wrap.className = 'cron-card-wrap';
 
-  var header = document.createElement('div'); header.className = 'cron-card';
+  var header = document.createElement('div'); header.className = 'cron-card md-file-card';
   var info = document.createElement('div'); info.className = 'cron-card__info';
   var nameRow = document.createElement('div'); nameRow.className = 'cron-card__name';
   nameRow.textContent = name;
   info.appendChild(nameRow);
   header.appendChild(info);
   header.style.cursor = 'pointer';
+  // 明确的编辑 affordance：无提示时用户看不出这行可点开编辑
+  var hint = document.createElement('span');
+  hint.className = 'md-file-card__hint';
+  hint.textContent = '✎ 点击编辑';
+  header.appendChild(hint);
+  var caret = document.createElement('span');
+  caret.className = 'md-file-card__caret';
+  caret.textContent = '▸';
+  header.appendChild(caret);
 
   var editWrap = document.createElement('div'); editWrap.className = 'cron-edit-wrap'; editWrap.style.display = 'none';
   var editStatus = document.createElement('div'); editStatus.className = 'status-line';
@@ -82,6 +91,8 @@ function buildMdFileCard(name) {
     editWrap.style.display = show ? 'block' : 'none';
     editStatus.textContent = '';
     editStatus.classList.remove('is-err');
+    caret.textContent = show ? '▾' : '▸';
+    hint.textContent = show ? '' : '✎ 点击编辑';
   };
 
   // Click header to toggle edit

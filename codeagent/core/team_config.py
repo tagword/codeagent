@@ -13,7 +13,7 @@ import json
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -28,8 +28,8 @@ class AgentConfig:
     id: str
     name: str
     persona: str
-    tools: List[str] = field(default_factory=list)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    tools: list[str] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def from_dict(cls, d: dict) -> AgentConfig:
@@ -48,9 +48,9 @@ class TeamConfig:
     """Complete team configuration parsed from team.json."""
 
     version: str = "1.0"
-    lead: Optional[AgentConfig] = None
-    members: List[AgentConfig] = field(default_factory=list)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    lead: AgentConfig | None = None
+    members: list[AgentConfig] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def from_file(cls, path: Path | str) -> TeamConfig:
@@ -78,7 +78,7 @@ class TeamConfig:
         return cls.from_dict(data, config_dir=path.parent)
 
     @classmethod
-    def from_dict(cls, data: dict, config_dir: Optional[Path] = None) -> TeamConfig:
+    def from_dict(cls, data: dict, config_dir: Path | None = None) -> TeamConfig:
         """Create from parsed JSON dict, with optional base dir for persona paths."""
         version = data.get("version", "1.0")
         metadata = data.get("metadata", {})
@@ -108,7 +108,7 @@ class TeamConfig:
 
     def _validate(self) -> None:
         """Validate config for required fields and consistency."""
-        errors: List[str] = []
+        errors: list[str] = []
 
         if not self.lead:
             errors.append("Lead agent is required")
@@ -158,7 +158,7 @@ class TeamConfig:
         return json.dumps(self.as_dict(), indent=indent, ensure_ascii=False)
 
 
-def _resolve_path(persona_path: str, config_dir: Optional[Path]) -> str:
+def _resolve_path(persona_path: str, config_dir: Path | None) -> str:
     """Resolve a persona path relative to config dir if it's a relative path."""
     if not persona_path or not config_dir:
         return persona_path

@@ -6,7 +6,6 @@ import asyncio
 import contextlib
 import json
 import logging
-import os
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
@@ -33,8 +32,8 @@ def create_app():
     from starlette.routing import Mount, Route, WebSocketRoute
     from starlette.websockets import WebSocket
 
-    from codeagent.server.webui_api_app import build_webui_api_app
     from codeagent.core.bootstrap import bootstrap_codeagent_runtime
+    from codeagent.server.webui_api_app import build_webui_api_app
 
     bootstrap_codeagent_runtime()
 
@@ -50,6 +49,7 @@ def create_app():
     from seed.core.config_plane import project_root as project_root_fn
 
     from . import _memkey, get_app_html, get_setup_html
+    from .a2a import a2a_agent_card, a2a_jsonrpc
 
     project_root = project_root_fn()
 
@@ -134,11 +134,11 @@ def create_app():
         has_audio = bool(_extra.get("has_audio"))
 
         message = str(user_msg.get("content") or "").strip()
+        from codeagent.core.audio_models import preset_supports_audio_id
         from codeagent.core.image_understanding import (
             image_attachment_allowed,
             video_attachment_allowed,
         )
-        from codeagent.core.audio_models import preset_supports_audio_id
 
         if has_image and not image_attachment_allowed(vision_llm_id):
             return JSONResponse(
@@ -155,8 +155,7 @@ def create_app():
                 {"detail": "发送视频需要选择支持多模态的模型 (vision_llm_id)"},
                 status_code=400,
             )
-        if has_audio:
-            if not audio_llm_id or not preset_supports_audio_id(audio_llm_id):
+        if has_audio and (not audio_llm_id or not preset_supports_audio_id(audio_llm_id)):
                 return JSONResponse(
                     {"detail": "需要选择支持音频转写的模型 (audio_llm_id)"},
                     status_code=400,
@@ -168,8 +167,9 @@ def create_app():
 
         _forced_mcp_skill_suffix = ""
         if message.startswith("/skill") or (message.startswith("/") and ":" in message.split(None, 1)[0]):
-            from codeagent.server.webui_api_app import _parse_mcp_skill_slash_command
             from seed_tools.mcp import mcp_skill_handler
+
+            from codeagent.server.webui_api_app import _parse_mcp_skill_slash_command
 
             try:
                 _mcp_sid, _mcp_skill, _mcp_args = _parse_mcp_skill_slash_command(message)
@@ -211,6 +211,7 @@ def create_app():
                 emit_ws=True,
                 broadcast_fn=_broadcast_session_event,
                 forced_skill_suffix=_forced_mcp_skill_suffix,
+                with_evidence=True,
             )
             if result.get("queued") or result.get("skipped"):
                 return JSONResponse(result, status_code=202)
@@ -244,7 +245,7 @@ def create_app():
     # Stored keys on Session.metadata:
     #   llm_id, vision_llm_id, image_gen_llm_id,
     #   audio_llm_id, music_llm_id, video_gen_llm_id
-    _MODEL_STACK_KEYS = (
+    _model_stack_keys = (
         "llm_id",
         "vision_llm_id",
         "image_gen_llm_id",
@@ -257,7 +258,7 @@ def create_app():
         if not isinstance(metadata, dict):
             return {}
         out = {}
-        for k in _MODEL_STACK_KEYS:
+        for k in _model_stack_keys:
             v = metadata.get(k)
             if isinstance(v, str) and v.strip():
                 out[k] = v.strip()
@@ -311,7 +312,7 @@ def create_app():
         if not isinstance(overrides_in, dict):
             return JSONResponse({"detail": "overrides must be an object"}, status_code=400)
         # Running sessions must be stopped first (consistency with rollback endpoint)
-        from . import _running_contains, _memkey
+        from . import _memkey, _running_contains
         if _running_contains(_memkey(agent_id, session_id)):
             return JSONResponse(
                 {"detail": "session is currently running, stop it first"}, status_code=409
@@ -319,7 +320,7 @@ def create_app():
         chat_sess = load_or_create_chat_session(session_id, agent_id)
         if not isinstance(chat_sess.metadata, dict):
             chat_sess.metadata = {}
-        for k in _MODEL_STACK_KEYS:
+        for k in _model_stack_keys:
             if k not in overrides_in:
                 continue
             v = overrides_in.get(k)
@@ -344,7 +345,7 @@ def create_app():
         if not session_id:
             return JSONResponse({"detail": "session_id required"}, status_code=400)
         agent_id = _resolve_session_agent_id(body)
-        from . import _running_contains, _memkey
+        from . import _memkey, _running_contains
         if _running_contains(_memkey(agent_id, session_id)):
             return JSONResponse(
                 {"detail": "session is currently running, stop it first"}, status_code=409
@@ -352,14 +353,14 @@ def create_app():
         chat_sess = load_or_create_chat_session(session_id, agent_id)
         if not isinstance(chat_sess.metadata, dict):
             chat_sess.metadata = {}
-        for k in _MODEL_STACK_KEYS:
+        for k in _model_stack_keys:
             chat_sess.metadata.pop(k, None)
         persist_chat_session(chat_sess, agent_id)
         return JSONResponse({"ok": True, "session_id": session_id, "agent_id": agent_id, "overrides": {}})
 
     async def api_compact_config_get(request: Request) -> JSONResponse:
         """GET /api/ui/compact-config — return current compact min tokens."""
-        from seed.core.agent_runtime import _get_compact_min_tokens, _compact_min_tokens_override
+        from seed.core.agent_runtime import _compact_min_tokens_override, _get_compact_min_tokens
         return JSONResponse({
             "compact_min_tokens": _get_compact_min_tokens(),
             "runtime_override": _compact_min_tokens_override,
@@ -394,7 +395,8 @@ def create_app():
             {"ok": true, "message_idx": 42, "messages_since": [<messages from idx onwards>]}
         """
         from seed.core.llm_sess import load_or_create_chat_session, persist_chat_session
-        from . import _running_contains, _memkey
+
+        from . import _memkey, _running_contains
 
         try:
             body = await request.json()
@@ -403,13 +405,6 @@ def create_app():
 
         session_id = str(body.get("session_id") or "web-chat").strip() or "web-chat"
         from codeagent.core import env as ca_env
-        from seed.core.env_access import (
-            CHAT_AUTO_CONTINUE_MAX_SEGMENTS,
-            CHAT_AUTO_CONTINUE_ON_LIMIT,
-            MAX_TOOL_ROUNDS,
-            env_truthy,
-            pick_int,
-        )
 
         agent_id = str(body.get("agent_id") or ca_env.default_agent_id()).strip() or "default"
         # 0 = system message, so minimal sensible value is 1
@@ -442,13 +437,11 @@ def create_app():
         persist_chat_session(chat_sess, agent_id)
 
         # Broadcast rollback event via websocket
-        try:
+        with contextlib.suppress(Exception):
             await _broadcast_session_event(agent_id, session_id, {
                 "type": "rollback",
                 "message_idx": message_idx,
             })
-        except Exception:
-            pass
 
         # Return messages from rollback point for UI refresh
         messages_since = chat_sess.messages[message_idx:]
@@ -517,8 +510,9 @@ def create_app():
     # 上下文压缩与持久化。通过 seed 的 register_cron_job_handler 单向注入
     # （seed 不反向依赖 codeagent）。
     async def _cron_run_via_chat_turn(job: dict) -> dict:
-        from codeagent.server.chat_turn import run_chat_turn
         from datetime import datetime, timezone
+
+        from codeagent.server.chat_turn import run_chat_turn
 
         jid = str(job.get("id") or "").strip() or "cron-job"
         agent_id = str(job.get("agent_id") or "").strip() or "default"
@@ -556,6 +550,21 @@ def create_app():
     # ── Cron：Starlette 1.x 用 lifespan（on_startup 已移除）；且 AsyncIOScheduler 需要已有运行中的 loop ──
     @asynccontextmanager
     async def _lifespan(_app: Starlette):
+        # ── 注册磁盘 agents 到 AgentRegistry：让 chat 团队工具（call_agent/
+        # dispatch/parallel）真正可用。此前 registry 恒空，工具永远报
+        # "not found in registry"。仅注册轻量 handle，不触发 LLM 调用。──
+        try:
+            from codeagent.runtime.agent_bootstrap import register_disk_agents
+
+            _reg = register_disk_agents()
+            if _reg.get("registered"):
+                logger.info(
+                    "agent bootstrap: registered %d agent(s) for chat team tools",
+                    _reg["total"],
+                )
+        except Exception as exc:
+            logger.warning("agent bootstrap failed (chat team tools may be limited): %s", exc)
+
         # 兼容旧版 seed：register_main_loop 是 v1.0.8+ 才有的线程安全 reload 前置；
         # 缺失时降级（reload 走自身线程的 loop，仍可用），但绝不因 ImportError 吞掉整个调度器。
         try:
@@ -660,6 +669,9 @@ def create_app():
         Route("/api/chat/stop", api_chat_stop, methods=["POST"]),
         Route("/api/chat/rollback", api_chat_rollback, methods=["POST"]),
         Route("/api/tts", api_tts, methods=["POST"]),
+        # ── A2A 协议端点（agent 间通信标准；见 codeagent/server/a2a/）──
+        Route("/.well-known/agent-card.json", a2a_agent_card, methods=["GET"]),
+        Route("/a2a", a2a_jsonrpc, methods=["POST"]),
         WebSocketRoute("/ws", websocket_chat),
         WebSocketRoute("/ws/{path:path}", websocket_chat),
     ]

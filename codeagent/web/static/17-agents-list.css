@@ -1,0 +1,396 @@
+/* ═══════════════════════════════════════════════════════════════
+ * 17-agents-list.css — page-agent 多 Agent 列表样式
+ * ═══════════════════════════════════════════════════════════════ */
+
+/* ── 列表容器 ── */
+.agent-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.agent-list__toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-3);
+}
+
+.agent-list__search {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-lg);
+  background: var(--bg-panel);
+  color: var(--text);
+  font-size: 12px;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.agent-list__search:focus {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-focus);
+}
+
+.agent-list__count {
+  font-size: 11px;
+  color: var(--text-subtle);
+  white-space: nowrap;
+}
+
+/* ── 列表项 ── */
+.agent-list__items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 340px;
+  overflow-y: auto;
+}
+
+.agent-list__item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--bg-panel);
+  cursor: pointer;
+  position: relative;
+  transition: border-color 0.15s, background 0.15s, transform 0.1s;
+}
+
+.agent-list__item:hover {
+  border-color: var(--border-strong);
+  background: var(--bg-hover, rgba(127, 127, 127, 0.06));
+}
+
+.agent-list__item:active {
+  transform: scale(0.995);
+}
+
+.agent-list__item--active {
+  border-color: var(--accent);
+  background: var(--bg-active, rgba(99, 102, 241, 0.08));
+}
+
+.agent-list__item .agent-card__avatar {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.agent-list__meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.agent-list__name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.agent-list__badge {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+}
+
+.agent-list__sub {
+  font-size: 11px;
+  color: var(--text-subtle);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.agent-list__desc {
+  font-size: 11px;
+  color: var(--text-muted, var(--text-subtle));
+  margin-top: 3px;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.agent-list__del {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-subtle);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  /* 弱化：默认几乎不可见，避免与「关闭/收起」混淆 + 降低误触 */
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s, color 0.15s;
+}
+
+.agent-list__del-icon {
+  display: inline-block;
+  font-size: 12px;
+  line-height: 1;
+  /* emoji 去彩色，跟随文字色，视觉更克制 */
+  filter: grayscale(1);
+  opacity: 0.75;
+}
+
+.agent-list__item:hover .agent-list__del,
+.agent-list__del:focus-visible {
+  opacity: 1;
+}
+
+.agent-list__del:hover {
+  background: var(--danger, #ef4444);
+  color: #fff;
+}
+
+.agent-list__del:hover .agent-list__del-icon {
+  filter: none;
+  opacity: 1;
+}
+
+/* ── 状态 ── */
+.agent-list__loading,
+.agent-list__empty {
+  padding: 18px 12px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-subtle);
+}
+
+.agent-list__error {
+  padding: 12px;
+  font-size: 12px;
+  color: var(--danger, #ef4444);
+  text-align: center;
+}
+
+/* ── 移动端 ── */
+@media (max-width: 640px) {
+  .agent-list__items {
+    max-height: 260px;
+  }
+  .agent-list__del {
+    /* 触屏无 hover：常显但压低透明度，兼顾可发现性与防误触 */
+    opacity: 0.35;
+  }
+  .agent-list__item:active .agent-list__del {
+    opacity: 1;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+ * Agent 页主从布局（2026-09-13 重构）
+ *   左栏 = Agent 列表（选择器，窄、固定、独立滚动）
+ *   右栏 = 选中 Agent 的完整配置（宽、随页面滚动）
+ * 修复：原先 5 个平级 fieldset 纵向堆叠，视觉模型与"列表驱动详情"
+ *       的交互模型不一致，用户困惑"下面那个是详情还是另一个东西"。
+ * ═══════════════════════════════════════════════════════════════ */
+
+.agent-page {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: var(--sp-4);
+  align-items: start;
+}
+
+/* ── 左栏 ── */
+.agent-page__sidebar {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--bg-panel);
+  max-height: calc(100vh - 120px);
+}
+
+.agent-page__sidebar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+}
+
+.agent-page__sidebar-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.agent-page__sidebar-actions {
+  display: flex;
+  gap: var(--sp-1);
+}
+
+/* 左栏内的列表：撑满剩余高度，独立滚动 */
+.agent-page__sidebar .agent-list__items {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+  overflow-y: auto;
+}
+
+/* ── 右栏 ── */
+.agent-page__main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  min-width: 0;
+}
+
+/* 右栏首个 section 的标题承载"当前 Agent"语义 */
+.agent-page__main > .section:first-of-type {
+  border-top: 2px solid var(--accent);
+}
+
+/* ── 可折叠 section（Teams） ── */
+.section__header--clickable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.section__caret {
+  display: inline-block;
+  width: 12px;
+  font-size: 10px;
+  color: var(--text-subtle);
+  transition: transform 0.15s;
+}
+
+.section__caret--open {
+  transform: rotate(90deg);
+}
+
+/* ── 删除按钮 ── */
+.btn--danger {
+  border-color: var(--danger);
+  color: var(--danger);
+  background: transparent;
+}
+
+.btn--danger:hover {
+  background: var(--danger);
+  color: #fff;
+}
+
+.btn--danger:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ── 响应式：窄屏改上下堆叠 ── */
+@media (max-width: 900px) {
+  .agent-page {
+    grid-template-columns: 1fr;
+  }
+  .agent-page__sidebar {
+    position: static;
+    max-height: 320px;
+  }
+  .agent-page__sidebar .agent-list__items {
+    max-height: 240px;
+  }
+}
+
+/* ── 状态标签（区分 内置 / 已配置 / 未配置空壳） ── */
+.agent-list__tag {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 500;
+  border: 1px solid var(--border);
+  color: var(--text-muted, var(--text-subtle));
+  background: var(--bg-soft, rgba(127, 127, 127, 0.06));
+}
+
+.agent-list__tag--builtin {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft, rgba(99, 102, 241, 0.08));
+}
+
+.agent-list__tag--shell {
+  border-color: var(--border-strong);
+  color: var(--text-subtle);
+  background: transparent;
+  font-style: italic;
+}
+
+/* 空壳 Agent：整体弱化，避免与真实 Agent 混淆 */
+.agent-list__item--shell {
+  opacity: 0.62;
+}
+
+.agent-list__item--shell:hover {
+  opacity: 1;
+}
+
+.agent-list__item--shell .agent-card__avatar {
+  filter: grayscale(0.55);
+}
+
+/* ── 身份配置文件卡片：明确"可点击编辑"的 affordance ── */
+.md-file-card {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.md-file-card:hover {
+  border-color: var(--accent);
+  background: var(--bg-hover, rgba(127, 127, 127, 0.06));
+}
+
+.md-file-card__hint {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-subtle);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.md-file-card:hover .md-file-card__hint {
+  opacity: 1;
+}
+
+.md-file-card__caret {
+  font-size: 10px;
+  color: var(--text-subtle);
+  flex-shrink: 0;
+}

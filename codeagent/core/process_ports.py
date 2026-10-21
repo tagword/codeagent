@@ -8,7 +8,7 @@ import signal
 import subprocess
 import time
 from shutil import which
-from typing import Callable, Optional, Set
+from typing import Callable
 
 
 def _win_no_window_kwargs() -> dict:
@@ -20,7 +20,7 @@ def _win_no_window_kwargs() -> dict:
     return {"startupinfo": si, "creationflags": 0x08000000}
 
 
-def pids_listening_on_port(port: int) -> Set[int]:
+def pids_listening_on_port(port: int) -> set[int]:
     """Return PIDs with a TCP listener on *port* (best effort)."""
     if os.name == "nt":
         return _pids_listening_on_port_windows(port)
@@ -64,9 +64,9 @@ def stop_listeners_on_port(
     port: int,
     *,
     timeout_sec: float = 5.0,
-    exclude_pid: Optional[int] = None,
-    log: Optional[Callable[[str], None]] = None,
-) -> Set[int]:
+    exclude_pid: int | None = None,
+    log: Callable[[str], None] | None = None,
+) -> set[int]:
     """
     SIGTERM listeners on *port*, wait for release, then SIGKILL stragglers.
     Returns PIDs that were targeted (excluding *exclude_pid*).
@@ -98,7 +98,7 @@ def stop_listeners_on_port(
     return pids
 
 
-def _pids_listening_on_port_windows(port: int) -> Set[int]:
+def _pids_listening_on_port_windows(port: int) -> set[int]:
     try:
         cp = subprocess.run(
             ["netstat", "-ano"],
@@ -111,7 +111,7 @@ def _pids_listening_on_port_windows(port: int) -> Set[int]:
         )
     except Exception:
         return set()
-    pids: Set[int] = set()
+    pids: set[int] = set()
     needle = f":{int(port)}"
     for line in (cp.stdout or "").splitlines():
         line = line.strip()
@@ -143,7 +143,7 @@ def _kill_pid_windows(pid: int) -> bool:
         return False
 
 
-def _pids_listening_on_port_posix(port: int) -> Set[int]:
+def _pids_listening_on_port_posix(port: int) -> set[int]:
     p = int(port)
     pids = _pids_via_lsof(p)
     if pids:
@@ -154,7 +154,7 @@ def _pids_listening_on_port_posix(port: int) -> Set[int]:
     return _pids_via_fuser(p)
 
 
-def _pids_via_lsof(port: int) -> Set[int]:
+def _pids_via_lsof(port: int) -> set[int]:
     if not which("lsof"):
         return set()
     try:
@@ -169,7 +169,7 @@ def _pids_via_lsof(port: int) -> Set[int]:
         )
     except Exception:
         return set()
-    out: Set[int] = set()
+    out: set[int] = set()
     for line in (cp.stdout or "").splitlines():
         line = line.strip()
         if not line:
@@ -184,7 +184,7 @@ def _pids_via_lsof(port: int) -> Set[int]:
 _SS_PID_RE = re.compile(r"pid=(\d+)", re.I)
 
 
-def _pids_via_ss(port: int) -> Set[int]:
+def _pids_via_ss(port: int) -> set[int]:
     if not which("ss"):
         return set()
     try:
@@ -199,7 +199,7 @@ def _pids_via_ss(port: int) -> Set[int]:
         )
     except Exception:
         return set()
-    pids: Set[int] = set()
+    pids: set[int] = set()
     for line in (cp.stdout or "").splitlines():
         for m in _SS_PID_RE.finditer(line):
             try:
@@ -209,7 +209,7 @@ def _pids_via_ss(port: int) -> Set[int]:
     return pids
 
 
-def _pids_via_fuser(port: int) -> Set[int]:
+def _pids_via_fuser(port: int) -> set[int]:
     if not which("fuser"):
         return set()
     try:
@@ -224,7 +224,7 @@ def _pids_via_fuser(port: int) -> Set[int]:
         )
     except Exception:
         return set()
-    pids: Set[int] = set()
+    pids: set[int] = set()
     spec = f"{port}/tcp"
     for part in (cp.stdout or "").split():
         part = part.strip()

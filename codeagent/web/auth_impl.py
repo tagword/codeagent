@@ -146,9 +146,7 @@ def is_setup_bootstrap_route(path: str, method: str) -> bool:
         return True
     if path == "/api/ui/llm/presets/default" and m in ("POST", "OPTIONS"):
         return True
-    if path == "/api/ui/env/chat" and m in ("POST", "OPTIONS"):
-        return True
-    return False
+    return path == "/api/ui/env/chat" and m in ("POST", "OPTIONS")
 
 
 def is_public_webui_route(path: str, method: str) -> bool:
@@ -171,6 +169,12 @@ def is_public_webui_route(path: str, method: str) -> bool:
         return True
     # File-serve for local images (path validation in handler)
     if path == "/api/file-serve" and method == "GET":
+        return True
+    # A2A 协议端点：Agent Card 是公开发现端点；/a2a 用 Bearer token 独立校验
+    # （不走 cookie，见 codeagent/server/a2a/handlers.py）
+    if path == "/.well-known/agent-card.json" and method == "GET":
+        return True
+    if path == "/a2a" and method == "POST":
         return True
     return bool(method == "GET" and path in ("/icon.png", "/favicon.ico", "/favicon.svg", "/health", "/api/health"))
 
@@ -282,7 +286,7 @@ class WebUIAuthMiddleware:
 
         async def send_with_cookie(message):
             if message["type"] == "http.response.start":
-                headers = [h for h in (message.get("headers") or []) if not (h[0].lower() == b"set-cookie")]
+                headers = [h for h in (message.get("headers") or []) if h[0].lower() != b"set-cookie"]
                 headers.append((b"set-cookie", set_cookie_hdr))
                 message["headers"] = headers
             await send(message)

@@ -16,16 +16,17 @@ import asyncio
 import contextlib
 import logging
 import threading
+from collections.abc import Awaitable
 from datetime import datetime, timezone
-from typing import Any, Awaitable, Callable
+from typing import Any, Callable
 
 logger = logging.getLogger(__name__)
 
 from codeagent.server import (  # noqa: E402
+    _DEFAULT_AUTO_CONTINUE_NUDGE,
     ACTIVE_CHAT_CANCELS,
     PENDING_INJECTIONS,
     SESSIONS,
-    _DEFAULT_AUTO_CONTINUE_NUDGE,
     _auto_continue_nudge,
     _memkey,
     _running_add,
@@ -60,6 +61,7 @@ async def run_chat_turn(
     broadcast_fn: Callable[..., Awaitable[None]] | None = None,
     if_busy: str = "queue",
     forced_skill_suffix: str = "",
+    with_evidence: bool = False,
 ) -> dict:
     """执行一轮 chat turn（追加 user 消息 → LLM 工具循环 → 合并/持久化）。
 
@@ -69,7 +71,6 @@ async def run_chat_turn(
     ``{"skipped": True}``（if_busy=skip 且 session 忙碌）。
     LLMError 会回滚追加的 user 消息后重新抛出，由调用方决定错误响应。
     """
-    from codeagent.core import env as ca_env
     from codeagent.core.attachments import content_text_for_skills
     from codeagent.core.image_understanding import MCP_VISION_SENTINEL
     from codeagent.core.vision_models import resolve_main_llm
@@ -198,22 +199,19 @@ async def run_chat_turn(
             max_rounds = pick_int(24, *MAX_TOOL_ROUNDS)
 
         llm = resolve_main_llm(llm_id or None)
-        if enable_thinking is None:
-            chat_enable_thinking = None
-        else:
-            chat_enable_thinking = bool(enable_thinking)
+        chat_enable_thinking = None if enable_thinking is None else bool(enable_thinking)
         chat_reasoning_effort = reasoning_effort.strip().lower() if (reasoning_effort or "").strip() else None
         reg, exe = tools_for_agent(agent_id)
         from seed.core.agent_context import (
             clear_active_project_workspace,
             set_active_agent_id,
+            set_active_audio_preset,
+            set_active_image_gen_preset,
+            set_active_music_preset,
             set_active_project_episodic,
             set_active_project_workspace,
-            set_active_vision_preset,
-            set_active_image_gen_preset,
-            set_active_audio_preset,
-            set_active_music_preset,
             set_active_video_gen_preset,
+            set_active_vision_preset,
         )
 
         set_active_llm_session(f"{agent_id}::{session_id}")
@@ -489,6 +487,7 @@ async def run_chat_turn(
                 _acc_usage: dict = {}
                 _seg_last_meta: dict = {}
                 _peak_across_segments = 0
+                _pending_nudge = ""
                 from seed.core.usage_accumulator import (
                     begin_usage_accumulation,
                     end_usage_accumulation,
@@ -536,9 +535,39 @@ async def run_chat_turn(
                             if isinstance(_v, (int, float)):
                                 _acc_usage[_k] = _acc_usage.get(_k, 0) + int(_v)
 
-                    if _seg_meta.get("stopped_reason") != "max_tool_rounds":
-                        if _seg_meta.get("stopped_reason") == "cancelled":
+                    _stop_reason = _seg_meta.get("stopped_reason")
+                    # ── 未完成事项驱动续跑 ──
+                    # 数据依据：5293 条用户消息中「继续」74 次（最高频）。
+                    # 原逻辑只在 max_tool_rounds 用尽时续跑；Agent 自己觉得
+                    # "做完了"就停 → 用户必须说"继续"。
+                    # 新增：若还有 pending todo，即使 Agent 认为完成也继续。
+                    _pending_continue = False
+                    _pending_nudge = ""
+                    if _stop_reason != "max_tool_rounds":
+                        if _stop_reason == "cancelled":
                             _run_was_cancelled = True
+                            break
+                        # Agent 自认为完成 —— 检查是否真有未完成事项
+                        # 两个信号源：① 项目 todo ② task.md 未勾选项
+                        # （后者覆盖"Agent 做完一个 Wave 就问要不要继续"）
+                        try:
+                            from codeagent.server.auto_continue import (
+                                build_continue_nudge,
+                                get_pending_all,
+                            )
+
+                            _pend = get_pending_all(agent_id, project_id or "", session_id)
+                            if _pend.has_pending and (_segment + 1) < _max_seg:
+                                _pending_continue = True
+                                _pending_nudge = build_continue_nudge(_pend)
+                                logger.info(
+                                    "auto-continue: %d pending items, continuing (segment %d/%d)",
+                                    _pend.count, _segment + 1, _max_seg,
+                                )
+                        except Exception:
+                            logger.debug("pending-todo check failed", exc_info=True)
+
+                    if not _pending_continue:
                         break
 
                     _segment += 1
@@ -575,7 +604,8 @@ async def run_chat_turn(
                     # Inject nudge as user message to continue
                     # n_before_ref deliberately NOT reset — nudge must be
                     # picked up by _on_tool_round_persist in the next segment
-                    _nudge = _auto_continue_nudge(_seg_meta)
+                    # 优先用"未完成事项"提示（更有指向性），否则用通用 nudge
+                    _nudge = _pending_nudge or _auto_continue_nudge(_seg_meta)
                     api_msgs.append(
                         {
                             "role": "user",
@@ -665,7 +695,7 @@ async def run_chat_turn(
                         break
                 _stream_placeholder_created[0] = False
 
-            tail = merge_llm_tail_into_full(chat_sess.messages, api_msgs, n_before_ref[0])
+            merge_llm_tail_into_full(chat_sess.messages, api_msgs, n_before_ref[0])
             _model_name = getattr(llm, "model", "")
             _ctx: dict[str, Any] = {}
             # 先写入 context_usage（含 peak），避免后续异步 persist 落盘旧值
@@ -726,7 +756,7 @@ async def run_chat_turn(
                         project_id=project_id or None,
                     )
                 except Exception:
-                    pass
+                    logger.debug("record_chat_turn_diary failed", exc_info=True)
             try:
                 if refresh_title:
                     # auto-continue 注入的 nudge 消息不应参与标题生成
@@ -760,6 +790,21 @@ async def run_chat_turn(
                 }
                 for t in tool_trace
             ]
+            # ── 交付证据链：把工具执行轨迹提炼成证据块，附在回复末尾 ──
+            # 目的：Agent 说"完成"时给出可验证证据，用户无需再问"验证一下"
+            # （数据依据：5293 条用户消息中验证类占 9%，是最大一类）
+            # 默认关闭（with_evidence=False），避免改变既有行为。
+            _evidence_block = ""
+            if with_evidence:
+                try:
+                    from codeagent.server.evidence import build_evidence_appendix
+
+                    _evidence_block = build_evidence_appendix(trace_out)
+                except Exception:
+                    logger.exception("build evidence appendix failed")
+                    _evidence_block = ""
+            if _evidence_block:
+                reply = (reply or "") + "\n" + _evidence_block
             # ── Token 用量精确计算（基于 API 返回的 usage） ──
             _acc = {}
             _cost_info = {}
@@ -811,6 +856,7 @@ async def run_chat_turn(
                 "session_id": session_id,
                 "tools_used": tools_used,
                 "tool_trace": trace_out,
+                "evidence": _evidence_block,
                 "token_usage": _api_usage,
                 "context": _ctx,
                 "cost": _cost_info,
@@ -819,7 +865,7 @@ async def run_chat_turn(
                 "model": _model_name,
                 "cancelled": bool(_run_was_cancelled),
             }
-        except LLMError as e:
+        except LLMError:
             with contextlib.suppress(Exception):
                 chat_sess.messages.pop()
             raise
