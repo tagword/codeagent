@@ -71,7 +71,12 @@ function buildChatRequestBody(requestSid, text, attachmentIds) {
     message: text,
     attachment_ids: attachmentIds.length ? attachmentIds : undefined,
     enable_thinking: getThinkState(),
-    reasoning_effort: getThinkState() ? getReasoningEffort() : undefined,
+    reasoning_effort: (() => {
+      if (!getThinkState()) return undefined;
+      const effort = getReasoningEffort();
+      // '' = 「默认 / 让模型自选」，不发送字段
+      return effort ? effort : undefined;
+    })(),
     llm_id: (modelSelect && modelSelect.value !== '__default__') ? modelSelect.value : undefined,
     vision_llm_id: (typeof getSelectedVisionModel === 'function' ? getSelectedVisionModel() : '') || undefined,
     image_gen_llm_id: (typeof getSelectedImageGenModel === 'function' ? getSelectedImageGenModel() : '') || undefined,

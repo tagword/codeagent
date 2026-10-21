@@ -15,11 +15,15 @@ function getThinkState() {
     return v === '1';
   } catch (_) { return true; }
 }
+// 推理强度档位：DeepSeek 仅 high|max（API 不读 reasoning_effort，仅作 UI hint）；
+// MiniMax-M3.1-Flash-Preview 支持 low|medium|high|xhigh|max；其他 MiniMax 模型档位无效。
+// '' 表示「未指定」——后端不发 reasoning_effort 字段，模型自选档位。
+const REASONING_EFFORTS = ['', 'low', 'medium', 'high', 'xhigh', 'max'];
 function getReasoningEffort() {
   try {
     const v = localStorage.getItem(REASONING_EFFORT_KEY);
-    return v === 'max' ? 'max' : 'high';
-  } catch (_) { return 'high'; }
+    return REASONING_EFFORTS.includes(v) ? v : '';
+  } catch (_) { return ''; }
 }
 function syncReasoningEffortUi() {
   const on = getThinkState();
@@ -27,8 +31,8 @@ function syncReasoningEffortUi() {
     reasoningEffortSelect.disabled = !on;
     reasoningEffortSelect.value = getReasoningEffort();
     reasoningEffortSelect.title = on
-      ? '推理强度（DeepSeek 思考模式）：高 = reasoning_effort high，最高 = max'
-      : '开启「思考」后可选择推理强度';
+      ? '推理强度：DeepSeek 后端不读取此字段（仅 UI 提示）；MiniMax-M3.1-Flash-Preview 支持 低/中/高/极高/最高；其他 MiniMax 模型仅 开/关 思考生效'
+      : '开启「思考」后可选择推理强度（默认 = 让模型自选）';
   }
 }
 function setThinkState(on) {
@@ -42,7 +46,7 @@ function setThinkState(on) {
   syncReasoningEffortUi();
 }
 function setReasoningEffort(val) {
-  const effort = val === 'max' ? 'max' : 'high';
+  const effort = REASONING_EFFORTS.includes(val) ? val : '';
   try { localStorage.setItem(REASONING_EFFORT_KEY, effort); } catch (_) {}
   syncReasoningEffortUi();
 }
