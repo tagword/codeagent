@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.1 (2026-10-21)
+
+- **fix(auto-continue)**：`get_pending_all` 补异常兜底。它是 chat_turn 续跑判定的入口，一旦抛异常会被 `except Exception: logger.debug(...)` 静默吞掉 → Agent 误判「无未完成事项」而停止。这是「24 轮后静默停止」的隐形来源
+- **test(auto-continue)**：新增 `tests/test_auto_continue_wiring.py`（8 项接线层契约测试）。原有 41 项只覆盖 `auto_continue.py` 纯函数（该不该续），完全没测 `chat_turn.py` 接线 —— 而静默停止类 bug 只出在接线处。新增锁定：① 与 seed-kernel 的 `stopped_reason` 字段契约（上游改名会静默失效）② nudge 必须注入 `api_msgs`（续跑空转的唯一判据）③ pending 检查在 Agent 自认为完成时也执行 ④ 分段上限两处生效 ⑤ 记录开关默认关闭的事实
+- **端到端实测**：mock LLM 循环验证「轮数用尽 → 续跑 → 第二段 LLM 收到 nudge」链路完好
+
+### 已知行为（非 bug，供部署参考）
+`CODEAGENT_CHAT_AUTO_CONTINUE_ON_LIMIT` **默认关闭**。未显式配置时，`max_tool_rounds`（默认 24）用尽即停止等用户。需要自主续跑必须设 `=1`。
+
 ## 1.2.0 (2026-10-18)
 
 本轮把 RSI 实验线的 31 个 commit 合入正式线，并修复合入过程中暴露的计费缺陷。
