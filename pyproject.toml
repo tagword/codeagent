@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tagword-codeagent"
-version = "1.1.36"
+version = "1.2.0"
 description = "Autonomous AI coding agent driven by Markdown config — DeepSeek-ready, CLI + Web UI, 45+ tools, self-hosted"
 readme = "README.md"
 license = { text = "MIT" }
@@ -28,7 +28,7 @@ classifiers = [
 ]
 dependencies = [
     "seed-kernel",
-    "seed-model-providers",
+    "seed-model-providers>=1.0.3",
     "seed-toolbox[code]",
     "uvicorn[standard]>=0.30.0",
     "starlette>=0.37.0"

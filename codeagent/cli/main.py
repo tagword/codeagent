@@ -184,7 +184,11 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
 
-    parser.add_argument('--version', action='version', version='CodeAgent v1.1.0')
+    from codeagent import __version__ as _codeagent_version
+
+    parser.add_argument(
+        '--version', action='version', version=f'CodeAgent v{_codeagent_version}'
+    )
     subparsers = parser.add_subparsers(dest='command', help='Available commands')
 
     # Run command
