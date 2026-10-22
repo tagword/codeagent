@@ -124,6 +124,26 @@ codeagent/
 - 模块按功能拆分（聊天、会话、配置、项目、文件浏览等）
 - 通过 WebSocket + REST API 与服务端通信
 
+### A2A 协议层 (`codeagent/server/a2a/`)
+Agent-to-Agent 通信，让外部 agent 通过标准协议调用本 agent。
+
+| 模块 | 职责 |
+|------|------|
+| `agent_card.py` | Agent Card 构建（`/.well-known/agent-card.json` 发现端点） |
+| `handlers.py` | JSON-RPC 入口：`message/send`、`tasks/get`；统一 Bearer 认证 |
+| `streaming.py` | `message/stream` SSE 流式响应 |
+| `client.py` | 发送端客户端（发现 → 协商传输 → 调用） |
+| `client_card.py` | 客户端侧 Agent Card 解析与传输协商 |
+| `context.py` | contextId ↔ sessionId 映射、taskId 反查 |
+| `auth.py` | Bearer 认证（复用 WebUI token） |
+| `models.py` | A2A 数据模型（Task / Message / Part / Artifact） |
+
+**认证设计**：
+- 复用 `config/webui.token`（或 `CODEAGENT_WEBUI_TOKEN`），不引入第二套密钥
+- 未配置 token 时放行（本机开发模式），此时 Agent Card **不声明** `security`
+- 配置 token 时，Agent Card 声明 `bearer`，服务端用 `hmac.compare_digest` 校验
+- 认证在 JSON-RPC 入口统一做，覆盖所有方法（含 SSE）
+
 ### Skills 引擎 (`codeagent/skills/select.py`)
 - 技能发现：扫描 agent 级和项目级 skills
 - 触发匹配：按用户输入匹配合适 skill

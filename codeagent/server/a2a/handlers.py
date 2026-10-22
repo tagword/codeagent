@@ -18,6 +18,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from .agent_card import build_agent_card
+from .auth import ERR_UNAUTHORIZED, check_request
 from .context import ContextError, context_id_for_task, record_task
 from .context import resolve as resolve_context
 from .models import (
@@ -52,7 +53,13 @@ async def a2a_jsonrpc(request: Request):
     """POST /a2a — A2A JSON-RPC 2.0 入口。
 
     ``message/stream`` 返回 SSE 流（StreamingResponse），其余返回 JSON。
+
+    认证在此统一校验：所有方法（含 SSE）都经过本入口。
     """
+    # ── Bearer 认证（未配置 token 时放行，见 auth.py）──
+    if not check_request(request):
+        return _rpc_error(None, ERR_UNAUTHORIZED, "Unauthorized: invalid or missing Bearer token")
+
     try:
         body = await request.json()
     except Exception:

@@ -40,7 +40,11 @@ def test_agent_card_structure():
     skill = card["skills"][0]
     for key in ("id", "name", "description", "inputModes", "outputModes"):
         assert key in skill
-    assert "securitySchemes" in card
+    # security 声明与 auth_enabled() 一致（未配置 token 时不声明），
+    # 两种状态各自的行为由 test_a2a_auth.py 覆盖。
+    from codeagent.server.a2a.auth import auth_enabled
+
+    assert ("securitySchemes" in card) is auth_enabled()
 
 
 def test_agent_card_endpoint(client):
@@ -79,6 +83,16 @@ def test_empty_text(client):
 
 
 # ---------- 项目校验默认放行 ----------
+@pytest.fixture(autouse=True)
+def _no_a2a_auth(monkeypatch):
+    """禁用 A2A 认证，隔离本机 config/webui.token 的影响。
+
+    认证行为由 tests/test_a2a_auth.py 专门覆盖；本文件测的是协议逻辑，
+    若读取真实 token 文件，所有用例都会因缺 Bearer 头而 401。
+    """
+    monkeypatch.setattr(ai, "get_webui_token", lambda *a, **k: "")
+
+
 @pytest.fixture(autouse=True)
 def _allow_any_project(monkeypatch):
     """默认认为任意 projectId 都存在，避免每个测试都要 mock。

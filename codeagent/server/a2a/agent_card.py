@@ -10,6 +10,8 @@ from __future__ import annotations
 import os
 from typing import Any
 
+from .auth import auth_enabled
+
 PROTOCOL_VERSION = "0.2.5"
 
 
@@ -74,12 +76,20 @@ def build_agent_card() -> dict[str, Any]:
                 "outputModes": ["text"],
             }
         ],
-        "securitySchemes": {
-            "bearer": {
-                "type": "http",
-                "scheme": "bearer",
-                "description": "Bearer token（复用 WebUI token，见 config/webui.token）",
+        # 认证声明与真实行为一致：未配置 token 时不声明 security，
+        # 否则客户端会带 token 而服务端根本不校验（声明与实现脱节）。
+        **(
+            {
+                "securitySchemes": {
+                    "bearer": {
+                        "type": "http",
+                        "scheme": "bearer",
+                        "description": "Bearer token（复用 WebUI token，见 config/webui.token）",
+                    }
+                },
+                "security": [{"bearer": []}],
             }
-        },
-        "security": [{"bearer": []}],
+            if auth_enabled()
+            else {}
+        ),
     }

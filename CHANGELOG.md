@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.2.8 (2026-10-22)
+
+### 修复
+
+- **A2A 服务端认证缺失（安全缺陷）**：Agent Card 声明了 `security: [{bearer: []}]`，
+  客户端也会发送 `Authorization: Bearer`，但**服务端从未校验** —— 任何人（含伪造 token）
+  都能调用 `/a2a` 让 agent 执行任意任务。实测：无 token / 伪造 token 均返回 HTTP 200
+  - 新增 `a2a/auth.py`：复用 WebUI token，`hmac.compare_digest` 常量时间比较
+  - 认证在 JSON-RPC 入口统一校验，覆盖 `message/send`、`tasks/get`、`message/stream`
+  - 未配置 token 时放行（本机开发模式），此时 Agent Card **不再声明** security
+    —— 声明与实现保持一致，避免客户端带 token 而服务端不校验
+
+### 文档
+
+- `ARCHITECTURE.md` 新增「A2A 协议层」章节（模块职责 + 认证设计）
+
+### 测试
+
+- 新增 `tests/test_a2a_auth.py`（11 项）：未配置放行 / 无 token 拒绝 / 错误 token 拒绝 /
+  非 Bearer 方案拒绝 / 正确 token 通过 / 大小写不敏感 / Card 声明与实现一致
+- 反向验证：禁用认证拦截后精确挂 3 项
+- 修正 `test_a2a.py` 的认证隔离（原先会读真实 `config/webui.token` 导致用例全挂）
+
 ## 1.2.7 (2026-10-22)
 
 ### 修复
