@@ -78,6 +78,18 @@ def test_empty_text(client):
     assert r.json()["error"]["code"] == -32602
 
 
+# ---------- 项目校验默认放行 ----------
+@pytest.fixture(autouse=True)
+def _allow_any_project(monkeypatch):
+    """默认认为任意 projectId 都存在，避免每个测试都要 mock。
+
+    需要验证「不存在的项目降级」的测试自行覆盖此 fixture。
+    """
+    import seed.core.proj_reg as pr
+
+    monkeypatch.setattr(pr, "get_project", lambda aid, pid: {"project_id": pid})
+
+
 # ---------- message/send 正常路径 ----------
 @pytest.fixture()
 def fake_chat_turn(monkeypatch):
@@ -211,3 +223,179 @@ def test_a2a_routes_public():
     assert ai.is_public_webui_route("/a2a", "POST")
     # 非 A2A 路径仍受保护
     assert not ai.is_public_webui_route("/api/chat", "POST")
+
+
+# ---------- projectId 贯通（Message.metadata）----------
+def test_project_id_from_message_metadata(client, fake_chat_turn):
+    """projectId 走 A2A 原生 Message.metadata，并回传到 Task.metadata。"""
+    r = client.post("/a2a", json={
+        "jsonrpc": "2.0", "id": "req-p1", "method": "message/send",
+        "params": {"message": {
+            "role": "user", "contextId": "ctx-proj",
+            "parts": [{"kind": "text", "text": "hi"}],
+            "metadata": {"projectId": "proj-meta"},
+        }},
+    })
+    result = r.json()["result"]
+    assert fake_chat_turn[0]["project_id"] == "proj-meta"
+    assert result["metadata"]["projectId"] == "proj-meta"
+    assert result["metadata"]["inferredFromTask"] is False
+
+
+def test_project_id_metadata_wins_over_configuration(client, fake_chat_turn):
+    """message.metadata.projectId 优先于 configuration.projectId。"""
+    client.post("/a2a", json={
+        "jsonrpc": "2.0", "id": "req-p2", "method": "message/send",
+        "params": {
+            "message": {
+                "role": "user", "contextId": "ctx-proj2",
+                "parts": [{"kind": "text", "text": "hi"}],
+                "metadata": {"projectId": "from-meta"},
+            },
+            "configuration": {"projectId": "from-cfg"},
+        },
+    })
+    assert fake_chat_turn[0]["project_id"] == "from-meta"
+
+
+def test_project_id_fallback_to_configuration(client, fake_chat_turn):
+    """无 metadata 时回退 configuration.projectId（向后兼容）。"""
+    client.post("/a2a", json={
+        "jsonrpc": "2.0", "id": "req-p3", "method": "message/send",
+        "params": {
+            "message": {"role": "user", "contextId": "ctx-proj3",
+                        "parts": [{"kind": "text", "text": "hi"}]},
+            "configuration": {"projectId": "legacy-cfg"},
+        },
+    })
+    assert fake_chat_turn[0]["project_id"] == "legacy-cfg"
+
+
+def test_no_project_id_yields_empty(client, fake_chat_turn):
+    """都不传时为空串，由存储层归入 __unassigned__。"""
+    r = client.post("/a2a", json={
+        "jsonrpc": "2.0", "id": "req-p4", "method": "message/send",
+        "params": {"message": {"role": "user", "contextId": "ctx-proj4",
+                               "parts": [{"kind": "text", "text": "hi"}]}},
+    })
+    assert fake_chat_turn[0]["project_id"] == ""
+    assert r.json()["result"]["metadata"]["projectId"] == ""
+
+
+# ---------- taskId → contextId 反查（规范 MUST）----------
+def test_task_id_infers_context(client, fake_chat_turn, monkeypatch):
+    """只传 taskId 时从 Task 反查 contextId，不新建上下文。"""
+    from codeagent.server.a2a import context as ctx_mod
+
+    monkeypatch.setattr(ctx_mod, "context_id_for_task", lambda tid: "ctx-from-task")
+
+    r = client.post("/a2a", json={
+        "jsonrpc": "2.0", "id": "req-t1", "method": "message/send",
+        "params": {"message": {
+            "role": "user", "taskId": "task-known",
+            "parts": [{"kind": "text", "text": "继续"}],
+        }},
+    })
+    result = r.json()["result"]
+    assert result["contextId"] == "ctx-from-task"
+    assert result["metadata"]["sessionId"] == "a2a-ctx-from-task"
+    assert result["metadata"]["inferredFromTask"] is True
+
+
+def test_context_task_mismatch_rejected(client, fake_chat_turn, monkeypatch):
+    """规范 MUST：contextId 与 taskId 不匹配时拒绝请求。"""
+    from codeagent.server.a2a import context as ctx_mod
+
+    monkeypatch.setattr(ctx_mod, "context_id_for_task", lambda tid: "ctx-real")
+
+    r = client.post("/a2a", json={
+        "jsonrpc": "2.0", "id": "req-t2", "method": "message/send",
+        "params": {"message": {
+            "role": "user", "contextId": "ctx-wrong", "taskId": "task-x",
+            "parts": [{"kind": "text", "text": "hi"}],
+        }},
+    })
+    body = r.json()
+    assert "error" in body
+    assert body["error"]["code"] == -32602
+    assert "mismatch" in body["error"]["message"]
+
+
+def test_tasks_get_by_task_id_only(client, monkeypatch):
+    """tasks/get 只传 id 时也能反查 contextId。"""
+    from codeagent.server.a2a import handlers as h
+
+    monkeypatch.setattr(h, "context_id_for_task", lambda tid: "ctx-lookup")
+
+    class _Sess:
+        messages = [{"role": "assistant", "content": "历史回复"}]
+        metadata = {"project_id": "proj-lookup"}
+
+    import seed.core.llm_sess as ls
+    monkeypatch.setattr(ls, "load_chat_session_from_disk", lambda *a, **k: _Sess())
+
+    r = client.post("/a2a", json={
+        "jsonrpc": "2.0", "id": "req-g1", "method": "tasks/get",
+        "params": {"id": "task-known"},
+    })
+    result = r.json()["result"]
+    assert result["contextId"] == "ctx-lookup"
+    assert result["metadata"]["projectId"] == "proj-lookup"
+    assert result["artifacts"][0]["parts"][0]["text"] == "历史回复"
+
+
+# ---------- projectId 校验（防会话静默丢失）----------
+def test_unknown_project_id_degrades_to_unassigned(client, fake_chat_turn, monkeypatch):
+    """不存在的 projectId 必须降级为空，否则 persist 会因外键失败丢会话。"""
+    import seed.core.proj_reg as pr
+
+    monkeypatch.setattr(pr, "get_project", lambda aid, pid: None)
+
+    r = client.post("/a2a", json={
+        "jsonrpc": "2.0", "id": "req-v1", "method": "message/send",
+        "params": {"message": {
+            "role": "user", "contextId": "ctx-badproj",
+            "parts": [{"kind": "text", "text": "hi"}],
+            "metadata": {"projectId": "proj-ghost"},
+        }},
+    })
+    assert fake_chat_turn[0]["project_id"] == ""
+    assert r.json()["result"]["metadata"]["projectId"] == ""
+
+
+def test_existing_project_id_preserved(client, fake_chat_turn, monkeypatch):
+    """存在的 projectId 原样透传。"""
+    import seed.core.proj_reg as pr
+
+    monkeypatch.setattr(pr, "get_project", lambda aid, pid: {"project_id": pid})
+
+    client.post("/a2a", json={
+        "jsonrpc": "2.0", "id": "req-v2", "method": "message/send",
+        "params": {"message": {
+            "role": "user", "contextId": "ctx-goodproj",
+            "parts": [{"kind": "text", "text": "hi"}],
+            "metadata": {"projectId": "proj-real"},
+        }},
+    })
+    assert fake_chat_turn[0]["project_id"] == "proj-real"
+
+
+# ---------- 续聊继承项目归属 ----------
+def test_continuation_inherits_project(client, fake_chat_turn, monkeypatch):
+    """续聊未显式传 projectId 时，沿用会话已归属的项目，避免归属漂移。"""
+    import seed.core.llm_sess as ls
+
+    class _Sess:
+        metadata = {"project_id": "proj-inherited"}
+
+    monkeypatch.setattr(ls, "load_chat_session_from_disk", lambda *a, **k: _Sess())
+
+    r = client.post("/a2a", json={
+        "jsonrpc": "2.0", "id": "req-i1", "method": "message/send",
+        "params": {"message": {
+            "role": "user", "contextId": "ctx-inherit",
+            "parts": [{"kind": "text", "text": "继续"}],
+        }},
+    })
+    assert fake_chat_turn[0]["project_id"] == "proj-inherited"
+    assert r.json()["result"]["metadata"]["projectId"] == "proj-inherited"
