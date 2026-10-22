@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.2.7 (2026-10-22)
+
+### 修复
+
+- **`self_reflect` 单槽覆盖导致反思静默丢失**（依赖 `seed-toolbox` 1.0.9）
+  - `task_id="self_reflect"` 硬编码 → 所有 agent/session 写同一文件互相覆盖。
+    实测：default 的全局反思被 agent0 的 newshub 日报任务覆盖，且无备份可恢复
+  - 现在写前归档上一份到 `memory/reflections/`（保留 30 份），
+    `self_reflect.md` 仍是最新一份（审计契约不变）
+
+### 变更
+
+- 依赖下限提升至 `seed-toolbox[code]>=1.0.9`
+
 ## 1.2.6 (2026-10-22)
 
 ### 变更
