@@ -21,11 +21,12 @@ import logging
 from collections.abc import AsyncIterator
 from typing import Any
 
+from .context import ContextError, record_task
+from .context import resolve as resolve_context
 from .models import (
     STATE_COMPLETED,
     STATE_FAILED,
     STATE_WORKING,
-    new_id,
 )
 
 logger = logging.getLogger(__name__)
@@ -94,9 +95,15 @@ async def stream_message(params: dict[str, Any]) -> AsyncIterator[bytes]:
     if not isinstance(cfg, dict):
         cfg = {}
 
-    context_id = msg.context_id or new_id("ctx")
-    session_id = f"a2a-{context_id}"
-    task_id = msg.task_id or new_id("task")
+    # 与 message/send 共用同一套上下文解析（含 taskId 反查）
+    try:
+        rctx = resolve_context(msg, cfg)
+    except ContextError as e:
+        yield _sse("error", {"code": -32602, "message": str(e)})
+        return
+    context_id = rctx.context_id
+    session_id = rctx.session_id
+    task_id = rctx.task_id
 
     loop = asyncio.get_running_loop()
     bridge = _EventBridge(loop)
@@ -123,7 +130,7 @@ async def stream_message(params: dict[str, Any]) -> AsyncIterator[bytes]:
                 agent_id=str(cfg.get("agentId") or "default"),
                 session_id=session_id,
                 user_msg={"role": "user", "content": text},
-                project_id=str(cfg.get("projectId") or ""),
+                project_id=rctx.project_id,
                 max_tool_rounds=max_rounds,
                 channel="A2A",
                 source="a2a",
@@ -204,6 +211,13 @@ async def stream_message(params: dict[str, Any]) -> AsyncIterator[bytes]:
     err = result.get("__error__") if isinstance(result, dict) else None
     final_text = bridge.final_text or (result.get("reply") if isinstance(result, dict) else "") or ""
 
+    # 登记 taskId → contextId 绑定，供后续只传 taskId 的调用反查
+    record_task(
+        session_id, task_id,
+        agent_id=str(cfg.get("agentId") or "default"),
+        project_id=rctx.project_id,
+    )
+
     # 4. 终态
     if err:
         yield _sse("status", {
@@ -238,6 +252,8 @@ async def stream_message(params: dict[str, Any]) -> AsyncIterator[bytes]:
         "final": True,
         "metadata": {
             "sessionId": session_id,
+            "projectId": rctx.project_id,
+            "inferredFromTask": rctx.inferred_from_task,
             "toolsUsed": bridge.tools_used or (result.get("tools_used") if isinstance(result, dict) else []) or [],
             "tokenUsage": (result.get("token_usage") if isinstance(result, dict) else {}) or {},
             "cost": (result.get("cost") if isinstance(result, dict) else {}) or {},

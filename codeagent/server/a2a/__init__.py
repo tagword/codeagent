@@ -13,9 +13,14 @@
 - ``agent_card``  Agent Card 构建（发现端点）
 - ``handlers``    JSON-RPC 处理器（message/send、message/stream、tasks/get）
 - ``streaming``   SSE 流式支持（message/stream）
+- ``context``     统一上下文解析（contextId / taskId 反查 / projectId 校验）
+- ``client_card`` Agent Card 解析模型（发送端）
+- ``client``      A2A 客户端（发现 → 协商 → 调用），供 ``a2a`` 工具使用
 """
 
 from .agent_card import build_agent_card
+from .client import A2AClient, A2AError, StreamEvent
+from .client_card import AgentCard
 from .handlers import a2a_agent_card, a2a_jsonrpc
 from .streaming import stream_message, stream_response
 
@@ -25,4 +30,8 @@ __all__ = [
     "a2a_jsonrpc",
     "stream_message",
     "stream_response",
+    "A2AClient",
+    "A2AError",
+    "StreamEvent",
+    "AgentCard",
 ]

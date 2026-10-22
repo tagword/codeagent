@@ -18,6 +18,8 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from .agent_card import build_agent_card
+from .context import ContextError, context_id_for_task, record_task
+from .context import resolve as resolve_context
 from .models import (
     STATE_COMPLETED,
     STATE_FAILED,
@@ -103,10 +105,15 @@ async def _handle_message_send(params: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(cfg, dict):
         cfg = {}
 
-    # contextId 是 A2A 的对话分组标识；映射为内部 session_id（加前缀隔离）
-    context_id = msg.context_id or new_id("ctx")
-    session_id = f"a2a-{context_id}"
-    task_id = msg.task_id or new_id("task")
+    # contextId 是 A2A 的对话分组标识；映射为内部 session_id（加前缀隔离）。
+    # 只传 taskId 时按规范从 Task 反查 contextId，避免上下文断裂。
+    try:
+        rctx = resolve_context(msg, cfg)
+    except ContextError as e:
+        raise _A2AError(ERR_INVALID_PARAMS, str(e)) from e
+    context_id = rctx.context_id
+    session_id = rctx.session_id
+    task_id = rctx.task_id
 
     from codeagent.server.chat_turn import run_chat_turn
 
@@ -115,13 +122,12 @@ async def _handle_message_send(params: dict[str, Any]) -> dict[str, Any]:
         max_rounds = int(max_rounds) if max_rounds is not None else None
     except (TypeError, ValueError):
         max_rounds = None
-
     try:
         result = await run_chat_turn(
             agent_id=str(cfg.get("agentId") or "default"),
             session_id=session_id,
             user_msg={"role": "user", "content": text},
-            project_id=str(cfg.get("projectId") or ""),
+            project_id=rctx.project_id,
             max_tool_rounds=max_rounds,
             channel="A2A",
             source="a2a",
@@ -138,6 +144,13 @@ async def _handle_message_send(params: dict[str, Any]) -> dict[str, Any]:
         reply = f"执行失败：{e}"
         result = {}
 
+    # 登记 taskId → contextId 绑定，供后续只传 taskId 的调用反查
+    record_task(
+        session_id, task_id,
+        agent_id=str(cfg.get("agentId") or "default"),
+        project_id=rctx.project_id,
+    )
+
     task = Task(
         id=task_id,
         context_id=context_id,
@@ -152,6 +165,8 @@ async def _handle_message_send(params: dict[str, Any]) -> dict[str, Any]:
         ],
         metadata={
             "sessionId": session_id,
+            "projectId": rctx.project_id,
+            "inferredFromTask": rctx.inferred_from_task,
             "toolsUsed": result.get("tools_used", []),
             "tokenUsage": result.get("token_usage", {}),
             "cost": result.get("cost", {}),
@@ -170,6 +185,9 @@ async def _handle_tasks_get(params: dict[str, Any]) -> dict[str, Any]:
     """
     context_id = str(params.get("contextId") or "").strip()
     task_id = str(params.get("id") or "").strip()
+    # 规范 3.4.2：只给 taskId 时应从 Task 反查 contextId
+    if not context_id and task_id:
+        context_id = context_id_for_task(task_id)
     if not context_id:
         raise _A2AError(ERR_INVALID_PARAMS, "params.contextId is required")
 
@@ -198,7 +216,11 @@ async def _handle_tasks_get(params: dict[str, Any]) -> dict[str, Any]:
                 parts=[Part(kind="text", text=last_agent)],
             )
         ],
-        metadata={"sessionId": session_id, "messageCount": len(messages)},
+        metadata={
+            "sessionId": session_id,
+            "projectId": str((getattr(sess, "metadata", None) or {}).get("project_id") or ""),
+            "messageCount": len(messages),
+        },
     )
     return task.to_dict()
 

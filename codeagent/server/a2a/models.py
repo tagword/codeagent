@@ -68,27 +68,39 @@ class Part:
 
 @dataclass
 class Message:
-    """A2A Message：单轮通信。"""
+    """A2A Message：单轮通信。
+
+    ``metadata`` 是 A2A 规范原生字段（Optional object），用于承载
+    协议未定义但实现需要的上下文。本项目约定：
+    - ``metadata.projectId``：会话归属的项目/工作区（缺失则归入未分类）
+    """
 
     role: str = "user"
     parts: list[Part] = field(default_factory=list)
     message_id: str = ""
     context_id: str = ""
     task_id: str = ""
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> Message:
+        md = d.get("metadata")
         return cls(
             role=str(d.get("role") or "user"),
             parts=[Part.from_dict(p) for p in (d.get("parts") or [])],
             message_id=str(d.get("messageId") or new_id("msg")),
             context_id=str(d.get("contextId") or ""),
             task_id=str(d.get("taskId") or ""),
+            metadata=md if isinstance(md, dict) else {},
         )
 
     def text(self) -> str:
         """拼接所有 text part。"""
         return "".join(p.text for p in self.parts if p.kind == "text")
+
+    def project_id(self) -> str:
+        """读取项目归属（协议原生 metadata 字段中的自定义 key）。"""
+        return str(self.metadata.get("projectId") or "").strip()
 
 
 # ── Artifact / Task ────────────────────────────────────────────
@@ -100,6 +112,19 @@ class Artifact:
     name: str
     parts: list[Part]
     description: str = ""
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> Artifact:
+        return cls(
+            artifact_id=str(d.get("artifactId") or new_id("artifact")),
+            name=str(d.get("name") or ""),
+            description=str(d.get("description") or ""),
+            parts=[Part.from_dict(p) for p in (d.get("parts") or [])],
+        )
+
+    def text(self) -> str:
+        """拼接所有 text part。"""
+        return "".join(p.text for p in self.parts if p.kind == "text")
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -115,6 +140,14 @@ class TaskStatus:
     state: str = STATE_SUBMITTED
     timestamp: str = field(default_factory=_now_iso)
     message: str = ""
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> TaskStatus:
+        return cls(
+            state=str(d.get("state") or STATE_SUBMITTED),
+            timestamp=str(d.get("timestamp") or _now_iso()),
+            message=str(d.get("message") or ""),
+        )
 
     def to_dict(self) -> dict[str, Any]:
         out: dict[str, Any] = {"state": self.state, "timestamp": self.timestamp}
@@ -132,6 +165,20 @@ class Task:
     status: TaskStatus
     artifacts: list[Artifact] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> Task:
+        return cls(
+            id=str(d.get("id") or ""),
+            context_id=str(d.get("contextId") or ""),
+            status=TaskStatus.from_dict(d.get("status") or {}),
+            artifacts=[Artifact.from_dict(a) for a in (d.get("artifacts") or [])],
+            metadata=d.get("metadata") if isinstance(d.get("metadata"), dict) else {},
+        )
+
+    def text(self) -> str:
+        """拼接所有 artifact 的文本（客户端取回复的便捷入口）。"""
+        return "".join(a.text() for a in self.artifacts)
 
     def to_dict(self) -> dict[str, Any]:
         return {

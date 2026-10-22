@@ -36,6 +36,14 @@ def build_agent_card() -> dict[str, Any]:
         ),
         "url": f"{base}/a2a",
         "preferredTransport": "JSONRPC",
+        # 规范 8.3.1：按优先级声明支持的传输组合，客户端据此选择。
+        # 首个条目即首选接口（8.3.2 客户端 MUST 选第一个支持的传输）。
+        "supportedInterfaces": [
+            {
+                "url": f"{base}/a2a",
+                "transport": "JSONRPC",
+            }
+        ],
         "version": "1.0.0",
         "provider": {
             "organization": "CodeAgent RSI Lab",
