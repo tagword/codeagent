@@ -1,5 +1,106 @@
 # Changelog
 
+## 1.2.4 (2026-10-22)
+
+### 新增
+
+- **A2A 客户端** `codeagent/server/a2a/client.py` + `client_card.py`
+  - 此前与服务端对等的「主动调用外部 Agent」能力缺失，只能手撸脚本直接 POST，
+    跳过发现、硬编码 URL、假设对方支持 JSONRPC 与流式——对方一换地址/传输即失效
+  - 现按规范走完整流程：Well-Known 发现 → 读 `supportedInterfaces` 协商传输 →
+    按名片声明的 URL/认证/流式能力调用，**不允许跳过发现**
+  - `AgentCard.select_interface()` 找不到本端支持的传输时直接报错，不猜测
+- **`a2a` 工具** `seed_tools/a2a.py`（toolbox，分类 `agent`）
+  - 分层：协议实现留宿主，工具层只做参数校验与格式化输出，延迟导入避免
+    `seed-tools` 反向依赖宿主
+  - `action`: `send` / `stream` / `get` / `cancel` / `discover`
+  - token 走 `CODEAGENT_A2A_TOKEN` 环境变量，不硬编码
+- **Agent Card 声明 `supportedInterfaces`**（规范 8.3.1），标准客户端可据此协商
+
+### 修复
+
+- **流式输出重复**（`流流式流式成功流式成功`）
+  - 服务端按规范发 `append: true` 增量片段 + 结束时发 `append: false` 全量快照，
+    客户端一律拼接导致内容重复
+  - `StreamEvent` 新增 `append` 字段，按语义处理（增量拼接 / 全量覆盖）
+- **A2A 上下文解析统一入口** `codeagent/server/a2a/context.py`
+  - 原 `contextId` 解析逻辑在 `handlers.py` / `streaming.py` 各写一份，且只做
+    `msg.context_id or new_id("ctx")`。两处漂移风险 + 无法扩展，抽成单一模块
+    （`resolve()` / `record_task()` / `context_id_for_task()`），不碰 LLM、不碰存储层
+- **只传 `taskId` 续聊时上下文断裂**（A2A 规范 3.4 MUST）
+  - 此前服务端只认 `contextId`，客户端按规范只传上一次的 `taskId` 时，
+    会被当成全新对话（新 `ctx` → 新 session），历史全丢
+  - 现在：无 `contextId` 且有 `taskId` → 从 Task 反查 `contextId`；
+    反查不到则记 warn 并新建（不静默复用同名上下文，避免串话）
+  - `Task.metadata.inferredFromTask` 暴露是否走了反查，便于调用方排查
+- **`contextId` / `taskId` 不匹配未拒绝**（规范 3.4 MUST）
+  - 两者同时给出但归属不同时必须报 `-32602 Invalid params`，此前直接采信
+    `contextId`，等于接受了一个属于别人的 `taskId`
+- **`tasks/get` 只传 `id` 时报 `contextId is required`**
+  - 规范允许仅凭 `taskId` 查询，现在同样走反查路径
+- **`projectId` 丢失导致 A2A 会话落入「未分类」**
+  - 支持 A2A 原生 `Message.metadata.projectId`（优先于
+    `configuration.projectId`，后者保留向后兼容）
+  - `Task.metadata` / `tasks/get` 回传 `projectId`，调用方可对账
+- **不存在的 `projectId` 导致会话静默丢失**（严重）
+  - `persist_chat_session` 注册会话依赖 registry 外键，项目不存在会抛
+    `IntegrityError`，而 `chat_turn` 内持久化异常被吞掉 → 会话凭空消失
+  - A2A 是外部入口、`projectId` 不可信，现在入口处校验：不存在则降级为
+    未分类并记 warn，宁可归错类也不丢会话
+
+### 测试
+
+- `tests/test_a2a_tool.py` +16：append 语义（增量拼接 / 全量覆盖）、参数校验、
+  token 解析、工具注册。含**反向验证**——注入错误逻辑后测试精确复现
+  `流流式流式成功流式成功`，还原后全绿
+- `tests/test_a2a.py` +14（共 23 项）：projectId 三层优先级、taskId 反查、
+  mismatch 拒绝、`tasks/get` 反查、未知 projectId 降级
+- 新增真实存储 E2E 脚本 `.codeagent/default/scripts/test-a2a-context-e2e.py`
+  （隔离 `SEED_PROJECT_ROOT`）：覆盖登记幂等、反查、mismatch、自动生成、
+  projectId 降级 6 组断言。首轮跑挂暴露了「registry 用 `session.name` 做索引」
+  的真实行为——手工 `Session(id=..., name=...)` 不一致时反查必失，
+  脚本已改为走 `load_or_create_chat_session` 与线上同路径
+- 全量 800 passed
+
+
+- **A2A 上下文解析统一入口** `codeagent/server/a2a/context.py`
+  - 原 `contextId` 解析逻辑在 `handlers.py` / `streaming.py` 各写一份，且只做
+    `msg.context_id or new_id("ctx")`。两处漂移风险 + 无法扩展，抽成单一模块
+    （`resolve()` / `record_task()` / `context_id_for_task()`），不碰 LLM、不碰存储层
+
+### 修复
+
+- **只传 `taskId` 续聊时上下文断裂**（A2A 规范 3.4 MUST）
+  - 此前服务端只认 `contextId`，客户端按规范只传上一次的 `taskId` 时，
+    会被当成全新对话（新 `ctx` → 新 session），历史全丢
+  - 现在：无 `contextId` 且有 `taskId` → 从 Task 反查 `contextId`；
+    反查不到则记 warn 并新建（不静默复用同名上下文，避免串话）
+  - `Task.metadata.inferredFromTask` 暴露是否走了反查，便于调用方排查
+- **`contextId` / `taskId` 不匹配未拒绝**（规范 3.4 MUST）
+  - 两者同时给出但归属不同时必须报 `-32602 Invalid params`，此前直接采信
+    `contextId`，等于接受了一个属于别人的 `taskId`
+- **`tasks/get` 只传 `id` 时报 `contextId is required`**
+  - 规范允许仅凭 `taskId` 查询，现在同样走反查路径
+- **`projectId` 丢失导致 A2A 会话落入「未分类」**
+  - 支持 A2A 原生 `Message.metadata.projectId`（优先于
+    `configuration.projectId`，后者保留向后兼容）
+  - `Task.metadata` / `tasks/get` 回传 `projectId`，调用方可对账
+- **不存在的 `projectId` 导致会话静默丢失**（严重）
+  - `persist_chat_session` 注册会话依赖 registry 外键，项目不存在会抛
+    `IntegrityError`，而 `chat_turn` 内持久化异常被吞掉 → 会话凭空消失
+  - A2A 是外部入口、`projectId` 不可信，现在入口处校验：不存在则降级为
+    未分类并记 warn，宁可归错类也不丢会话
+
+### 测试
+
+- 单测 +14 项（`tests/test_a2a.py` 共 23 项）：projectId 三层优先级、
+  taskId 反查、mismatch 拒绝、`tasks/get` 反查、未知 projectId 降级
+- 新增真实存储 E2E 脚本 `.codeagent/default/scripts/test-a2a-context-e2e.py`
+  （隔离 `SEED_PROJECT_ROOT`）：覆盖登记幂等、反查、mismatch、自动生成、
+  projectId 降级 6 组断言。首轮跑挂暴露了「registry 用 `session.name` 做索引」
+  的真实行为——手工 `Session(id=..., name=...)` 不一致时反查必失，
+  脚本已改为走 `load_or_create_chat_session` 与线上同路径
+
 ## 1.2.3 (2026-10-21)
 
 ### 修复
