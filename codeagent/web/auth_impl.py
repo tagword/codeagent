@@ -176,6 +176,10 @@ def is_public_webui_route(path: str, method: str) -> bool:
         return True
     if path == "/a2a" and method == "POST":
         return True
+    # KaTeX 字体是纯静态资源（woff2，无用户数据），需在登录前可加载，
+    # 否则登录页/未登录状态下公式字体 401。
+    if method in ("GET", "HEAD") and path.startswith("/katex-fonts/"):
+        return True
     return bool(method == "GET" and path in ("/icon.png", "/favicon.ico", "/favicon.svg", "/health", "/api/health"))
 
 

@@ -293,3 +293,25 @@
 .ctx-history__table td:first-child {
   text-align: center;
 }
+
+/* ===== KaTeX 数学公式 ===== */
+.bubble .md-content .katex { font-size: 1.05em; }
+.bubble .md-content .math-block {
+  margin: 0.6em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  text-align: center;
+  /* 长公式横向滚动时不撑破气泡 */
+  max-width: 100%;
+}
+.bubble .md-content .math-block .katex-display { margin: 0; }
+/* 行内公式过长时允许换行滚动 */
+.bubble .md-content .katex-display > .katex { white-space: normal; }
+/* 渲染失败时的降级样式 */
+.bubble .md-content .math-fallback {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em;
+  background: rgba(127, 127, 127, 0.12);
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+}

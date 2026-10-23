@@ -6,9 +6,13 @@ import asyncio
 import contextlib
 import json
 import logging
+import re
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
+
+# KaTeX 字体路由：只允许安全文件名，杜绝路径穿越与非 woff2 扩展名。
+_KATEX_FONT_RE = re.compile(r"^/katex-fonts/([A-Za-z0-9_\-]+\.woff2)$")
 
 logger = logging.getLogger(__name__)
 
@@ -480,6 +484,20 @@ def create_app():
             headers={"Cache-Control": "public, max-age=86400"},
         )
 
+    async def katex_font(request: Request) -> Response:
+        """Serve KaTeX woff2 fonts (kept out of the inlined HTML to avoid bloating first paint)."""
+        m = _KATEX_FONT_RE.match(request.url.path)
+        if not m:
+            return Response(status_code=404)
+        p = Path(__file__).resolve().parent.parent / "web" / "static" / "katex-fonts" / m.group(1)
+        if not p.is_file():
+            return Response(status_code=404)
+        return Response(
+            content=p.read_bytes(),
+            media_type="font/woff2",
+            headers={"Cache-Control": "public, max-age=31536000, immutable"},
+        )
+
     async def health(_: Request) -> JSONResponse:
         return JSONResponse({"ok": True})
 
@@ -632,6 +650,7 @@ def create_app():
         Route("/api/health", health),
         Route("/icon.png", icon_png),
         Route("/favicon.ico", favicon_ico),
+        Route("/katex-fonts/{name}", katex_font),
         # NOTE: routes under /api/ui/session/model-stack must be registered
         # BEFORE the /api/ui Mount, otherwise Starlette will dispatch them
         # to build_webui_api_app first.

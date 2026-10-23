@@ -290,12 +290,21 @@ function renderMarkdown(raw) {
     return '<p data-mermaid-idx="' + idx + '"></p>';
   });
 
+  // 再抽出数学公式，替换成 <span data-math-idx="N"></span> 占位符。
+  // 必须在 marked 之前：否则 \( \) 的反斜杠会被 marked 当转义吃掉，
+  // $...$ 里的 _ 和 * 会被当成强调语法。
+  const mathExtracted = (typeof extractMath === 'function')
+    ? extractMath(tWithPlaceholders)
+    : { text: tWithPlaceholders, items: [] };
+  const tWithAllPlaceholders = mathExtracted.text;
+
   const plain = '<div class="md-content md-content--plain">' + escapeHtml(t) + '</div>';
   if (typeof marked === 'undefined' || typeof DOMPurify === 'undefined') return plain;
   try {
     marked.setOptions({ breaks: true, gfm: true });
-    const html = marked.parse(tWithPlaceholders);
-    const clean = DOMPurify.sanitize(html);
+    const html = marked.parse(tWithAllPlaceholders);
+    const purifyCfg = (typeof MATH_PURIFY_CONFIG !== 'undefined') ? MATH_PURIFY_CONFIG : {};
+    const clean = DOMPurify.sanitize(html, purifyCfg);
     // 给代码块添加复制按钮（浮动右上角）
     var enhanced = clean;
     enhanced = enhanced.replace(
@@ -312,6 +321,11 @@ function renderMarkdown(raw) {
       const code = mermaidBlocks[i] != null ? mermaidBlocks[i] : '';
       return '<pre class="mermaid" data-mermaid-idx="' + i + '">' + escapeHtml(code) + '</pre>';
     });
+    // 最后把公式占位符换成 KaTeX 输出（在 DOMPurify 之后，
+    // 因为 KaTeX 生成的结构需要完整保留）
+    if (typeof substituteMath === 'function' && mathExtracted.items.length) {
+      enhanced = substituteMath(enhanced, mathExtracted.items);
+    }
     return '<div class="md-content">' + enhanced + '</div>';
   } catch (_) { return plain; }
 }
