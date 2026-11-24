@@ -116,7 +116,7 @@ async def run_chat_turn(
     message = str(user_msg.get("content") or "").strip()
     _run_started = False
     _run_was_cancelled = False
-    _run_mkey = _memkey(agent_id, session_id)
+    _run_mkey = _memkey(agent_id, session_id, project_id)
     _cancel_token = None
     emitter_token = None
 
@@ -152,7 +152,7 @@ async def run_chat_turn(
         except Exception:
             pass
 
-        mkey = _memkey(agent_id, session_id)
+        mkey = _memkey(agent_id, session_id, project_id)
         try:
             from codeagent.core.paths import ensure_agent_scaffold
 

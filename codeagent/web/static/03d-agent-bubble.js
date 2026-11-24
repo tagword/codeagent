@@ -60,6 +60,7 @@ function bubble(role, text, opts) {
               body: JSON.stringify({
                 session_id: sessionId,
                 agent_id: agentId,
+                project_id: projectId,
                 message_idx: parseInt(idx, 10)
               })
             });

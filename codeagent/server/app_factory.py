@@ -60,8 +60,8 @@ def create_app():
     # ── WebSocket 广播基础设施 ──
     ws_by_session: dict[str, set] = defaultdict(set)
 
-    async def _broadcast_session_event(aid: str, sid: str, payload: dict) -> None:
-        mkey = _memkey(aid, sid)
+    async def _broadcast_session_event(aid: str, sid: str, payload: dict, pid: str = "") -> None:
+        mkey = _memkey(aid, sid, pid)
         msg = dict(payload)
         msg.setdefault("session_id", sid)
         msg.setdefault("agent_id", aid)
@@ -231,7 +231,7 @@ def create_app():
         from . import ACTIVE_CHAT_CANCELS, _memkey, _running_contains
         session_id = (body.get("session_id") or "web-chat").strip()
         agent_id = (body.get("agent_id") or "").strip() or "default"
-        _run_mkey = _memkey(agent_id, session_id)
+        _run_mkey = _memkey(agent_id, session_id, _resolve_session_project_id(body))
         # 以 _running_sessions 为唯一判断源，ACTIVE_CHAT_CANCELS 只负责取消
         if not _running_contains(_run_mkey):
             return JSONResponse({"cancelled": False, "reason": "not_running"})
@@ -241,7 +241,7 @@ def create_app():
             with contextlib.suppress(Exception):
                 await _broadcast_session_event(agent_id, session_id, {
                     "type": "chat_stop_requested",
-                })
+                }, _resolve_session_project_id(body))
             return JSONResponse({"cancelled": True})
         return JSONResponse({"cancelled": False, "reason": "not_running"})
 
@@ -274,6 +274,21 @@ def create_app():
             str(body.get("agent_id") or ca_env.default_agent_id()).strip() or "default"
         )
 
+    def _resolve_session_project_id(body):
+        """从请求体取 project_id，并归一化 ``__unassigned__`` 等占位值。
+
+        内存会话缓存键必须带 project_id，否则跨项目同名 session 会串台。
+        """
+        raw = str(body.get("project_id") or "").strip()
+        if not raw:
+            return ""
+        try:
+            from codeagent.server.webui_api_app import _resolve_project_id
+
+            return _resolve_project_id(raw)
+        except Exception:
+            return raw
+
     async def api_session_model_stack_get(request: Request) -> JSONResponse:
         """GET /api/ui/session/model-stack?session_id=...&agent_id=...
 
@@ -289,7 +304,7 @@ def create_app():
         if not session_id:
             return JSONResponse({"detail": "session_id required"}, status_code=400)
         agent_id = _resolve_session_agent_id(body)
-        chat_sess = load_or_create_chat_session(session_id, agent_id)
+        chat_sess = load_or_create_chat_session(session_id, agent_id, _resolve_session_project_id(body) or None)
         overrides = _read_model_stack_from_metadata(chat_sess.metadata)
         return JSONResponse(
             {"ok": True, "session_id": session_id, "agent_id": agent_id, "overrides": overrides}
@@ -317,11 +332,11 @@ def create_app():
             return JSONResponse({"detail": "overrides must be an object"}, status_code=400)
         # Running sessions must be stopped first (consistency with rollback endpoint)
         from . import _memkey, _running_contains
-        if _running_contains(_memkey(agent_id, session_id)):
+        if _running_contains(_memkey(agent_id, session_id, _resolve_session_project_id(body))):
             return JSONResponse(
                 {"detail": "session is currently running, stop it first"}, status_code=409
             )
-        chat_sess = load_or_create_chat_session(session_id, agent_id)
+        chat_sess = load_or_create_chat_session(session_id, agent_id, _resolve_session_project_id(body) or None)
         if not isinstance(chat_sess.metadata, dict):
             chat_sess.metadata = {}
         for k in _model_stack_keys:
@@ -350,11 +365,11 @@ def create_app():
             return JSONResponse({"detail": "session_id required"}, status_code=400)
         agent_id = _resolve_session_agent_id(body)
         from . import _memkey, _running_contains
-        if _running_contains(_memkey(agent_id, session_id)):
+        if _running_contains(_memkey(agent_id, session_id, _resolve_session_project_id(body))):
             return JSONResponse(
                 {"detail": "session is currently running, stop it first"}, status_code=409
             )
-        chat_sess = load_or_create_chat_session(session_id, agent_id)
+        chat_sess = load_or_create_chat_session(session_id, agent_id, _resolve_session_project_id(body) or None)
         if not isinstance(chat_sess.metadata, dict):
             chat_sess.metadata = {}
         for k in _model_stack_keys:
@@ -414,11 +429,11 @@ def create_app():
         # 0 = system message, so minimal sensible value is 1
         message_idx = int(body.get("message_idx", 1))
 
-        _run_mkey = _memkey(agent_id, session_id)
+        _run_mkey = _memkey(agent_id, session_id, _resolve_session_project_id(body))
         if _running_contains(_run_mkey):
             return JSONResponse({"detail": "session is currently running, stop it first"}, status_code=409)
 
-        chat_sess = load_or_create_chat_session(session_id, agent_id)
+        chat_sess = load_or_create_chat_session(session_id, agent_id, _resolve_session_project_id(body) or None)
 
         if not isinstance(chat_sess.metadata, dict):
             chat_sess.metadata = {}
@@ -445,7 +460,7 @@ def create_app():
             await _broadcast_session_event(agent_id, session_id, {
                 "type": "rollback",
                 "message_idx": message_idx,
-            })
+            }, _resolve_session_project_id(body))
 
         # Return messages from rollback point for UI refresh
         messages_since = chat_sess.messages[message_idx:]
@@ -505,8 +520,9 @@ def create_app():
         await websocket.accept()
         sid = (websocket.query_params.get("session_id") or "").strip()
         aid = (websocket.query_params.get("agent_id") or "").strip() or "default"
+        pid = (websocket.query_params.get("project_id") or "").strip()
         if sid:
-            mkey = _memkey(aid, sid)
+            mkey = _memkey(aid, sid, pid)
             ws_by_session[mkey].add(websocket)
         try:
             while True:

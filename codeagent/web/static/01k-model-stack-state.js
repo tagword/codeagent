@@ -158,7 +158,7 @@
       await fetch('/api/ui/session/model-stack', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: sid, agent_id: aid, overrides: overrides }),
+        body: JSON.stringify({ session_id: sid, agent_id: aid, project_id: (typeof projectId !== 'undefined' ? projectId : ''), overrides: overrides }),
       });
     } catch (_) {}
   }
@@ -169,7 +169,7 @@
     if (!s) return;
     const a = aid || (typeof agentId !== 'undefined' ? agentId : 'default') || 'default';
     try {
-      const r = await fetch('/api/ui/session/model-stack?session_id=' + encodeURIComponent(s) + '&agent_id=' + encodeURIComponent(a));
+      const r = await fetch('/api/ui/session/model-stack?session_id=' + encodeURIComponent(s) + '&agent_id=' + encodeURIComponent(a) + '&project_id=' + encodeURIComponent(typeof projectId !== 'undefined' ? (projectId || '') : ''));
       if (!r.ok) return;
       const j = await r.json();
       const ov = (j && j.overrides) || {};

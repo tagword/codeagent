@@ -41,8 +41,28 @@ from seed.core._session_cache import (  # noqa: E402,F401 — 故意 re-export �
     PENDING_INJECTIONS,
     SESSIONS,
     WS_BY_SESSION,
-    _memkey,
 )
+from seed.core._session_cache import _memkey as _seed_memkey  # noqa: E402
+
+
+def _memkey(agent_id: str, session_id: str, project_id: str = "") -> str:
+    """内存会话缓存键：``agent::project::session``。
+
+    ⚠️ 必须包含 project_id，否则跨项目同名 session 会共用同一份内存会话，
+    导致上下文串台（历史 bug：两个项目都用 ``web-chat`` 这个 session_id 时，
+    项目 B 的消息会追加进项目 A 的内存对象，且 project_id 被覆盖）。
+
+    磁盘持久化本身是按项目目录隔离的（见 load_chat_session_from_disk），
+    所以只有内存缓存这一层需要修。
+
+    project_id 为空时退化为 seed 的旧格式，保证与 cron / 旧调用点兼容。
+    """
+    aid = (agent_id or "default").strip() or "default"
+    sid = str(session_id or "").strip()
+    pid = str(project_id or "").strip()
+    if not pid:
+        return _seed_memkey(aid, sid)
+    return f"{aid}::{pid}::{sid}"
 
 # 当前正在执行中的会话集合（mkey 格式：agent_id::session_id）
 # 用于页面刷新后前端恢复运行状态指示

@@ -152,6 +152,7 @@ function connectWs() {
     proto + '//' + location.host +
     '/ws?session_id=' + encodeURIComponent(sessionId) +
     '&agent_id=' + encodeURIComponent(agentId) +
+    '&project_id=' + encodeURIComponent(projectId || '') +
     wsTokQs
   );
   ws = sock;

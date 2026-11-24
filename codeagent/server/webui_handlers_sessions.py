@@ -122,7 +122,7 @@ def build_sessions_routes(project_root: Path) -> list[Route]:
             if not sid:
                 return JSONResponse({"detail": "session_id required"}, status_code=400)
 
-            mkey = _memkey(aid, sid)
+            mkey = _memkey(aid, sid, pid)
             sess = SESSIONS.get(mkey)
             if sess is None:
                 sess = load_chat_session_from_disk(sid, aid, pid or None)
@@ -155,7 +155,7 @@ def build_sessions_routes(project_root: Path) -> list[Route]:
             ok = bool(loc and loc.is_file() and _archive_session_path(loc))
         if not ok:
             return JSONResponse({"detail": "archive failed"}, status_code=400)
-        SESSIONS.pop(_memkey(aid, sid), None)
+        SESSIONS.pop(_memkey(aid, sid, pid), None)
         return JSONResponse({"ok": True})
 
     async def api_session_delete(request: Request) -> JSONResponse:
@@ -185,7 +185,7 @@ def build_sessions_routes(project_root: Path) -> list[Route]:
                         break
         if not ok:
             return JSONResponse({"detail": "delete failed"}, status_code=400)
-        SESSIONS.pop(_memkey(aid, sid), None)
+        SESSIONS.pop(_memkey(aid, sid, pid), None)
         return JSONResponse({"ok": True})
 
     return [

@@ -49,7 +49,7 @@ async function stopActiveChat() {
     if (btn) btn.disabled = true;
     const r = await fetch('/api/chat/stop', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ session_id: requestSid, agent_id: agentId })
+      body: JSON.stringify({ session_id: requestSid, agent_id: agentId, project_id: projectId })
     });
     const j = await r.json();
     if (!r.ok) throw new Error(j.detail || r.statusText);
