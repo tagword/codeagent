@@ -93,3 +93,25 @@ def test_webui_handlers_sessions_pass_project_id():
     assert "_memkey(aid, sid)" not in src, (
         "webui_handlers_sessions 存在未带 project_id 的 _memkey 调用"
     )
+
+
+def test_no_direct_seed_memkey_import():
+    """守卫：不允许绕过 codeagent.server._memkey 直接导入 seed 版本。
+
+    codeagent 的修复方式是同名覆盖（seed 是第三方包，不能改）。
+    若有人直接 ``from seed.core._session_cache import _memkey``，
+    就会拿到不含 project_id 的旧实现，跨项目串台会复发。
+    """
+    import re
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent / "codeagent"
+    pat = re.compile(r"from\s+seed\.core\._session_cache\s+import\s+[^\n]*\b_memkey\b")
+    offenders = []
+    for py in root.rglob("*.py"):
+        if py.name == "__init__.py" and py.parent.name == "server":
+            continue  # 这里就是覆盖定义处，允许
+        for i, line in enumerate(py.read_text(encoding="utf-8").splitlines(), 1):
+            if pat.search(line):
+                offenders.append(f"{py.relative_to(root)}:{i}")
+    assert not offenders, f"绕过 project 隔离的 _memkey 导入: {offenders}"
