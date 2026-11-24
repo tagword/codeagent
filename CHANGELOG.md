@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.2.9 (2026-11-25)
+
+### 新增
+
+- **WebUI 支持 KaTeX 数学公式渲染**：消息中的 `$...$` / `$$...$$` 渲染为数学公式，
+  字体文件本地打包（不依赖 CDN，离线可用），新增 `tests/test_katex_math.py`（7 项）
+
+### 修复
+
+- **跨项目会话上下文串台**：同一 session 在不同项目间切换时，历史消息会串到别的项目。
+  根因是本地 `_memkey` 覆盖绕过了 seed 根的会话键生成逻辑
+  - 撤掉本地 `_memkey` 覆盖，统一改用 seed 根实现
+  - 新增守卫测试，禁止绕过 `codeagent._memkey` 直接导入 seed 版本（防止问题复发）
+  - 新增 `tests/test_session_project_isolation.py`（8 项）
+- **切换会话后滚动位置错位**：切换会话（非筛选/搜索）后 chat log 不停在底部。三处叠加根因：
+  1. 历史渲染后只写一次 `scrollTop`，图片/mermaid/字体/抽屉后续增高把视口留在半空
+  2. `log.innerHTML=''` 触发 scroll 归零事件，旧会话分页状态仍在 → 用旧 block index 拉更早记录
+  3. 旧 history/分页请求晚于下次切换返回，结果被插进别的会话
+  - 修复：会话代次 `_historyLoadSeq` 校验所有异步回填；切换时重置分页状态；
+    渲染后 `scrollLogForce()` + `pinLogBottomFor()` rAF 持续钉底，用户输入（wheel/touchmove/keydown/pointerdown）立即取消
+
 ## 1.2.8 (2026-10-22)
 
 ### 修复
