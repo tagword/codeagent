@@ -1,15 +1,26 @@
-"""跨项目会话隔离测试。
+"""跨项目会话隔离测试（codeagent 侧）。
 
-历史 bug：内存会话缓存键 ``_memkey(agent, session)`` 不含 project_id，
-导致两个项目使用相同 session_id（如都叫 ``web-chat``）时共用同一份内存
-Session 对象 —— 项目 B 的消息会追加进项目 A 的上下文，且 project_id 被覆盖。
+根因修复在 ``seed.core._session_cache._memkey``（已加 project_id 维度）。
+本文件验证 **codeagent 的各个调用点确实把 project_id 传了下去** —— 只修
+_memkey 而调用点不传，等于没修。
 
+历史 bug：两个项目使用相同 session_id（如都叫 ``web-chat``）时共用同一份
+内存 Session 对象，项目 B 的消息追加进项目 A 的上下文，且 project_id 被覆盖。
 磁盘持久化本身按项目目录隔离，只有内存缓存这一层会串。
 """
 from __future__ import annotations
 
+import inspect
+
 from codeagent.server import _memkey
 from seed.core._session_cache import SESSIONS
+
+
+def test_memkey_is_seed_implementation():
+    """codeagent 直接复用 seed 的实现，不再本地覆盖（避免两处逻辑分叉）。"""
+    from seed.core._session_cache import _memkey as seed_memkey
+
+    assert _memkey is seed_memkey
 
 
 def test_memkey_includes_project():
@@ -19,19 +30,10 @@ def test_memkey_includes_project():
     assert "proj-A" in a and "proj-B" in b
 
 
-def test_memkey_same_project_same_key():
-    assert _memkey("default", "s1", "p1") == _memkey("default", "s1", "p1")
-
-
 def test_memkey_without_project_is_backward_compatible():
     """未传 project_id 时退化为旧格式，保证 cron / 旧调用点不炸。"""
     assert _memkey("default", "web-chat") == "default::web-chat"
     assert _memkey("default", "web-chat", "") == "default::web-chat"
-
-
-def test_memkey_handles_whitespace_and_empty_agent():
-    assert _memkey("", "s1", "p1") == _memkey("default", "s1", "p1")
-    assert _memkey(" default ", "s1", "p1") == _memkey("default", "s1", "p1")
 
 
 def test_cross_project_sessions_do_not_share_memory():
@@ -44,7 +46,6 @@ def test_cross_project_sessions_do_not_share_memory():
         SESSIONS[ka] = {"project_id": "proj-A", "messages": []}
         SESSIONS[ka]["messages"].append("项目A的问题")
 
-        # 项目 B 走同样的 key 计算 → 必须未命中缓存
         assert kb not in SESSIONS, "项目B 不应命中项目A 的缓存"
         SESSIONS[kb] = {"project_id": "proj-B", "messages": []}
         SESSIONS[kb]["messages"].append("项目B的问题")
@@ -56,23 +57,18 @@ def test_cross_project_sessions_do_not_share_memory():
         SESSIONS.clear()
 
 
-def test_chat_turn_passes_project_id_to_memkey():
-    """回归守卫：chat_turn 的 _memkey 调用必须带 project_id。"""
-    import inspect
+# ── 调用点守卫：禁止出现不带 project_id 的 _memkey 调用 ──
 
+def test_chat_turn_passes_project_id_to_memkey():
     from codeagent.server import chat_turn
 
     src = inspect.getsource(chat_turn)
-    # 不允许出现两参数的旧写法
     assert "_memkey(agent_id, session_id)" not in src, (
         "chat_turn 存在未带 project_id 的 _memkey 调用，会导致跨项目串台"
     )
 
 
 def test_app_factory_session_endpoints_pass_project_id():
-    """回归守卫：app_factory 中会话相关的 _memkey 调用必须带 project_id。"""
-    import inspect
-
     from codeagent.server import app_factory
 
     src = inspect.getsource(app_factory)
@@ -85,8 +81,6 @@ def test_app_factory_session_endpoints_pass_project_id():
 
 
 def test_webui_handlers_sessions_pass_project_id():
-    import inspect
-
     from codeagent.server import webui_handlers_sessions
 
     src = inspect.getsource(webui_handlers_sessions)
@@ -95,23 +89,11 @@ def test_webui_handlers_sessions_pass_project_id():
     )
 
 
-def test_no_direct_seed_memkey_import():
-    """守卫：不允许绕过 codeagent.server._memkey 直接导入 seed 版本。
+def test_load_or_create_chat_session_passes_project_id():
+    """app_factory 加载会话时必须带 project_id，否则会读写错项目的文件。"""
+    from codeagent.server import app_factory
 
-    codeagent 的修复方式是同名覆盖（seed 是第三方包，不能改）。
-    若有人直接 ``from seed.core._session_cache import _memkey``，
-    就会拿到不含 project_id 的旧实现，跨项目串台会复发。
-    """
-    import re
-    from pathlib import Path
-
-    root = Path(__file__).resolve().parent.parent / "codeagent"
-    pat = re.compile(r"from\s+seed\.core\._session_cache\s+import\s+[^\n]*\b_memkey\b")
-    offenders = []
-    for py in root.rglob("*.py"):
-        if py.name == "__init__.py" and py.parent.name == "server":
-            continue  # 这里就是覆盖定义处，允许
-        for i, line in enumerate(py.read_text(encoding="utf-8").splitlines(), 1):
-            if pat.search(line):
-                offenders.append(f"{py.relative_to(root)}:{i}")
-    assert not offenders, f"绕过 project 隔离的 _memkey 导入: {offenders}"
+    src = inspect.getsource(app_factory)
+    assert "load_or_create_chat_session(session_id, agent_id)" not in src, (
+        "app_factory 存在未带 project_id 的 load_or_create_chat_session 调用"
+    )
