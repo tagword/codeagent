@@ -141,7 +141,14 @@ function recalcTokenUsageFromDom() {
 
 function connectWs() {
   if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
-  if (ws) { try { ws.close(); } catch (e) {} ws = undefined; }
+  // 主动重建连接时，旧 socket 的 onclose 仍会异步触发并挂上 2s 重连定时器，
+  // 导致「重连 → 再重连」风暴（实测切 project 后 10s 内重建 5 次）。
+  // 先把旧 socket 的 onclose 摘掉，再 close。
+  if (ws) {
+    try { ws.onclose = null; } catch (e) {}
+    try { ws.close(); } catch (e) {}
+    ws = undefined;
+  }
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
   var wsTokQs = '';
   try {
@@ -169,6 +176,8 @@ function connectWs() {
     } catch (_) {}
   };
   sock.onclose = () => {
+    // 只处理「当前」socket 的关闭：旧 socket 被 connectWs 主动关闭时不应触发重连
+    if (sock !== ws) return;
     if (pauseWsReconnect) return;
     wsReconnectTimer = setTimeout(connectWs, 2000);
   };
@@ -182,6 +191,8 @@ const WS_HANDLERS = {
   tool_output:  handleProgressEvent,
   tool_end:     handleProgressEvent,
   chat_stop_requested: function (j) {
+    // 停止提示的唯一出口：后端 api_chat_stop 广播此事件，
+    // 前端 stopActiveChat 不再重复提示（否则出现两条相同提示）。
     if (j.session_id === sessionId) systemMsg('info', '⏳ 正在完成本轮回答…');
   },
   chat_cancelled: function (j) {

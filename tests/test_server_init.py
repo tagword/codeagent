@@ -159,3 +159,37 @@ def test_running_list_strips_project_segment():
     _running_add("a::proj::s1")
     assert _running_list("a") == ["s1"]
     _running_discard("a::proj::s1")
+
+def test_stop_prompt_has_single_source():
+    """「正在完成本轮回答…」只能由 WS chat_stop_requested handler 提示一次。
+
+    回归：api_chat_stop 会广播 chat_stop_requested，前端 stopActiveChat 若在
+    POST 返回后也提示一次，用户会看到两条重复提示。
+    """
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent / "codeagent" / "web" / "static"
+    hits = []
+    for p in sorted(root.glob("*.js")):
+        text = p.read_text(encoding="utf-8")
+        for i, line in enumerate(text.splitlines(), 1):
+            if "正在完成本轮回答" in line and "systemMsg(" in line:
+                hits.append((p.name, i))
+    assert len(hits) == 1, f"提示应只有一处出口，实际 {hits}"
+    assert hits[0][0] == "04-ws-connect.js", hits
+
+def test_no_duplicate_toplevel_functions_in_bundle():
+    """拼接式前端：顶层重复 function 声明会静默覆盖（后定义胜出）。
+
+    回归：13c-skills-panel.js 的 deleteSkill / toggleSkillEnabled 曾覆盖
+    13a-skills.js 的同名函数，导致 Agent 页技能删除打到项目作用域。
+    """
+    import re
+    from collections import Counter
+
+    from codeagent.server import get_app_html
+
+    html, _ = get_app_html()
+    names = re.findall(r"^(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(", html, re.M)
+    dup = {k: v for k, v in Counter(names).items() if v > 1}
+    assert not dup, f"顶层重复函数声明: {dup}"

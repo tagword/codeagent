@@ -54,12 +54,13 @@ async function stopActiveChat() {
     const j = await r.json();
     if (!r.ok) throw new Error(j.detail || r.statusText);
     if (sessionId === requestSid) {
-      if (j.cancelled) {
-        systemMsg('info', '⏳ 正在完成本轮回答…');
-      } else {
+      if (!j.cancelled) {
         systemMsg('info', '当前会话没有正在运行的 agent。');
         setSessionRunning(requestSid, false);
       }
+      // j.cancelled === true 时**不在这里**提示：
+      // 后端 api_chat_stop 已广播 chat_stop_requested，由 WS handler 统一提示，
+      // 两处都提示会出现两条重复的「正在完成本轮回答…」。
     }
   } catch (e) { if (sessionId === requestSid) systemMsg('err', '停止失败：' + String(e)); }
   finally { updateComposerButtons(); }

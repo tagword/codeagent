@@ -126,7 +126,9 @@ async function saveSkill(name, content, enabled) {
   } catch (e) { throw e; }
 }
 
-async function deleteSkill(name) {
+// 注意：13a-skills.js 已定义全局 deleteSkill（Agent 级技能页），
+// 此处必须用不同名字，否则后者覆盖前者，Agent 页删技能会打到项目作用域。
+async function panelDeleteSkill(name) {
   var aid = typeof agentId !== 'undefined' ? (agentId || 'default') : 'default';
   var pid = getProjectId();
   try {
@@ -193,7 +195,7 @@ function buildSkillCardPanel(s) {
   cardToggleBtn.addEventListener('click', function(ev) {
     ev.stopPropagation();
     s.enabled = !(s.enabled !== false);
-    toggleSkillEnabled(s);
+    panelToggleSkillEnabled(s);
   });
   actions.appendChild(cardToggleBtn);
 
@@ -224,7 +226,8 @@ function buildSkillCardPanel(s) {
 
 // ---- CRUD ----
 
-async function toggleSkillEnabled(s) {
+// 同上：13a-skills.js 已有全局 toggleSkillEnabled，面板内改名避免覆盖。
+async function panelToggleSkillEnabled(s) {
   try {
     await saveSkill(s.name, s.content || '', s.enabled);
     await refreshSkills();
@@ -235,7 +238,7 @@ async function toggleSkillEnabled(s) {
 
 async function doDeleteSkill(name) {
   try {
-    await deleteSkill(name);
+    await panelDeleteSkill(name);
     await refreshSkills();
   } catch (e) {
     if (skillStatus) { skillStatus.classList.add('is-err'); skillStatus.textContent = String(e); }
