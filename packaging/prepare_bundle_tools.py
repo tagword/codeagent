@@ -21,6 +21,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import time
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -69,7 +70,7 @@ def _chmod_exec(path: Path) -> None:
     path.chmod(mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
 
-def _download_with_timeout(url: str, dest: Path, *, timeout: float = 120.0) -> None:
+def _download_with_timeout(url: str, dest: Path, *, timeout: float = 600.0) -> None:
     """Download a URL to dest with a hard cap on *any* stall.
 
     `urllib.urlopen(timeout=...)` only bounds the TCP connect; once the
@@ -79,9 +80,13 @@ def _download_with_timeout(url: str, dest: Path, *, timeout: float = 120.0) -> N
     with an explicit per-read socket timeout, so a stalled transfer raises
     within `timeout` seconds and we can fall back / fail loudly instead of
     hanging.
-    """
-    import socket
 
+    The default timeout is generous (600s) because CI runners download tens of
+    megabytes from GitHub/nodejs.org over rates that can be well under
+    1 MB/s — a tight timeout there fails the whole build rather than the
+    transfer.  Progress is printed so a slow-but-alive download is
+    distinguishable from a hang when reading CI logs.
+    """
     req = urllib.request.Request(url, headers={"User-Agent": "CodeAgent-bundle/1.0"})
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         # 给底层 socket 设置读超时：resp.read(chunk) 在数据停滞时也会超时
@@ -91,13 +96,35 @@ def _download_with_timeout(url: str, dest: Path, *, timeout: float = 120.0) -> N
                 sock.settimeout(timeout)
             except Exception:
                 pass
+        total = resp.headers.get("Content-Length")
+        try:
+            total_n = int(total) if total else 0
+        except (TypeError, ValueError):
+            total_n = 0
         dest.parent.mkdir(parents=True, exist_ok=True)
+        got = 0
+        last_report = 0
+        last_at = time.monotonic()
+        started = last_at
         with open(dest, "wb") as out:
             while True:
                 chunk = resp.read(64 * 1024)
                 if not chunk:
                     break
                 out.write(chunk)
+                got += len(chunk)
+                # 每 10MB 或每 30s 报告一次：既能看出是否在前进，又不刷屏
+                now = time.monotonic()
+                if got - last_report >= 10 * 1024 * 1024 or now - last_at >= 30:
+                    last_report = got
+                    last_at = now
+                    pct = f"{got * 100 / total_n:.0f}%" if total_n else "?"
+                    print(
+                        f"    … {got / 1024 / 1024:.1f}MB / "
+                        f"{(total_n / 1024 / 1024) if total_n else 0:.1f}MB ({pct})",
+                        flush=True,
+                    )
+    print(f"    ✓ {got / 1024 / 1024:.1f}MB downloaded", flush=True)
 
 
 def _copy_exec(src: Path, dest: Path) -> None:
