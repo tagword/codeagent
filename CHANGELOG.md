@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.13 (2026-11-25)
+
+### 依赖
+
+- `seed-model-providers>=1.0.5`：OpenAI Responses 协议的 reasoning 回显修复
+  （reasoning item 紧邻 function_call 时不再被服务端拒绝）
+- `seed-kernel>=1.0.24`：Responses 协议新增「剥离 reasoning item 后重试一次」降级路径
+
 ## 1.2.12 (2026-11-25)
 
 ### 修复
