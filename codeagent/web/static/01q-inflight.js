@@ -164,8 +164,12 @@ async function restoreRunningSessions() {
     if (!r.ok) return;
     const j = await r.json();
     if (j && Array.isArray(j.running)) {
-      j.running.forEach(function(sid) {
-        if (sid) setSessionRunning(String(sid), true);
+      j.running.forEach(function(raw) {
+        if (!raw) return;
+        // 兼容两种格式：纯 session_id，或旧后端返回的 "project::session"。
+        // 直接整串当 sid 会导致 isSessionRunning(sid) 永远为 false（执行中指示丢失）。
+        const sid = String(raw).split('::').pop();
+        if (sid) setSessionRunning(sid, true);
       });
     }
   } catch (_) {}

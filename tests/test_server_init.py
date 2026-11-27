@@ -147,3 +147,15 @@ def test_running_list_filters_by_agent():
     assert _running_list("b") == ["s2"]
     _running_discard("a::s1")
     _running_discard("b::s2")
+
+
+def test_running_list_strips_project_segment():
+    """带 project 的 mkey（agent::project::session）必须只返回 session_id。
+
+    回归：旧实现用 removeprefix 会返回 "proj::sess"，前端按 data-session-id
+    匹配不到，刷新页面后「执行中」指示消失。
+    """
+    _running_discard("a::proj::s1")
+    _running_add("a::proj::s1")
+    assert _running_list("a") == ["s1"]
+    _running_discard("a::proj::s1")

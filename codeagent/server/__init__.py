@@ -66,11 +66,17 @@ def _running_contains(mkey: str) -> bool:
         return mkey in _running_sessions
 
 def _running_list(agent_id: str) -> list[str]:
-    """线程安全地获取指定 agent 的运行中会话 ID 列表。"""
+    """线程安全地获取指定 agent 的运行中会话 ID 列表。
+
+    mkey 形如 ``agent::session`` 或 ``agent::project::session``（见 ``_memkey``），
+    因此必须取**最后一段**作为 session_id —— 直接 removeprefix 会把
+    ``agent::project::session`` 变成 ``project::session``，前端拿它去匹配
+    ``data-session-id`` 永远匹配不上，导致刷新后「执行中」指示丢失。
+    """
     prefix = f"{agent_id.strip() or 'default'}::"
     with _running_sessions_lock:
         return [
-            mkey.removeprefix(prefix)
+            mkey.rsplit("::", 1)[-1]
             for mkey in _running_sessions
             if mkey.startswith(prefix)
         ]
