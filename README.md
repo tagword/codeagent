@@ -30,7 +30,7 @@
 
 ## 核心特性
 
-- 🧠 **LLM 驱动** — 支持 DeepSeek、OpenAI、Anthropic、Ollama 本地模型及兼容 API，可切换
+- 🧠 **LLM 驱动** — 支持 DeepSeek、OpenAI（含 **Responses 协议**）、Anthropic、Ollama 本地模型及兼容 API，可切换
 - 📜 **人格即配置** — 用 Markdown 定义 Agent 的身份、行为准则、技能，无需改代码
 - 🛠️ **45+ 内置工具** — 文件操作、Shell 执行、代码分析、Git 管理、数据库、部署、搜索
 - 🌐 **内置 Web UI** — 零构建单页应用：项目/会话树、工具调用链、mermaid 图表、健康面板、深色模式
