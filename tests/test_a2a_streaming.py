@@ -152,3 +152,24 @@ async def test_stream_context_id_mapping(monkeypatch):
         "message": {"role": "user", "contextId": "ctx-map", "parts": [{"text": "x"}]},
     })
     assert seen["session_id"] == "a2a-ctx-map"
+
+def test_event_bridge_accepts_project_id_kwarg():
+    """run_chat_turn 以 4 参调用 broadcast_fn(…, project_id)，桥接必须容忍。
+
+    回归：chat_turn 给所有 broadcast 调用补了 project_id 后，A2A 桥接
+    仍是 3 参签名，会让 TypeError 被 contextlib.suppress 吞掉 → SSE 静默无输出。
+    """
+    import asyncio
+
+    from codeagent.server.a2a.streaming import _EventBridge
+
+    async def _run():
+        bridge = _EventBridge(asyncio.get_running_loop())
+        await bridge("default", "sid", {"type": "run_started"}, "pid")
+        await bridge("default", "sid", {"type": "text_done", "text": "hi"}, "pid")
+        await bridge("default", "sid", {"type": "run_finished"}, "pid")
+        return bridge
+
+    bridge = asyncio.run(_run())
+    assert bridge.final_text == "hi"
+    assert bridge.finished is True

@@ -566,18 +566,26 @@ def create_app():
             "content": f"[cron:{jid}] {prompt}",
             "ts": datetime.now(timezone.utc).isoformat(),
         }
+        _cron_pid = str(job.get("project_id") or "").strip() or ""
+        _cron_sid = sid
+
+        async def _cron_broadcast(aid: str, sid_: str, payload: dict, pid: str = "") -> None:
+            # cron 侧 job 可能不带 project_id：回退到本 job 的 project_id，
+            # 否则 WS key 与前端注册的 key 不一致，事件全部丢失。
+            await _broadcast_session_event(aid, sid_, payload, pid or _cron_pid)
+
         return await run_chat_turn(
             agent_id=agent_id,
             session_id=sid,
             user_msg=user_msg,
-            project_id=str(job.get("project_id") or "").strip() or "",
+            project_id=_cron_pid,
             max_tool_rounds=max_rounds,
             channel="Cron",
             source=f"cron:{jid}",
             refresh_title=False,
             log_diary=False,
             emit_ws=True,
-            broadcast_fn=_broadcast_session_event,
+            broadcast_fn=_cron_broadcast,
             if_busy="skip",
         )
 

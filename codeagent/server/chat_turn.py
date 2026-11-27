@@ -139,7 +139,7 @@ async def run_chat_turn(
             existing_queue.append(queued)
             if emit_ws and broadcast_fn is not None:
                 with contextlib.suppress(Exception):
-                    await broadcast_fn(agent_id, session_id, {"type": "message_queued"})
+                    await broadcast_fn(agent_id, session_id, {"type": "message_queued"}, project_id)
             return {"queued": True, "session_id": session_id, "agent_id": agent_id}
         PENDING_INJECTIONS[_run_mkey] = []
         _running_add(_run_mkey)
@@ -336,7 +336,7 @@ async def run_chat_turn(
                 return
             with contextlib.suppress(Exception):
                 asyncio.run_coroutine_threadsafe(
-                    broadcast_fn(agent_id, session_id, evt), main_loop
+                    broadcast_fn(agent_id, session_id, evt, project_id), main_loop
                 )
 
         if emit_ws and broadcast_fn is not None:
@@ -345,7 +345,7 @@ async def run_chat_turn(
         if emit_ws and broadcast_fn is not None:
             with contextlib.suppress(Exception):
                 asyncio.run_coroutine_threadsafe(
-                    broadcast_fn(agent_id, session_id, {"type": "run_started"}),
+                    broadcast_fn(agent_id, session_id, {"type": "run_started"}, project_id),
                     main_loop,
                 )
 
@@ -451,7 +451,7 @@ async def run_chat_turn(
                                 "session_id": session_id,
                                 "agent_id": agent_id,
                                 "text": full_text,
-                            }), main_loop
+                            }, project_id), main_loop
                         )
             except Exception:
                 pass
@@ -693,7 +693,7 @@ async def run_chat_turn(
                             "text": reply or "",
                             "tool_trace": trace_out_ws,
                             "tools_used": tools_used or [],
-                        }), main_loop
+                        }, project_id), main_loop
                     )
                 with contextlib.suppress(Exception):
                     asyncio.run_coroutine_threadsafe(
@@ -704,7 +704,7 @@ async def run_chat_turn(
                             "text": reply or "",
                             "tool_trace": trace_out_ws,
                             "tools_used": tools_used or [],
-                        }), main_loop
+                        }, project_id), main_loop
                     )
 
             # ── 移除流式占位符，防止纯文本回复路径（无 tool rounds）重复落盘 ──
@@ -861,7 +861,7 @@ async def run_chat_turn(
                 }
                 if emit_ws and broadcast_fn is not None:
                     asyncio.run_coroutine_threadsafe(
-                        broadcast_fn(agent_id, session_id, _ws_evt), main_loop
+                        broadcast_fn(agent_id, session_id, _ws_evt, project_id), main_loop
                     )
             except Exception:
                 logger.exception("merge accumulated usage failed")
@@ -920,11 +920,11 @@ async def run_chat_turn(
                     broadcast_fn(agent_id, session_id, {
                         "type": "run_finished",
                         "cancelled": bool(_run_was_cancelled),
-                    }), main_loop
+                    }, project_id), main_loop
                 )
                 if _run_was_cancelled:
                     asyncio.run_coroutine_threadsafe(
                         broadcast_fn(agent_id, session_id, {
                             "type": "chat_cancelled",
-                        }), main_loop
+                        }, project_id), main_loop
                     )

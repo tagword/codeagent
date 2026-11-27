@@ -46,8 +46,17 @@ class _EventBridge:
         self.tools_used: list[str] = []
         self.finished = False
 
-    async def __call__(self, _agent_id: str, _session_id: str, payload: dict[str, Any]) -> None:
-        """broadcast_fn 签名：(agent_id, session_id, payload) -> None。"""
+    async def __call__(
+        self,
+        _agent_id: str,
+        _session_id: str,
+        payload: dict[str, Any],
+        _project_id: str = "",
+    ) -> None:
+        """broadcast_fn 签名：(agent_id, session_id, payload, project_id="") -> None。
+
+        project_id 为可选第 4 参（WS 广播按 project 隔离会话），A2A 桥接不需要它。
+        """
         etype = str(payload.get("type") or "")
         if etype == "text_delta":
             self.queue.put_nowait({"kind": "delta", "text": str(payload.get("text") or "")})
