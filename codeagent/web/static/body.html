@@ -270,8 +270,10 @@
                 </details>
                 <label class="compose__field compose__field--wide">
                   <span class="compose__field-label">推理强度</span>
-                  <select id="reasoningEffortSelect" class="compose__field-select compose__reasoning-effort" title="推理强度（思考模式下生效；DeepSeek 后端不读取此字段）" disabled>
+                  <select id="reasoningEffortSelect" class="compose__field-select compose__reasoning-effort" title="推理强度（思考模式下生效；DeepSeek 后端不读取此字段；OpenAI Responses 协议用 reasoning.effort）" disabled>
                     <option value="">默认（让模型自选）</option>
+                    <option value="none">关闭（仅 OpenAI Responses 协议）</option>
+                    <option value="minimal">极简（仅 OpenAI Responses 协议）</option>
                     <option value="low">低</option>
                     <option value="medium">中</option>
                     <option value="high">高</option>

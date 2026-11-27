@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.2.11 (2026-11-25)
+
+### 新增
+
+- **支持 OpenAI Responses API 协议的模型**（provider「OpenAI (Responses 协议)」）
+  - Web UI「环境与 LLM」预设新增 provider 选项，端点为 `POST {base_url}/responses`
+    （内置 gpt-5.1 / gpt-5 / gpt-5-mini / gpt-5-codex / o4-mini / o3）
+  - provider 下拉与模型列表由后端 catalog 驱动，新增 provider 自动出现，无需手工配置
+  - 高级模式可指向兼容 Responses 协议的第三方端点（如 `https://gw.example.com/v1`）
+
+### 修复 / 调整
+
+- **推理强度下拉新增两档**：`关闭(none)` / `极简(minimal)` —— OpenAI Responses 协议的
+  `reasoning.effort` 独有档位（合法值 `none|minimal|low|medium|high|xhigh`）
+  - DeepSeek / MiniMax 等既有协议的档位行为不变
+  - 选项文案标注适用协议，避免误选
+
+### 依赖
+
+- 协议实现依赖 `seed-kernel>=1.0.22` 与 `seed-model-providers>=1.0.4`
+
+### 测试
+
+- 新增 `tests/test_webui_responses_provider.py`（8 项）：catalog 可见性、preset 表单物化
+  （含非法模型回退默认）、高级模式自定义 base_url、协议解析
+
 ## 1.2.10 (2026-11-25)
 
 ### 修复
