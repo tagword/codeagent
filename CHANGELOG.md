@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.2.14 (2026-11-27)
+
+### 构建 / CI
+
+- Windows 打包 Stage 步骤改用 `pip install ast-grep-cli==0.40.3` 预装并复用本地二进制，
+  不再从 GitHub Releases 下载 15MB zip（CI runner 实测 ~100KB/s，单步耗时 20 分钟+）
+- workflow 增加 `concurrency` + `cancel-in-progress`：连续发版时新 run 取消被取代的旧 run，
+  避免多个 Windows 任务并发下载工具链互相抢带宽
+- Windows eslint 安装增加 npm 缓存
+
 ## 1.2.13 (2026-11-25)
 
 ### 依赖
