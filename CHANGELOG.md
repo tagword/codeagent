@@ -1,5 +1,33 @@
 # Changelog
 
+## 1.2.10 (2026-11-25)
+
+### 修复
+
+- **WS 广播缺 `project_id` 导致跨项目事件串台/丢失**：`run_chat_turn` 的 `broadcast_fn` 调用不带
+  `project_id`，而 WS 注册表 key 是 `(agent_id, session_id, project_id)` 三元组
+  - 多项目下同名 session 事件串台；cron 侧不带 `project_id` 时事件全发到空 project key，
+    前端注册的 key 不匹配 → 事件全部丢失（运行状态/流式输出不更新）
+  - 修复：`chat_turn.py` 9 处调用统一补 `project_id`；`app_factory.py` cron 路径用 `_cron_broadcast`
+    包装，payload 缺 `project_id` 时回退 job 的 `project_id`；`a2a/streaming.py` 的 `_EventBridge.__call__`
+    增加可选第 4 参（签名不兼容会 TypeError 被 suppress 吞掉 → SSE 静默无输出）
+  - 新增回归测试 `test_event_bridge_accepts_project_id_kwarg`
+- **WebUI 白屏：05a~05e / 09a~09f / 11a~11d 前端碎片被截断**：单文件 `node --check` 报
+  `Unexpected end of input`，拼装后 bundle 语法可过但存在截断错位（Git 面板、Cron 面板）
+- **项目技能面板覆盖 Agent 技能函数**：`13c-skills-panel.js` 顶层 `deleteSkill` / `toggleSkillEnabled`
+  与 `13a-skills.js` 同名，拼接后后者覆盖前者 → Agent 页删技能打到项目作用域。
+  修复：面板内改名 `panelDeleteSkill` / `panelToggleSkillEnabled`
+  - 新增回归测试 `test_no_duplicate_toplevel_functions_in_bundle`（顶层重复函数为 0）
+- **刷新后「执行中」指示丢失**：running 快照 sid 未带 project 段
+- **停止提示重复出现两条「⏳ 正在完成本轮回答…」**：后端 WS 广播与前端 POST 返回两条路径都提示。
+  修复：收敛为唯一出口（WS `chat_stop_requested` handler），前端仅在 `cancelled=false` 时提示
+  - 新增回归测试 `test_stop_prompt_has_single_source`
+
+### 测试
+
+- 新增 `tests/test_server_init.py`、`tests/test_a2a_streaming.py` 回归用例，全量 830 passed
+- bundle `node --check` OK；顶层重复函数 0；Playwright 冒烟 pageerrors/console_errors/failed_requests 全空
+
 ## 1.2.9 (2026-11-25)
 
 ### 新增
