@@ -8,19 +8,19 @@
 
 (function() {
 
-var btnToggle = document.getElementById('btnToggleSkills');
+var skillsBtnToggle = document.getElementById('btnToggleSkills');
 var skillPanel = document.getElementById('skillPanel');
 var skillList = document.getElementById('skillPanelList');
 var skillStatus = document.getElementById('skillPanelStatus');
-var btnRefresh = document.getElementById('btnSkillPanelRefresh');
+var skillsBtnRefresh = document.getElementById('btnSkillPanelRefresh');
 var btnAdd = document.getElementById('btnSkillPanelAdd');
 
-if (!btnToggle || !skillPanel || !skillList) return;
+if (!skillsBtnToggle || !skillPanel || !skillList) return;
 
 // 只在有项目时显示 📚 按钮
 function updateButtonVisibility() {
   var pid = typeof projectId !== 'undefined' ? (projectId || '') : '';
-  btnToggle.style.display = pid ? '' : 'none';
+  skillsBtnToggle.style.display = pid ? '' : 'none';
   // 如果项目已切换且面板还开着，刷新
   if (pid && skillPanel.style.display !== 'none') {
     refreshSkills();
@@ -37,10 +37,10 @@ function skillPanelIsVisible() {
 }
 
 // Toggle
-btnToggle.addEventListener('click', function() {
+skillsBtnToggle.addEventListener('click', function() {
   var opening = !skillPanelIsVisible();
   skillPanel.style.display = opening ? 'flex' : 'none';
-  btnToggle.classList.toggle('is-active', opening);
+  skillsBtnToggle.classList.toggle('is-active', opening);
   if (opening) {
     // 如果在文件模式，先切回聊天
     if (typeof _activeMode !== 'undefined' && _activeMode === 'files' && typeof switchActivityMode === 'function') {
@@ -71,8 +71,8 @@ function _closeOtherPanels() {
   });
 }
 
-if (btnRefresh) {
-  btnRefresh.addEventListener('click', refreshSkills);
+if (skillsBtnRefresh) {
+  skillsBtnRefresh.addEventListener('click', refreshSkills);
 }
 
 if (btnAdd) {
@@ -155,11 +155,11 @@ async function refreshSkills() {
   if (skillStatus) skillStatus.textContent = skills.length + ' 个技能';
 
   skills.forEach(function(s) {
-    skillList.appendChild(buildSkillCard(s));
+    skillList.appendChild(buildSkillCardPanel(s));
   });
 }
 
-function buildSkillCard(s) {
+function buildSkillCardPanel(s) {
   var wrap = document.createElement('div');
   wrap.className = 'cron-card-wrap';
 
@@ -187,15 +187,15 @@ function buildSkillCard(s) {
   var actions = document.createElement('div');
   actions.className = 'cron-card__actions';
 
-  var btnToggle = document.createElement('button');
-  btnToggle.type = 'button'; btnToggle.className = 'btn btn--ghost btn--xs';
-  btnToggle.textContent = (s.enabled !== false) ? '停用' : '启用';
-  btnToggle.addEventListener('click', function(ev) {
+  var cardToggleBtn = document.createElement('button');
+  cardToggleBtn.type = 'button'; cardToggleBtn.className = 'btn btn--ghost btn--xs';
+  cardToggleBtn.textContent = (s.enabled !== false) ? '停用' : '启用';
+  cardToggleBtn.addEventListener('click', function(ev) {
     ev.stopPropagation();
     s.enabled = !(s.enabled !== false);
     toggleSkillEnabled(s);
   });
-  actions.appendChild(btnToggle);
+  actions.appendChild(cardToggleBtn);
 
   var btnEdit = document.createElement('button');
   btnEdit.type = 'button'; btnEdit.className = 'btn btn--ghost btn--xs';

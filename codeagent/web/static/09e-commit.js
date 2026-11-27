@@ -1,16 +1,3 @@
-    _gitApi('log', '--oneline --graph --decorate -30').then(function(r) {
-      if (r.result) {
-        container.innerHTML = '<pre class="git-diff-pre">' + escapeHtml(r.result) + '</pre>';
-      } else if (r.error) {
-        container.innerHTML = '<div style="color:var(--danger,#e06c75);padding:8px 12px;">❌ ' + escapeHtml(r.error) + '</div>';
-      } else {
-        container.innerHTML = '<div style="color:var(--text-muted,#888);padding:12px;text-align:center;">暂无提交记录</div>';
-      }
-    }).catch(function(err) {
-      container.innerHTML = '<div style="color:var(--danger,#e06c75);padding:8px 12px;">❌ ' + escapeHtml(err.message) + '</div>';
-    });
-  }
-
   function _loadDiff(container) {
     container.innerHTML = '<div class="git-panel__loading">加载差异中...</div>';
     _gitApi('diff').then(function(r) {
@@ -78,3 +65,6 @@
       if (btn) { btn.disabled = false; btn.textContent = command === 'push' ? '↑ 推送' : '↓ 拉取'; }
     }).catch(function(err) {
       _showNotification('❌ ' + err.message);
+      if (btn) { btn.disabled = false; btn.textContent = command === 'push' ? '↑ 推送' : '↓ 拉取'; }
+    });
+  }

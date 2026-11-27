@@ -167,7 +167,7 @@ function buildPlanCard(plan) {
 
   var meta = document.createElement('div');
   meta.className = 'plan-card__meta';
-  meta.textContent = formatRelativeTime(plan.modified_at) + (plan.size ? ' · ' + formatSize(plan.size) : '');
+  meta.textContent = formatRelativeTimeFromEpoch(plan.modified_at) + (plan.size ? ' · ' + formatSize(plan.size) : '');
 
   info.appendChild(nameEl);
   info.appendChild(meta);
@@ -204,7 +204,9 @@ function buildPlanCard(plan) {
 
 // ---- 工具函数 ---- //
 
-function formatRelativeTime(epochSec) {
+// 注意：顶层 formatRelativeTime 已由 13a-todo-utils.js 定义（接受 ISO 字符串）。
+// 这里只提供 epoch 秒版本，避免重复声明导致整个 bundle SyntaxError。
+function formatRelativeTimeFromEpoch(epochSec) {
   if (!epochSec) return '';
   var diffMs = Date.now() - (epochSec * 1000);
   var diffSec = Math.floor(diffMs / 1000);

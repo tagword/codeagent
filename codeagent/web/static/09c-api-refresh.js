@@ -1,8 +1,3 @@
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    }).then(function(r) { return r.json(); });
-  }
-
   /* =============================================
    * 刷新
    * ============================================= */
@@ -98,3 +93,13 @@
    * ============================================= */
   function _loadStatus(container) {
     container.innerHTML = '<div class="git-panel__loading">加载状态中...</div>';
+    _gitApi('status').then(function(r) {
+      if (r.error) {
+        container.innerHTML = '<div style="color:var(--danger,#e06c75);padding:8px 12px;">❌ ' + escapeHtml(r.error) + '</div>';
+        return;
+      }
+      _renderStatus(container, r.result || '');
+    }).catch(function(err) {
+      container.innerHTML = '<div style="color:var(--danger,#e06c75);padding:8px 12px;">❌ ' + escapeHtml(err.message) + '</div>';
+    });
+  }

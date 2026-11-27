@@ -89,3 +89,7 @@
     if (_projectId) body.project_id = _projectId;
     return fetch('/api/ui/git', {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }).then(function(r) { return r.json(); });
+  }

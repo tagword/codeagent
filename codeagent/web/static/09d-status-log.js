@@ -1,15 +1,3 @@
-    _gitApi('status').then(function(r) {
-      if (r.error) {
-        container.innerHTML = '<div style="color:var(--danger,#e06c75);padding:8px 12px;">❌ ' + escapeHtml(r.error) + '</div>';
-        return;
-      }
-      var output = r.result || '';
-      _renderStatus(container, output);
-    }).catch(function(err) {
-      container.innerHTML = '<div style="color:var(--danger,#e06c75);padding:8px 12px;">❌ ' + escapeHtml(err.message) + '</div>';
-    });
-  }
-
   function _renderStatus(container, output) {
     if (!output || output.trim() === '' || output.trim() === '(无输出)') {
       container.innerHTML = '<div style="color:var(--success,#98c379);padding:12px;text-align:center;">✅ 工作区干净，无改动</div>';
@@ -78,3 +66,15 @@
    * ============================================= */
   function _loadLog(container) {
     container.innerHTML = '<div class="git-panel__loading">加载提交历史中...</div>';
+    _gitApi('log', '--oneline --graph --decorate -30').then(function(r) {
+      if (r.result) {
+        container.innerHTML = '<pre class="git-diff-pre">' + escapeHtml(r.result) + '</pre>';
+      } else if (r.error) {
+        container.innerHTML = '<div style="color:var(--danger,#e06c75);padding:8px 12px;">❌ ' + escapeHtml(r.error) + '</div>';
+      } else {
+        container.innerHTML = '<div style="color:var(--text-muted,#888);padding:12px;text-align:center;">暂无提交记录</div>';
+      }
+    }).catch(function(err) {
+      container.innerHTML = '<div style="color:var(--danger,#e06c75);padding:8px 12px;">❌ ' + escapeHtml(err.message) + '</div>';
+    });
+  }

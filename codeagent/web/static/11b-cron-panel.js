@@ -1,3 +1,4 @@
+async function loadCronPanel() {
   const toggle = document.getElementById('cronGlobalToggle');
   const list = document.getElementById('cronJobList');
   if (!toggle) return;
@@ -116,3 +117,5 @@ function buildCronJobCard(j) {
   header.appendChild(info); header.appendChild(actions);
   var editWrap = document.createElement('div'); editWrap.className = 'cron-edit-wrap'; editWrap.style.display = 'none';
   var editStatus = document.createElement('div'); editStatus.className = 'status-line';
+  editWrap.innerHTML = buildCronEditFormHTML(j);
+  editWrap.appendChild(editStatus);

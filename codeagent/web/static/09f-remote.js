@@ -1,7 +1,3 @@
-      if (btn) { btn.disabled = false; btn.textContent = command === 'push' ? '↑ 推送' : '↓ 拉取'; }
-    });
-  }
-
   /* =============================================
    * 通知 / 工具
    * ============================================= */
@@ -13,6 +9,7 @@
     if (window._gitNotifTimer) clearTimeout(window._gitNotifTimer);
     window._gitNotifTimer = setTimeout(function() { hint.textContent = ''; hint.style.color = ''; }, 5000);
   }
+
 
   /* =============================================
    * 远程仓库（只读显示）

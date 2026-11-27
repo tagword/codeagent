@@ -160,4 +160,3 @@ function cronSafeJobId(displayName) {
 // ---- Global state ----
 let cronGlobalEnabled = false;
 
-async function loadCronPanel() {

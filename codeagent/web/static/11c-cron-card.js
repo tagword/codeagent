@@ -133,6 +133,3 @@ function buildCronEditFormHTML(j) {
     + '</div>';
 }
 
-/** Read frequency settings from an edit form into a descriptor */
-function readFreqFromForm(el) {
-  var mode = el.querySelector('.cron-fld-mode').value;

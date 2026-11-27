@@ -1,3 +1,5 @@
+function readFreqFromForm(el) {
+  var mode = el.querySelector('.cron-fld-mode').value;
   var interval = parseInt(el.querySelector('.cron-fld-interval').value) || 30;
   var hour = el.querySelector('.cron-fld-hour') ? el.querySelector('.cron-fld-hour').value : '*';
   // 分钟 select 有两处：hours 模式用 .cron-fld-minute-hours，daily/weekly/monthly 用
