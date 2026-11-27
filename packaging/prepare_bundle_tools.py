@@ -274,6 +274,31 @@ def _valid_zip(path: Path) -> bool:
         return False
 
 
+def _prefer_local_ast_grep(dest: Path, *, prefer_local: bool) -> bool:
+    """把本地 ast-grep/sg 二进制复制到 dest，成功返回 True。
+
+    prefer_local=False 时直接返回 False（用于 macOS：本地二进制可能来自
+    Homebrew，依赖新版 macOS，塞进 DMG 后 macOS 12 上跑不起来）。
+
+    Windows CI 走 ``pip install ast-grep-cli`` 预装 + prefer_local=True，
+    从而完全绕开 GitHub Releases 上 15MB 的 zip（实测只有 ~100KB/s）。
+    """
+    if not prefer_local:
+        return False
+    sg_link = dest.parent / ("sg.exe" if sys.platform == "win32" else "sg")
+    for fallback in ("ast-grep", "sg"):
+        src = _venv_bin(fallback) or (Path(p) if (p := shutil.which(fallback)) else None)
+        if src and src.is_file():
+            _copy_exec(src, dest)
+            if sys.platform == "win32" and not sg_link.is_file():
+                # Windows symlink 需要特权，直接复制副本
+                shutil.copy2(dest, sg_link)
+                print("  ✓ sg.exe → ast-grep.exe")
+            print(f"  ✓ ast-grep  ← {src} (local)")
+            return True
+    return False
+
+
 def _download_ast_grep() -> None:
     print("==> ast-grep")
     dest_name = "ast-grep" + (".exe" if sys.platform == "win32" else "")
@@ -282,14 +307,13 @@ def _download_ast_grep() -> None:
         print(f"  ✓ ast-grep already staged ({dest})")
         return
 
-    def _use_local_fallback() -> bool:
-        for fallback in ("ast-grep", "sg"):
-            src = _venv_bin(fallback) or (Path(p) if (p := shutil.which(fallback)) else None)
-            if src and src.is_file():
-                _copy_exec(src, dest)
-                print(f"  ✓ ast-grep  ← {src} (local fallback)")
-                return True
-        return False
+    # Windows：CI 里用 `pip install ast-grep-cli` 预装，直接复用本地二进制。
+    # GitHub Releases 的 15MB 压缩包在 Windows runner 上经常只有 ~100KB/s，
+    # 是 Stage 步骤耗时 20 分钟+ 的主因；PyPI 快一个数量级。
+    # 只在 win32 上优先本地：macOS 的本地 ast-grep 可能来自 Homebrew，
+    # 依赖新版 macOS，打进 DMG 后会在 macOS 12 上跑不起来。
+    if _prefer_local_ast_grep(dest, prefer_local=sys.platform == "win32"):
+        return
 
     arch = _machine()
     asset = f"app-{arch}.zip"
@@ -306,7 +330,7 @@ def _download_ast_grep() -> None:
             _download_with_timeout(url, zip_path)
         except Exception as exc:
             print(f"  ⚠ download failed: {exc}")
-            if _use_local_fallback():
+            if _prefer_local_ast_grep(dest, prefer_local=True):
                 return
             raise SystemExit(
                 "ast-grep download failed and no local ast-grep/sg on PATH. "
@@ -316,7 +340,7 @@ def _download_ast_grep() -> None:
     if not _valid_zip(zip_path):
         print(f"  ⚠ downloaded {asset} is not a valid zip")
         zip_path.unlink(missing_ok=True)
-        if _use_local_fallback():
+        if _prefer_local_ast_grep(dest, prefer_local=True):
             return
         raise SystemExit(f"ast-grep download corrupt: {asset}")
 

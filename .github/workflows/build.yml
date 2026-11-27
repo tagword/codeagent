@@ -6,6 +6,12 @@ on:
       - "v*"
   workflow_dispatch:
 
+concurrency:
+  # 连续发版（v1.2.12 → v1.2.13）会给每个 tag 各起一个 run，两个 Windows 任务
+  # 同时下载工具链互相抢带宽，Stage 步骤被拖到 20 分钟以上。新 run 直接取消旧 run。
+  group: build-${{ github.repository }}
+  cancel-in-progress: true
+
 jobs:
   build-macos:
     runs-on: macos-latest
@@ -72,8 +78,18 @@ jobs:
           pip install pyinstaller
           # 系统托盘图标 (pystray) + 图像处理 (Pillow)
           pip install pystray pillow
+          # ast-grep：PyPI 的 wheel 比 GitHub Releases 的 15MB zip 快一个数量级。
+          # 版本与 prepare_bundle_tools.py 的 AST_GREP_VERSION 保持一致，
+          # 脚本会优先复用本地二进制（win32 分支），不再走网络下载。
+          pip install ast-grep-cli==0.40.3
         env:
           GIT_TERMINAL_PROMPT: 0
+
+      - name: Cache npm (eslint for Windows bundle)
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}-eslint9-v1
 
       - name: Stage bundled tools (git/node/eslint/ast-grep/ruff for Windows)
         # Generous: CI runners download tens of MB from GitHub/nodejs.org at
