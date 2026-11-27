@@ -1,3 +1,16 @@
+/* ================================================================
+ * 05b-session-list.js
+ *   - Session list fetch / refresh (refreshSessionList)
+ *   - Session list event binding (bindSessListOnce)
+ *   - Web UI sessions initialization (initWebUiSessions)
+ * ================================================================ */
+
+// ---------------- Session list fetch / sync ----------------
+
+async function refreshSessionList() {
+  const listEl = document.getElementById('sessList');
+  try {
+    const r = await fetch('/api/ui/sessions?limit=80&agent_id=' + encodeURIComponent(agentId) + projectQuerySuffix());
     if (!r.ok) throw new Error((await r.json()).detail || r.statusText);
     const j = await r.json();
     const cur = sessionId;
@@ -108,7 +121,38 @@ function bindSessListOnce() {
 // ---------------- Web UI sessions initialization ----------------
 
 async function initWebUiSessions() {
+  try {
   // 页面刷新后先恢复正在运行中的会话状态（心跳指示）
   await restoreRunningSessions();
   const sidebar = document.getElementById('chatSidebar');
   const fs = document.getElementById('fieldsetChatSessions');
+  if (sidebar) sidebar.style.display = '';
+  if (fs) fs.style.display = '';
+  if (typeof bindSessListOnce === 'function') bindSessListOnce();
+  await refreshProjects();
+  const btnSessNew = document.getElementById('btnNewSession');
+  if (btnSessNew && btnSessNew.dataset.bound !== '1') {
+    btnSessNew.dataset.bound = '1';
+    btnSessNew.addEventListener('click', async () => {
+      if (typeof saveMsgDraft === 'function') saveMsgDraft();
+      sessionId = oaRandomUUID();
+      localStorage.setItem(_sidStorageKey(agentId, projectId), sessionId);
+      if (typeof msg !== 'undefined' && msg) msg.value = '';
+      updateComposerButtons(); updateMainHeaderForSession(sessionId);
+      await refreshSessionList(); reconnectWsForSession(); resetAgentReplyDedupe(); log.innerHTML = '';
+      await loadSessionHistoryIntoLog(true);
+      if (typeof refreshSessionsUnderProject === 'function') refreshSessionsUnderProject(projectId);
+      if (typeof activatePage === 'function') activatePage('chat');
+    });
+  }
+  await refreshSessionList();
+  updateMainHeaderForSession(sessionId);
+  await loadSessionHistoryIntoLog(true);
+  // 单窗口下不再定时轮询会话子树；新建/删会话、切项目等路径会主动 refreshSessionsUnderProject / refreshSessionList。
+  } catch (_) { if (sidebar) sidebar.style.display = 'none'; }
+  // 首屏加载后按当前状态重绘一次，确保 running/completed 与最新快照一致
+  if (typeof applyAllSessionRunningStates === 'function') applyAllSessionRunningStates();
+  if (typeof applyAllSessionCompletedStates === 'function') applyAllSessionCompletedStates();
+}
+
+initWebUiSessions();

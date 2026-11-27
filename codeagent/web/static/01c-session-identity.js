@@ -36,9 +36,7 @@ function oaRandomUUID() {
   );
 }
 
-function projectStorageKey(aid) {
-  return 'oa_proj_' + String(aid || 'default');
-}
+// projectStorageKey 定义在 00-storage.js（全局唯一），此处不再重复声明。
 function loadProjectIdForAgent(aid) {
   try { return localStorage.getItem(projectStorageKey(aid)) || ''; } catch (_) { return ''; }
 }

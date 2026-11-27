@@ -1,5 +1,11 @@
-        el.addEventListener('change', _updateProjectRemotePreview);
-      });
+/* ================================================================
+ * 05d-project-create.js
+ *   - 新建项目对话框表单（方案预设 / 远程预览 / 目录选择 / 提交）
+ *   由 05c-dialog.js 的 showNewProjectDialog 内部调用（同一次调用内声明）。
+ * ================================================================ */
+
+function _bindNewProjectDialogForm(btnConfirm, btnCancel, btnClose, inpName) {
+  try {
 
       // 绑定按钮事件：用 onclick 直接赋值，自动覆盖旧监听器
       btnConfirm.onclick = onSubmit;
@@ -16,7 +22,6 @@
       dialog.addEventListener('click', function(e) {
         if (e.target === dialog) closeDialog();
       });
-    }
 
     function _updateProjectSourceFields(source) {
       document.getElementById('fieldCloneUrl').style.display = source === 'clone' ? 'block' : 'none';
@@ -107,16 +112,17 @@
     function _updateProjectRemotePreview() {
       var preview = document.getElementById('projectRemoteUrlPreview');
       if (!preview) return;
-      var provider = document.getElementById('selProjectRemoteProvider').value;
+      var provEl = document.getElementById('selProjectRemoteProvider');
+      var provider = (provEl && provEl.value) || 'github';
       var hostEl = document.getElementById('inpProjectRemoteHost');
       var ownerEl = document.getElementById('inpProjectRemoteOwner');
       var repoEl = document.getElementById('inpProjectRemoteRepo');
 
-      // 显示/隐藏 主机地址输入
-      hostEl.style.display = provider === 'custom' ? '' : 'none';
+      // 显示/隐藏 主机地址输入（元素缺失时静默跳过，避免整段绑定失败）
+      if (hostEl) hostEl.style.display = provider === 'custom' ? '' : 'none';
 
-      var owner = ownerEl.value.trim() || '{owner}';
-      var repo = repoEl.value.trim() || '{repo}';
+      var owner = (ownerEl && ownerEl.value.trim()) || '{owner}';
+      var repo = (repoEl && repoEl.value.trim()) || '{repo}';
       var protocol = document.querySelector('input[name="projectRemoteProtocol"]:checked')?.value || 'ssh';
       var templates = {
         'github': { ssh: 'git@github.com:{owner}/{repo}.git', https: 'https://github.com/{owner}/{repo}.git' },
@@ -165,8 +171,5 @@
       });
     }
     initNativeDirPicker();
-
-    async function doCreateProject(name, path, source, cloneUrl, template, remoteInfo) {
-      // 显示进度提示
-      _showProjectProgress(true, source, cloneUrl);
-      try {
+  } catch (e) { systemMsg('err', '新建项目对话框初始化失败：' + String(e)); }
+}

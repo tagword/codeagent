@@ -1,3 +1,12 @@
+/* ================================================================
+ * 05e-project-remote.js
+ *   - 远程克隆/模板创建：进度心跳 + 进度条（_showProjectProgress / _updateProjectProgress / _hideProjectProgress）
+ *   - doCreateProject 由 05d-project-create.js 调用
+ * ================================================================ */
+
+async function doCreateProject(name, path, source, cloneUrl, template, remoteInfo) {
+      var heartbeatTimer = null;
+      try {
         var body = { agent_id: agentId, name: name };
         if (path) body.path = path;
         if (source) body.source = source;
@@ -14,7 +23,6 @@
         ];
         var heartbeatIdx = 0;
         var startTime = Date.now();
-        var heartbeatTimer = null;
         if (source === 'clone') {
           heartbeatTimer = setInterval(function() {
             var elapsed = Math.round((Date.now() - startTime) / 1000);
@@ -55,20 +63,22 @@
             treeProjectsCache.projects.push(j.project);
           }
           treeExpanded[treePid(j.project.id)] = true;
-          appendProjectTreeNode(j.project);            resetAgentReplyDedupe(); log.innerHTML = ''; reconnectWsForSession();
-            if (webuiSessionsEnabled) {
-              await refreshSessionList(); updateMainHeaderForSession(sessionId);
-              await loadSessionHistoryIntoLog(true);
-            }
-            try { document.dispatchEvent(new CustomEvent('project-changed')); } catch (_) {}
+          appendProjectTreeNode(j.project);
+          resetAgentReplyDedupe(); log.innerHTML = ''; reconnectWsForSession();
+          if (webuiSessionsEnabled) {
+            await refreshSessionList(); updateMainHeaderForSession(sessionId);
+            await loadSessionHistoryIntoLog(true);
           }
-        } catch (e) {
-          if (heartbeatTimer) clearInterval(heartbeatTimer);
-          _hideProjectProgress();
-          systemMsg('err', '创建项目失败：' + String(e)); }
-    }
+          try { document.dispatchEvent(new CustomEvent('project-changed')); } catch (_) {}
+        }
+      } catch (e) {
+        if (heartbeatTimer) clearInterval(heartbeatTimer);
+        _hideProjectProgress();
+        systemMsg('err', '创建项目失败：' + String(e));
+      }
+}
 
-    // ---- 进度提示控制 ---- //
+// ---- 进度提示控制 ---- //
     function _showProjectProgress(show, source, cloneUrl) {
       var overlay = document.getElementById('projectProgressOverlay');
       if (!overlay) return;
@@ -116,28 +126,3 @@
         if (dialog) dialog.style.display = 'none';
       }, 600);
     }
-    await refreshProjects();
-    const btnSessNew = document.getElementById('btnNewSession');
-    if (btnSessNew && btnSessNew.dataset.bound !== '1') {
-      btnSessNew.dataset.bound = '1';
-      btnSessNew.addEventListener('click', async () => {
-      if (typeof saveMsgDraft === 'function') saveMsgDraft();
-      sessionId = oaRandomUUID();
-      localStorage.setItem(_sidStorageKey(agentId, projectId), sessionId);
-      if (typeof msg !== 'undefined' && msg) msg.value = '';
-      updateComposerButtons(); updateMainHeaderForSession(sessionId);
-      await refreshSessionList(); reconnectWsForSession(); resetAgentReplyDedupe(); log.innerHTML = '';
-      await loadSessionHistoryIntoLog(true);
-      if (typeof refreshSessionsUnderProject === 'function') refreshSessionsUnderProject(projectId);
-      if (typeof activatePage === 'function') activatePage('chat');
-    });
-    }
-    await refreshSessionList();
-    updateMainHeaderForSession(sessionId);
-    await loadSessionHistoryIntoLog(true);
-    // 单窗口下不再定时轮询会话子树；新建/删会话、切项目等路径会主动 refreshSessionsUnderProject / refreshSessionList。
-  } catch (_) { if (sidebar) sidebar.style.display = 'none'; }
-}
-initWebUiSessions();
-// Load LLM preset list for model selector
-refreshModelSelect().catch(function() {});

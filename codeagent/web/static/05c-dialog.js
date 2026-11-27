@@ -1,3 +1,12 @@
+/* ================================================================
+ * 05c-dialog.js
+ *   - 会话侧栏启用（/api/ui/flags → sessions_ui）
+ *   - 新建项目对话框入口（showNewProjectDialog）
+ *   - 新建项目表单绑定（05d-project-create.js）
+ *   - 远程克隆进度提示（05e-project-remote.js）
+ * ================================================================ */
+
+async function initWebUiSessionsPanels() {
   try {
     const r = await fetch('/api/ui/flags');
     const f = await r.json();
@@ -25,6 +34,7 @@
     }
 
     // ---- 新建项目对话框逻辑（含来源选择 + 远程配置） ---- //
+    // 表单绑定在 05d-project-create.js，远程进度在 05e-project-remote.js
     function showNewProjectDialog() {
       var dialog = document.getElementById('newProjectDialog');
       var inpName = document.getElementById('inpNewProjectName');
@@ -33,7 +43,7 @@
       var btnCancel = document.getElementById('btnNewProjectCancel');
       var btnClose = document.getElementById('btnNewProjectDialogClose');
       if (!dialog || !inpName) return;
-
+      _bindNewProjectDialogForm(btnConfirm, btnCancel, btnClose, inpName);
       // 重置
       inpName.value = '';
       inpPath.value = '';
@@ -46,8 +56,6 @@
       _updateProjectSourceFields('scratch');
 
       // 加载默认远程配置
-      _loadProjectDefaults();
-
       dialog.style.display = 'flex';
       setTimeout(function() { inpName.focus(); }, 100);
 
@@ -121,3 +129,10 @@
         if (el) el.addEventListener('change', _updateProjectRemotePreview);
       });
       document.querySelectorAll('input[name="projectRemoteProtocol"]').forEach(function(el) {
+        if (el) el.addEventListener('change', _updateProjectRemotePreview);
+      });
+    }
+  } catch (_) {}
+}
+
+initWebUiSessionsPanels();

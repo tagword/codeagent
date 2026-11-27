@@ -2,10 +2,8 @@
  * 05a-session-history.js
  *   - Session history loading (loadSessionHistoryIntoLog)
  *   - Older history paging (loadOlderSessionHistoryChunk)
- *   - Session list fetch / refresh (refreshSessionList)
- *   - Session list bindings (bindSessListOnce)
- *   - Web UI sessions initialization (initWebUiSessions)
  *   - Logout
+ *   - 注：会话列表 fetch/绑定/初始化已迁至 05b-session-list.js
  * ================================================================ */
 
 (function () {
@@ -236,7 +234,3 @@ async function loadSessionHistoryIntoLog(skipTreeRefresh) {
 
 // ---------------- Session list fetch / sync ----------------
 
-async function refreshSessionList() {
-  const listEl = document.getElementById('sessList');
-  try {
-    const r = await fetch('/api/ui/sessions?limit=80&agent_id=' + encodeURIComponent(agentId) + projectQuerySuffix());
