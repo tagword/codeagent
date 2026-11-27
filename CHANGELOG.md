@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.2.12 (2026-11-25)
+
+### 修复
+
+- **Windows CI 构建「Stage bundled tools」步骤超时被杀**（v1.2.8 ~ v1.2.11 连续失败）
+  - 现象：步骤状态 `in_progress` / `conclusion=None`（被 GitHub kill），后续步骤全部 pending
+  - 根因：CI runner 从 GitHub / nodejs.org 的下载速率实测仅 **~110KB/s**
+    （ast-grep Windows asset 6.6MB 耗时 60s）。ast-grep(15MB) + node(30MB+) 等
+    在 `timeout-minutes: 15` 内下不完 → job 被 kill，表现为「卡死」
+  - 修复：
+    - `_download_with_timeout` 默认超时 120s → **600s**（慢网络下 120s 必然中途失败）
+    - 下载过程输出进度（每 10MB / 30s 一次），可区分「慢但在前进」与「真挂死」
+    - workflow Stage 步骤 `timeout-minutes` 15 → **45**
+  - 验证：本地实测 ast-grep Windows asset 下载成功（6.6MB / 59.6s，zip 校验有效）
+
 ## 1.2.11 (2026-11-25)
 
 ### 新增
